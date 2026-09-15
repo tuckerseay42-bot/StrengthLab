@@ -144,11 +144,10 @@ export function rackGroupsQO(teamId: string | null, sessionDate: string | null) 
 }
 
 /**
- * Resolves the rack layout to print: real persisted assignments when there
- * are genuinely multiple racks with people in them, otherwise an
- * auto-grouped fallback (roster chunked into groups of 4) — today's
- * rack-console hardcodes every team to a single rack, so real multi-rack
- * data mostly won't exist until the dedicated rack-assignment builder ships.
+ * Resolves the rack layout to print: real persisted assignments (from the
+ * "Assign Racks" tab in Training View — src/components/rack-assignment-board.tsx)
+ * when any exist, otherwise an auto-grouped fallback (roster chunked into
+ * groups of 4) for a coach who hasn't built the day's racks yet.
  */
 export function resolveRackGroups(
   roster: Athlete[],
@@ -156,8 +155,7 @@ export function resolveRackGroups(
 ): { groups: RackGroup[]; isAutoGrouped: boolean } {
   const byId = new Map(roster.map((a) => [a.id, a]));
   const genuine = persisted.filter((r) => r.athleteIds.length > 0);
-  const rackNumbers = new Set(genuine.map((r) => r.rackNumber));
-  if (genuine.length > 0 && rackNumbers.size > 1) {
+  if (genuine.length > 0) {
     return {
       isAutoGrouped: false,
       groups: genuine.map((r) => ({

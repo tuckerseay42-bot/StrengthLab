@@ -38,6 +38,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RackAssignmentBoard } from "@/components/rack-assignment-board";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -307,6 +309,7 @@ function TrainingView() {
   }, [exerciseLib]);
 
   // UI state
+  const [mode, setMode] = useState<"assign" | "live">("live");
   const [layoutSize, setLayoutSize] = useLocalStorage<LayoutSize>(LAYOUT_KEY, 4);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Tap-to-expand: one athlete takes over the screen so numbers are readable.
@@ -680,7 +683,20 @@ function TrainingView() {
   const activeCount = selectedAthletes.length;
 
   return (
-    <div className="hud-grid flex h-[calc(100dvh-4rem)] min-h-[560px] gap-3 pb-[env(safe-area-inset-bottom)]">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-[560px] flex-col gap-3 pb-[env(safe-area-inset-bottom)]">
+      <Tabs value={mode} onValueChange={(v) => setMode(v as "assign" | "live")}>
+        <TabsList>
+          <TabsTrigger value="live">Live Training</TabsTrigger>
+          <TabsTrigger value="assign">Assign Racks</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {mode === "assign" ? (
+        <div className="min-h-0 flex-1">
+          <RackAssignmentBoard />
+        </div>
+      ) : (
+      <div className="hud-grid flex min-h-0 flex-1 gap-3">
 
 
 
@@ -817,6 +833,8 @@ function TrainingView() {
         )}
 
       </section>
+      </div>
+      )}
     </div>
   );
 
