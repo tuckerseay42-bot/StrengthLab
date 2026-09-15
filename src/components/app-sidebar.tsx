@@ -24,6 +24,7 @@ import {
   UserCog,
   ShieldCheck,
   Upload,
+  Printer,
   Settings as SettingsIcon,
   User,
   LogIn,
@@ -66,6 +67,7 @@ const GROUPS: Group[] = [
       { to: "/programming", label: "Programs", icon: Layers },
       { to: "/training/assigned", label: "Assigned", icon: ClipboardCheck },
       { to: "/rack-console", label: "Training View", icon: Radio },
+      { to: "/program-delivery", label: "Program Delivery", icon: Printer },
       { to: "/athlete-qr", label: "Athlete Sign In", icon: LogIn },
       { to: "/training/completed", label: "Completed", icon: CheckCircle2 },
       { to: "/exercises", label: "Exercise Library", icon: Library },
@@ -109,7 +111,8 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isActive = (to: string) => (to === "/app" ? pathname === "/app" : pathname === to || pathname.startsWith(to + "/"));
+  const isActive = (to: string) =>
+    to === "/app" ? pathname === "/app" : pathname === to || pathname.startsWith(to + "/");
 
   return (
     <Sidebar collapsible="icon">
@@ -182,4 +185,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-

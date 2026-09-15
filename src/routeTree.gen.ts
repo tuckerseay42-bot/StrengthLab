@@ -21,6 +21,7 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as RackConsoleRouteImport } from './routes/rack-console'
 import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as ProgrammingRouteImport } from './routes/programming'
+import { Route as ProgramDeliveryRouteImport } from './routes/program-delivery'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PermissionsRouteImport } from './routes/permissions'
 import { Route as OverheadDisplayRouteImport } from './routes/overhead-display'
@@ -131,6 +132,11 @@ const ProgramsRoute = ProgramsRouteImport.update({
 const ProgrammingRoute = ProgrammingRouteImport.update({
   id: '/programming',
   path: '/programming',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramDeliveryRoute = ProgramDeliveryRouteImport.update({
+  id: '/program-delivery',
+  path: '/program-delivery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -417,6 +423,7 @@ export interface FileRoutesByFullPath {
   '/overhead-display': typeof OverheadDisplayRoute
   '/permissions': typeof PermissionsRoute
   '/pricing': typeof PricingRoute
+  '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
   '/rack-console': typeof RackConsoleRoute
@@ -546,6 +553,7 @@ export interface FileRoutesById {
   '/overhead-display': typeof OverheadDisplayRoute
   '/permissions': typeof PermissionsRoute
   '/pricing': typeof PricingRoute
+  '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
   '/rack-console': typeof RackConsoleRoute
@@ -613,6 +621,7 @@ export interface FileRouteTypes {
     | '/overhead-display'
     | '/permissions'
     | '/pricing'
+    | '/program-delivery'
     | '/programming'
     | '/programs'
     | '/rack-console'
@@ -678,6 +687,7 @@ export interface FileRouteTypes {
     | '/overhead-display'
     | '/permissions'
     | '/pricing'
+    | '/program-delivery'
     | '/programming'
     | '/programs'
     | '/rack-console'
@@ -741,6 +751,7 @@ export interface FileRouteTypes {
     | '/overhead-display'
     | '/permissions'
     | '/pricing'
+    | '/program-delivery'
     | '/programming'
     | '/programs'
     | '/rack-console'
@@ -807,6 +818,7 @@ export interface RootRouteChildren {
   OverheadDisplayRoute: typeof OverheadDisplayRoute
   PermissionsRoute: typeof PermissionsRoute
   PricingRoute: typeof PricingRoute
+  ProgramDeliveryRoute: typeof ProgramDeliveryRoute
   ProgrammingRoute: typeof ProgrammingRoute
   ProgramsRoute: typeof ProgramsRouteWithChildren
   RackConsoleRoute: typeof RackConsoleRoute
@@ -915,6 +927,13 @@ declare module '@tanstack/react-router' {
       path: '/programming'
       fullPath: '/programming'
       preLoaderRoute: typeof ProgrammingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/program-delivery': {
+      id: '/program-delivery'
+      path: '/program-delivery'
+      fullPath: '/program-delivery'
+      preLoaderRoute: typeof ProgramDeliveryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -1392,6 +1411,7 @@ const rootRouteChildren: RootRouteChildren = {
   OverheadDisplayRoute: OverheadDisplayRoute,
   PermissionsRoute: PermissionsRoute,
   PricingRoute: PricingRoute,
+  ProgramDeliveryRoute: ProgramDeliveryRoute,
   ProgrammingRoute: ProgrammingRoute,
   ProgramsRoute: ProgramsRouteWithChildren,
   RackConsoleRoute: RackConsoleRoute,
