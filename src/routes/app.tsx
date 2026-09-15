@@ -4,7 +4,7 @@ import { useOnboardingState } from "@/hooks/use-onboarding";
 import { useQuery } from "@tanstack/react-query";
 import {
   athletesQO, teamsQO, testsQO, testTypesQO, athleteTeamsQO,
-  athleteDisplayName, workoutAssignmentsQO, workoutsQO, repMaxesQO, liftsQO,
+  athleteDisplayName, workoutAssignmentsQO, workoutsQO, repMaxesQO, liftsQO, attendanceQO,
 } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveTeamId } from "@/hooks/use-active-team";
@@ -61,6 +61,7 @@ function DailyDashboard() {
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const { data: lifts = [] } = useQuery(liftsQO);
+  const { data: attendance = [] } = useQuery(attendanceQO);
 
   const { data: setsToday = [] } = useQuery({
     queryKey: ["rack_set_logs_today", today],
@@ -195,6 +196,39 @@ function DailyDashboard() {
     return items.sort((a, b) => (b.at.localeCompare(a.at))).slice(0, 30);
   }, [setsToday, repMaxes, tests, today, activeTeamId, athById]);
 
+  // Team Health: roster-wide "who's behind" — no coach-facing view surfaces
+  // this today, only per-athlete detail or same-day aggregates.
+  const BEHIND_DAYS = 7;
+  const teamHealth = useMemo(() => {
+    const lastPresent = new Map<string, string>(); // athlete_id -> most recent present session_date
+    for (const r of attendance) {
+      if (!r.present) continue;
+      if (!lastPresent.has(r.athlete_id)) lastPresent.set(r.athlete_id, r.session_date); // pre-sorted desc
+    }
+    const nowMs = Date.now();
+    const behind = athletes
+      .filter((a) => inScope(a.id) && a.status === "active")
+      .map((a) => {
+        const last = lastPresent.get(a.id) ?? null;
+        const daysSince = last ? Math.floor((nowMs - new Date(`${last}T00:00:00Z`).getTime()) / 86_400_000) : null;
+        return { athlete: a, last, daysSince };
+      })
+      .filter((r) => r.daysSince == null || r.daysSince >= BEHIND_DAYS)
+      .sort((a, b) => (b.daysSince ?? 9999) - (a.daysSince ?? 9999));
+
+    const flaggedByAthlete = new Map<string, number>();
+    for (const s of setsToday) {
+      if (s.approval_status !== "pending" || !inScope(s.athlete_id)) continue;
+      flaggedByAthlete.set(s.athlete_id, (flaggedByAthlete.get(s.athlete_id) ?? 0) + 1);
+    }
+    const flagged = [...flaggedByAthlete.entries()]
+      .map(([athleteId, count]) => ({ athlete: athById.get(athleteId), count }))
+      .filter((r): r is { athlete: (typeof athletes)[number]; count: number } => !!r.athlete)
+      .sort((a, b) => b.count - a.count);
+
+    return { behind, flagged };
+  }, [athletes, attendance, setsToday, activeTeamId, athById]);
+
   const todayLabel = new Date().toLocaleDateString(undefined, {
     weekday: "long", month: "long", day: "numeric",
   });
@@ -238,6 +272,9 @@ function DailyDashboard() {
           ))}
           <Button asChild size="sm" variant="outline">
             <Link to="/training/today"><CalendarDays className="mr-1.5 h-4 w-4" /> Today</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/training/analytics"><LineChart className="mr-1.5 h-4 w-4" /> Analytics</Link>
           </Button>
           <Button asChild size="sm">
             <Link to="/rack-console"><PlayCircle className="mr-1.5 h-4 w-4" /> Rack Console</Link>
@@ -373,6 +410,68 @@ function DailyDashboard() {
             <RowKV label="Lifts logged" value={kpis.liftsToday} icon={<Dumbbell className="h-3.5 w-3.5" />} />
             <RowKV label="Tests recorded" value={kpis.testsToday} icon={<LineChart className="h-3.5 w-3.5" />} />
             <RowKV label="PRs set" value={kpis.prsToday} icon={<Award className="h-3.5 w-3.5" />} accent="pr" />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Team Health — roster-wide, always visible (not buried in a collapsed section) ─ */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-2.5">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Users className="h-4 w-4 text-[color:var(--status-below)]" />
+              Behind on training
+            </CardTitle>
+            <Badge variant="outline" className="text-[10px] font-normal">{teamHealth.behind.length}</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            {teamHealth.behind.length === 0 ? (
+              <EmptyRow label={`Everyone's trained within the last ${BEHIND_DAYS} days.`} />
+            ) : (
+              <ul className="divide-y divide-border">
+                {teamHealth.behind.slice(0, 8).map(({ athlete, daysSince }) => (
+                  <li key={athlete.id} className="flex items-center justify-between gap-3 px-4 py-2 transition hover:bg-accent/40">
+                    <Link to="/athletes/$id" params={{ id: athlete.id }} className="truncate text-sm font-medium hover:underline">
+                      {athleteDisplayName(athlete)}
+                    </Link>
+                    <span className="shrink-0 text-xs text-[color:var(--status-below)]">
+                      {daysSince == null ? "Never checked in" : `${daysSince}d ago`}
+                    </span>
+                  </li>
+                ))}
+                {teamHealth.behind.length > 8 && (
+                  <li className="px-4 py-2 text-xs text-muted-foreground">+{teamHealth.behind.length - 8} more</li>
+                )}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-2.5">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <AlertTriangle className="h-4 w-4 text-[color:var(--status-below)]" />
+              Flagged today
+            </CardTitle>
+            <Button asChild size="sm" variant="ghost" className="text-xs">
+              <Link to="/log-review">Review all <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {teamHealth.flagged.length === 0 ? (
+              <EmptyRow label="No flagged sets today." />
+            ) : (
+              <ul className="divide-y divide-border">
+                {teamHealth.flagged.slice(0, 8).map(({ athlete, count }) => (
+                  <li key={athlete.id} className="flex items-center justify-between gap-3 px-4 py-2 transition hover:bg-accent/40">
+                    <Link to="/athletes/$id" params={{ id: athlete.id }} className="truncate text-sm font-medium hover:underline">
+                      {athleteDisplayName(athlete)}
+                    </Link>
+                    <span className="shrink-0 text-xs text-[color:var(--status-below)]">{count} set{count === 1 ? "" : "s"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>
