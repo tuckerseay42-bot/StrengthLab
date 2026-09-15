@@ -478,7 +478,7 @@ export type ProgramSession = {
 export type ProgramVersion = {
   id: string; program_id: string; organization_id: string;
   label: string; notes: string | null; snapshot: unknown;
-  created_by: string | null; created_at: string;
+  created_by: string | null; created_at: string; version_number: number;
 };
 
 export const programPhasesQO = (programId: string) => queryOptions({

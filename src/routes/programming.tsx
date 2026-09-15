@@ -6,9 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useActiveOrgId } from "@/hooks/use-active-org";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  programsQO, programPhasesQO, programCyclesQO, programSessionsQO,
+  programsQO, programPhasesQO, programCyclesQO, programSessionsQO, programVersionsQO,
   workoutsQO, teamsQO,
-  type Program, type ProgramPhase, type ProgramCycle, type ProgramSession, type Workout,
+  type Program, type ProgramPhase, type ProgramCycle, type ProgramSession, type Workout, type ProgramVersion,
 } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +30,13 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import {
   ChevronRight, ChevronDown, Plus, MoreHorizontal, Copy, Trash2, Pencil,
   FolderKanban, Layers, CalendarDays, Dumbbell, FolderPlus, FilePlus2, Move,
-  PanelLeft, GripVertical, ArrowRightLeft, Zap,
+  PanelLeft, GripVertical, ArrowRightLeft, Zap, History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 import { WorkoutEditor } from "@/components/workout-editor";
+import { duplicateWorkout } from "@/lib/workout-duplicate";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -443,6 +444,29 @@ function ProgramNode({ program, sel, onSelect }: {
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
+  // DnD: reorder phases within this program
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const phaseIds = phases.map((p) => p.id);
+  const reorderPhases = useMutation({
+    mutationFn: async (ordered: ProgramPhase[]) => {
+      await Promise.all(ordered.map((p, i) =>
+        supabase.from("program_phases" as never).update({ position: i } as never).eq("id", p.id),
+      ));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["program_phases", program.id] }),
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+  const handlePhaseDragEnd = (evt: DragEndEvent) => {
+    const { active: a, over } = evt;
+    if (!over || a.id === over.id) return;
+    const oldIdx = phaseIds.indexOf(String(a.id));
+    const newIdx = phaseIds.indexOf(String(over.id));
+    if (oldIdx < 0 || newIdx < 0) return;
+    const next = arrayMove(phases, oldIdx, newIdx);
+    qc.setQueryData(["program_phases", program.id], () => next.map((p, i) => ({ ...p, position: i })));
+    reorderPhases.mutate(next);
+  };
+
   return (
     <li>
       <Row
@@ -475,26 +499,35 @@ function ProgramNode({ program, sel, onSelect }: {
               </button>
             </li>
           )}
-          {phases.map((ph) => (
-            <PhaseNode
-              key={ph.id}
-              program={program}
-              phase={ph}
-              cycles={cycles.filter((c) => c.phase_id === ph.id)}
-              sessions={sessions}
-              sel={sel}
-              onSelect={onSelect}
-            />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhaseDragEnd}>
+            <SortableContext items={phaseIds} strategy={verticalListSortingStrategy}>
+              {phases.map((ph) => (
+                <SortableWrap key={ph.id} id={ph.id}>
+                  {(handleProps) => (
+                    <PhaseNode
+                      program={program}
+                      phase={ph}
+                      cycles={cycles.filter((c) => c.phase_id === ph.id)}
+                      sessions={sessions}
+                      sel={sel}
+                      onSelect={onSelect}
+                      dragHandleProps={handleProps}
+                    />
+                  )}
+                </SortableWrap>
+              ))}
+            </SortableContext>
+          </DndContext>
         </ul>
       )}
     </li>
   );
 }
 
-function PhaseNode({ program, phase, cycles, sessions, sel, onSelect }: {
+function PhaseNode({ program, phase, cycles, sessions, sel, onSelect, dragHandleProps }: {
   program: Program; phase: ProgramPhase; cycles: ProgramCycle[]; sessions: ProgramSession[];
   sel: Sel; onSelect: (s: Sel) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }) {
   const qc = useQueryClient();
   const contains =
@@ -566,6 +599,7 @@ function PhaseNode({ program, phase, cycles, sessions, sel, onSelect }: {
         icon={<Layers className="h-3.5 w-3.5" style={{ color: phase.color || undefined }} />}
         label={phase.name}
         badge={`${cycles.length}`}
+        dragHandleProps={dragHandleProps}
         menu={
           <>
             <DropdownMenuItem onClick={() => addCycle.mutate()}><FolderPlus className="mr-2 h-3.5 w-3.5" />Add cycle / week</DropdownMenuItem>
@@ -1020,6 +1054,90 @@ function ProgramTargetGroup({ program, selected, onToggle, mode, currentCycleId 
   );
 }
 
+// ================= DESTINATION PICKER (copy whole cycle) =================
+function CycleDestinationPicker({ cycleId, sessions, onClose }: {
+  cycleId: string;
+  sessions: ProgramSession[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [activeOrgId] = useActiveOrgId();
+  const { data: programsAll = [] } = useQuery(programsQO);
+  const programs = activeOrgId ? programsAll.filter((p) => p.organization_id === activeOrgId) : programsAll;
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // cycle_ids
+
+  const toggle = (id: string) => setSelected((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const run = useMutation({
+    mutationFn: async () => {
+      if (selected.size === 0) throw new Error("Pick at least one destination");
+      if (sessions.length === 0) throw new Error("This cycle has no sessions to copy");
+      const cycleIds = Array.from(selected);
+      const { data: targetCycles, error: ce } = await supabase
+        .from("program_cycles" as never).select("*").in("id", cycleIds);
+      if (ce) throw ce;
+      const cycles = (targetCycles ?? []) as unknown as ProgramCycle[];
+      const orderedSessions = [...sessions].sort((a, b) => a.position - b.position);
+
+      for (const c of cycles) {
+        const { data: existing } = await supabase.from("program_sessions" as never)
+          .select("position").eq("cycle_id", c.id).order("position", { ascending: false }).limit(1);
+        let nextPos = ((existing?.[0] as { position?: number } | undefined)?.position ?? -1) + 1;
+        const payload = orderedSessions.map((s) => {
+          const row = {
+            cycle_id: c.id, phase_id: c.phase_id, program_id: c.program_id,
+            organization_id: c.organization_id, workout_id: s.workout_id,
+            name: s.name, week: s.week, day: nextPos + 1,
+            position: nextPos, notes: s.notes,
+          };
+          nextPos += 1;
+          return row;
+        });
+        const { error } = await supabase.from("program_sessions" as never).insert(payload as never);
+        if (error) throw error;
+      }
+      return cycles.map((c) => c.program_id);
+    },
+    onSuccess: (programIds) => {
+      new Set(programIds).forEach((pid) => qc.invalidateQueries({ queryKey: ["program_sessions", pid] }));
+      toast.success(`Copied ${sessions.length} session${sessions.length === 1 ? "" : "s"} to ${selected.size} cycle${selected.size === 1 ? "" : "s"}`);
+      onClose();
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Copy this cycle to…</DialogTitle>
+          <DialogDescription>
+            Copies all {sessions.length} session{sessions.length === 1 ? "" : "s"} in this cycle into one or more
+            destination cycles/weeks. Sessions point at the same workouts (not duplicated).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[50vh] overflow-auto rounded border">
+          <ul className="divide-y">
+            {programs.map((p) => (
+              <ProgramTargetGroup key={p.id} program={p} selected={selected} onToggle={toggle} mode="copy" currentCycleId={cycleId} />
+            ))}
+          </ul>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => run.mutate()} disabled={run.isPending || selected.size === 0}>
+            {`Copy to ${selected.size || "…"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ================= RIGHT EDITOR PANE =================
 
 function EditorPane({ sel, onSelect, programs, onNewProgram }: { sel: Sel; onSelect: (s: Sel) => void; programs: Program[]; onNewProgram?: () => void }) {
@@ -1108,6 +1226,7 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
   const { data: phases = [] } = useQuery(programPhasesQO(programId));
   const { data: cycles = [] } = useQuery(programCyclesQO(programId));
   const { data: sessions = [] } = useQuery(programSessionsQO(programId));
+  const { data: versions = [] } = useQuery(programVersionsQO(programId));
 
   const [form, setForm] = useState({ name: "", description: "" });
   useEffect(() => {
@@ -1167,6 +1286,52 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["program_sessions", programId] });
       onSelect({ kind: "session", id, programId });
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
+  // Version snapshots: a lightweight structural record (phases/cycles/
+  // sessions — names, weeks, days, dates) a coach can save before making
+  // changes and look back at later. Doesn't capture exercise/set-level
+  // detail or support one-click restore — see program_versions' snapshot
+  // jsonb for the saved shape.
+  const saveVersion = useMutation({
+    mutationFn: async () => {
+      if (!program) throw new Error("Program not loaded");
+      const label = prompt("Label this version (e.g. \"Week 3 draft\", \"Pre-deload\")", `Version ${versions.length + 1}`);
+      if (!label || !label.trim()) throw new Error("__cancelled");
+      const snapshot = {
+        saved_at: new Date().toISOString(),
+        phases: phases.map((p) => ({ id: p.id, name: p.name, goal: p.goal, position: p.position })),
+        cycles: cycles.map((c) => ({ id: c.id, phase_id: c.phase_id, name: c.name, weeks: c.weeks, position: c.position })),
+        sessions: sessions.map((s) => ({
+          id: s.id, cycle_id: s.cycle_id, phase_id: s.phase_id, name: s.name,
+          week: s.week, day: s.day, position: s.position, scheduled_date: s.scheduled_date,
+        })),
+      };
+      const { error } = await supabase.from("program_versions" as never).insert({
+        program_id: programId, organization_id: program.organization_id,
+        label: label.trim(), snapshot,
+      } as never);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["program_versions", programId] });
+      toast.success("Version saved");
+    },
+    onError: (e: Error) => { if (e.message !== "__cancelled") toast.error(toUserMessage(e)); },
+  });
+
+  const [deleteVersionId, setDeleteVersionId] = useState<string | null>(null);
+  const deleteVersion = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("program_versions" as never).delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["program_versions", programId] });
+      toast.success("Version deleted");
+      setDeleteVersionId(null);
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -1242,6 +1407,40 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
               })}
             </div>
           </div>
+
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-sm font-semibold">
+                <History className="h-4 w-4 text-muted-foreground" /> Versions
+              </div>
+              <Button size="sm" variant="outline" onClick={() => saveVersion.mutate()} disabled={saveVersion.isPending}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Save snapshot
+              </Button>
+            </div>
+            {versions.length === 0 ? (
+              <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                No snapshots yet — save one before making a big change so you can look back at how the program was structured.
+              </div>
+            ) : (
+              <ul className="divide-y rounded-md border">
+                {versions.map((v) => (
+                  <li key={v.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        v{v.version_number} · {v.label}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {new Date(v.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                      </div>
+                    </div>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setDeleteVersionId(v.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </>
       ) : (
         <>
@@ -1297,6 +1496,27 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
           )}
         </>
       )}
+
+      <AlertDialog open={!!deleteVersionId} onOpenChange={(open) => { if (!open) setDeleteVersionId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this version?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This snapshot will be permanently deleted. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteVersion.mutate(deleteVersionId!)}
+              disabled={deleteVersion.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1430,6 +1650,7 @@ function CycleEditor({ cycleId, programId, onSelect }: { cycleId: string; progra
   const { data: programs = [] } = useQuery(programsQO);
   const program = programs.find((p) => p.id === programId);
   const { data: phases = [] } = useQuery(programPhasesQO(programId));
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const addSession = useMutation({
     mutationFn: async () => {
@@ -1478,9 +1699,20 @@ function CycleEditor({ cycleId, programId, onSelect }: { cycleId: string; progra
       <div className="mt-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold">Sessions</div>
-          <Button size="sm" onClick={() => addSession.mutate()} disabled={addSession.isPending}>
-            <Plus className="mr-1 h-4 w-4" /> Add workout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCopyOpen(true)}
+              disabled={cSessions.length === 0}
+              title="Copy every session in this cycle to one or more other cycles/weeks"
+            >
+              <Copy className="mr-1 h-3.5 w-3.5" /> Copy this cycle to…
+            </Button>
+            <Button size="sm" onClick={() => addSession.mutate()} disabled={addSession.isPending}>
+              <Plus className="mr-1 h-4 w-4" /> Add workout
+            </Button>
+          </div>
         </div>
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
           {cSessions.map((s) => (
@@ -1508,6 +1740,13 @@ function CycleEditor({ cycleId, programId, onSelect }: { cycleId: string; progra
         </div>
       </div>
 
+      {copyOpen && (
+        <CycleDestinationPicker
+          cycleId={cycleId}
+          sessions={cSessions}
+          onClose={() => setCopyOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1515,6 +1754,7 @@ function CycleEditor({ cycleId, programId, onSelect }: { cycleId: string; progra
 // ---------- Session (workout) edit ----------
 function SessionEditor({ sessionId, programId }: { sessionId: string; programId: string }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: sessions = [] } = useQuery(programSessionsQO(programId));
   const session = sessions.find((s) => s.id === sessionId);
   const { data: workouts = [] } = useQuery(workoutsQO);
@@ -1560,6 +1800,35 @@ function SessionEditor({ sessionId, programId }: { sessionId: string; programId:
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["program_sessions", programId] });
       qc.invalidateQueries({ queryKey: ["workouts"] });
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
+  // Duplicate this session as a new sibling Day in the same cycle — copies the
+  // workout's exercises/sets via duplicateWorkout(), then attaches the copy
+  // via a new program_sessions row so it shows up in the tree right away
+  // (duplicateWorkout only re-attaches through the legacy program_workouts
+  // table, which this hierarchy doesn't use).
+  const duplicateSession = useMutation({
+    mutationFn: async () => {
+      if (!session || !workout || !program) throw new Error("Nothing to duplicate yet");
+      const newWorkout = await duplicateWorkout(workout.id, { name: session.name });
+      const siblings = sessions.filter((s) => s.cycle_id === session.cycle_id);
+      const { data: ns, error } = await supabase.from("program_sessions" as never).insert({
+        cycle_id: session.cycle_id, phase_id: session.phase_id, program_id: program.id,
+        organization_id: program.organization_id,
+        workout_id: newWorkout.id,
+        name: `${session.name} (copy)`,
+        week: session.week, day: siblings.length + 1, position: siblings.length,
+      } as never).select("id").single();
+      if (error) throw error;
+      return (ns as { id: string }).id;
+    },
+    onSuccess: (newId) => {
+      qc.invalidateQueries({ queryKey: ["program_sessions", programId] });
+      qc.invalidateQueries({ queryKey: ["workouts"] });
+      toast.success("Session duplicated");
+      navigate({ to: "/programming", search: selToSearch({ kind: "session", id: newId, programId }), replace: false });
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -1623,6 +1892,8 @@ function SessionEditor({ sessionId, programId }: { sessionId: string; programId:
             programId: program.id,
             teamId: program.team_id,
             teamName: program.team_id ? (teams.find((t) => t.id === program.team_id)?.name ?? null) : null,
+            onDuplicateSession: () => duplicateSession.mutate(),
+            duplicatingSession: duplicateSession.isPending,
           } : undefined}
         />
       )}

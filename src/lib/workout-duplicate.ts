@@ -2,10 +2,16 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Workout, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 
 /**
- * Duplicate a workout: copies the workout row, all workout_exercises,
- * all workout_sets (with foreign keys remapped), and re-attaches the new
- * workout to every program the source was in. Assignments are intentionally
- * NOT copied — schedules belong to the original session.
+ * Duplicate a workout: copies the workout row, all workout_exercises, and
+ * all workout_sets (with foreign keys remapped). Assignments are
+ * intentionally NOT copied — schedules belong to the original session.
+ *
+ * Also re-attaches the copy via the legacy flat `program_workouts` table for
+ * any program that still uses it. Programs built on the newer
+ * Phase→Cycle→Session hierarchy (`program_sessions`) don't use that table at
+ * all, so a caller duplicating a session in that hierarchy needs to insert
+ * its own sibling `program_sessions` row pointing at the returned workout
+ * (see SessionEditor's duplicateSession in src/routes/programming.tsx).
  *
  * Returns the newly created workout row.
  */

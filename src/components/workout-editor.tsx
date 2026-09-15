@@ -49,7 +49,14 @@ export function WorkoutEditor({ workout, programContext }: {
    * single "Publish & Assign" action targets the program's team (or the
    * athletes on that program) automatically.
    */
-  programContext?: { programId: string; teamId: string | null; teamName?: string | null };
+  programContext?: {
+    programId: string;
+    teamId: string | null;
+    teamName?: string | null;
+    /** Duplicates this session as a new sibling Day in the same cycle, instead of the standalone-only Duplicate button's behavior. */
+    onDuplicateSession?: () => void;
+    duplicatingSession?: boolean;
+  };
 }) {
   const embedded = !!programContext;
   const qc = useQueryClient();
@@ -641,6 +648,18 @@ export function WorkoutEditor({ workout, programContext }: {
             <SaveIndicator state={saveState} lastSavedAt={lastSavedAt} onFlush={() => void flush()} />
             {embedded ? (
               <>
+                {programContext?.onDuplicateSession && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => programContext.onDuplicateSession!()}
+                    disabled={programContext.duplicatingSession}
+                    title="Duplicate this session as a new Day in the same cycle"
+                  >
+                    <Copy className="h-3 w-3" /> Duplicate
+                  </Button>
+                )}
                 <Input
                   type="date"
                   value={publishDate}
