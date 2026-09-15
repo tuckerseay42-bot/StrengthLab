@@ -59,6 +59,8 @@ export type Athlete = {
   gender: string | null;
   organization_id: string;
   class_period: string | null;
+  training_group: string | null;
+  tags: string[];
 };
 export type Program = {
   id: string; name: string; description: string | null;
