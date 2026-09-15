@@ -22,6 +22,10 @@ import {
   Activity, AlertTriangle, Award, ArrowUpRight, CalendarDays, CheckCircle2,
   ChevronDown, CircleDashed, Dumbbell, Filter, LineChart, PlayCircle, TrendingUp, Users, Zap,
 } from "lucide-react";
+import {
+  ResponsiveContainer, LineChart as RLineChart, Line, BarChart, Bar,
+  XAxis, YAxis, Tooltip, CartesianGrid,
+} from "recharts";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -34,6 +38,25 @@ export const Route = createFileRoute("/app")({
 });
 
 function fmtDate(d: Date) { return d.toISOString().slice(0, 10); }
+function isoWeek(dateStr: string) {
+  const d = new Date(dateStr);
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+function lastNWeekStarts(n: number): string[] {
+  const start = isoWeek(fmtDate(new Date()));
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(start);
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+function weekLabel(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 function timeAgo(iso: string | null | undefined) {
   if (!iso) return "";
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -229,6 +252,46 @@ function DailyDashboard() {
     return { behind, flagged };
   }, [athletes, attendance, setsToday, activeTeamId, athById]);
 
+  // ── Weekly trend visuals ────────────────────────────────────────
+  const attendanceTrend = useMemo(() => {
+    const weeks = lastNWeekStarts(6);
+    const byWeek = new Map<string, { present: number; total: number }>();
+    for (const w of weeks) byWeek.set(w, { present: 0, total: 0 });
+    for (const r of attendance) {
+      if (!inScope(r.athlete_id)) continue;
+      const bucket = byWeek.get(isoWeek(r.session_date));
+      if (!bucket) continue;
+      bucket.total += 1;
+      if (r.present) bucket.present += 1;
+    }
+    return weeks.map((w) => {
+      const b = byWeek.get(w)!;
+      return { week: weekLabel(w), rate: b.total > 0 ? Math.round((b.present / b.total) * 100) : 0 };
+    });
+  }, [attendance, activeTeamId, athById]);
+
+  const prWeeklyTrend = useMemo(() => {
+    const weeks = lastNWeekStarts(8);
+    const byWeek = new Map<string, number>();
+    for (const w of weeks) byWeek.set(w, 0);
+    for (const r of repMaxes) {
+      if (!inScope(r.athlete_id)) continue;
+      const d = (r.tested_at ?? "").slice(0, 10);
+      if (!d) continue;
+      const wk = isoWeek(d);
+      if (!byWeek.has(wk)) continue;
+      byWeek.set(wk, (byWeek.get(wk) ?? 0) + 1);
+    }
+    return weeks.map((w) => ({ week: weekLabel(w), PRs: byWeek.get(w) ?? 0 }));
+  }, [repMaxes, activeTeamId, athById]);
+
+  const activityBreakdown = useMemo(() => [
+    { name: "Sets", value: setsToday.filter((s) => inScope(s.athlete_id)).length },
+    { name: "Lifts", value: kpis.liftsToday },
+    { name: "Tests", value: kpis.testsToday },
+    { name: "PRs", value: kpis.prsToday },
+  ], [setsToday, kpis, activeTeamId, athById]);
+
   const todayLabel = new Date().toLocaleDateString(undefined, {
     weekday: "long", month: "long", day: "numeric",
   });
@@ -400,16 +463,20 @@ function DailyDashboard() {
           </CardContent>
         </Card>
 
-        {/* Right rail — grouped info */}
+        {/* Right rail — today's activity at a glance */}
         <Card>
           <CardHeader className="border-b border-border pb-2.5">
-            <CardTitle className="text-sm font-semibold">Volume today</CardTitle>
+            <CardTitle className="text-sm font-semibold">Today's activity</CardTitle>
           </CardHeader>
-          <CardContent className="p-0 text-sm">
-            <RowKV label="Rack sets logged" value={setsToday.filter((s) => inScope(s.athlete_id)).length} icon={<Activity className="h-3.5 w-3.5" />} />
-            <RowKV label="Lifts logged" value={kpis.liftsToday} icon={<Dumbbell className="h-3.5 w-3.5" />} />
-            <RowKV label="Tests recorded" value={kpis.testsToday} icon={<LineChart className="h-3.5 w-3.5" />} />
-            <RowKV label="PRs set" value={kpis.prsToday} icon={<Award className="h-3.5 w-3.5" />} accent="pr" />
+          <CardContent className="p-3">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={activityBreakdown} layout="vertical" margin={{ left: 8, right: 12 }}>
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis type="category" dataKey="name" width={50} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
+                <Bar dataKey="value" fill="var(--primary)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
@@ -472,6 +539,43 @@ function DailyDashboard() {
                 ))}
               </ul>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Weekly trends — the visual pulse of the room over time ─ */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="border-b border-border pb-2.5">
+            <CardTitle className="text-sm font-semibold">Attendance — last 6 weeks</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <ResponsiveContainer width="100%" height={200}>
+              <RLineChart data={attendanceTrend} margin={{ left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Present"]} />
+                <Line type="monotone" dataKey="rate" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
+              </RLineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b border-border pb-2.5">
+            <CardTitle className="text-sm font-semibold">PRs — last 8 weeks</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={prWeeklyTrend} margin={{ left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
+                <Bar dataKey="PRs" fill="var(--status-pr)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
@@ -640,20 +744,6 @@ function Kpi({
           <div className={`h-full transition-all ${barClass}`} style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
         </div>
       )}
-    </div>
-  );
-}
-
-function RowKV({ label, value, accent, icon }: { label: string; value: number | string; accent?: "pr"; icon?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between border-b border-border px-4 py-2.5 last:border-b-0">
-      <span className="flex items-center gap-2 text-sm text-muted-foreground">
-        {icon}
-        {label}
-      </span>
-      <span className={`mono-number text-sm font-semibold tabular-nums ${accent === "pr" ? "text-[color:var(--status-pr)]" : ""}`}>
-        {value}
-      </span>
     </div>
   );
 }

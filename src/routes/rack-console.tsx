@@ -50,6 +50,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { RackAssignmentBoard } from "@/components/rack-assignment-board";
+import { RackDisplayBoard } from "@/components/rack-display-board";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +100,8 @@ import {
   Timer,
   ChevronDown,
   ChevronRight,
+  Radio,
+  Tv,
   FolderKanban,
   Layers,
   CalendarDays,
@@ -319,7 +322,7 @@ function TrainingView() {
   }, [exerciseLib]);
 
   // UI state
-  const [mode, setMode] = useState<"assign" | "live">("live");
+  const [mode, setMode] = useState<"assign" | "live" | "display">("live");
   const [layoutSize, setLayoutSize] = useLocalStorage<LayoutSize>(LAYOUT_KEY, 4);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Tap-to-expand: one athlete takes over the screen so numbers are readable.
@@ -694,10 +697,11 @@ function TrainingView() {
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] min-h-[560px] flex-col gap-3 pb-[env(safe-area-inset-bottom)]">
-      <Tabs value={mode} onValueChange={(v) => setMode(v as "assign" | "live")}>
+      <Tabs value={mode} onValueChange={(v) => setMode(v as "assign" | "live" | "display")}>
         <TabsList>
-          <TabsTrigger value="live">Live Training</TabsTrigger>
-          <TabsTrigger value="assign">Assign Racks</TabsTrigger>
+          <TabsTrigger value="live" className="gap-1.5"><Radio className="h-3.5 w-3.5" />Live Training</TabsTrigger>
+          <TabsTrigger value="assign" className="gap-1.5"><Users className="h-3.5 w-3.5" />Assign Racks</TabsTrigger>
+          <TabsTrigger value="display" className="gap-1.5"><Tv className="h-3.5 w-3.5" />Display</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -705,15 +709,17 @@ function TrainingView() {
         <div className="min-h-0 flex-1">
           <RackAssignmentBoard />
         </div>
+      ) : mode === "display" ? (
+        <div className="min-h-0 flex-1">
+          <RackDisplayBoard />
+        </div>
       ) : (
       <div className="hud-grid flex min-h-0 flex-1 gap-3">
-
-
 
       {/* ---------------- Workspace ---------------- */}
       <section className="flex min-w-0 flex-1 flex-col gap-3">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/50 px-2 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/60 px-2.5 py-2 shadow-sm">
           <div className="flex items-center gap-1">
             <span className="hidden pr-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
               Layout
@@ -746,7 +752,6 @@ function TrainingView() {
             )}
           </div>
           <div className="flex items-center gap-1">
-
             <ToolbarToggle
               active={compact}
               onClick={() => setCompact((v) => !v)}
@@ -759,6 +764,7 @@ function TrainingView() {
               icon={<LayoutGrid className="h-3.5 w-3.5" />}
               label="Rack mode"
             />
+            <div className="mx-1 h-5 w-px bg-border/60" />
             <ToolbarToggle
               active={fullscreen}
               onClick={toggleFullscreen}
@@ -1094,7 +1100,7 @@ function Avatar({
         "flex shrink-0 items-center justify-center rounded-full font-semibold text-white",
         dim,
       )}
-      style={{ backgroundColor: color || "hsl(var(--primary))" }}
+      style={{ backgroundColor: color || "var(--primary)" }}
     >
       {initials}
     </div>
