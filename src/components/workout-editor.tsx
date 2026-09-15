@@ -929,7 +929,7 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="rounded-md border border-border/50 bg-card">
+      <div className="rounded-md border border-border/50 bg-card transition-shadow hover:shadow-sm">
         {/* Row header — always visible, dense */}
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="grid h-6 w-6 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground hover:bg-muted">
@@ -1136,7 +1136,7 @@ function SetSchemeRow({ index, set, exercises, measurement, onUpdate, onRemove }
   };
 
   return (
-    <div className="grid grid-cols-[24px_56px_56px_104px_1fr_72px_28px] items-center gap-2 px-2 py-1.5">
+    <div className="grid grid-cols-[24px_56px_56px_104px_1fr_72px_28px] items-center gap-2 px-2 py-2 transition-colors hover:bg-muted/30">
       <span className="mono-number text-[11px] text-muted-foreground">{index}</span>
       <Input className="h-7 text-xs" type="number" min={1} value={local.sets ?? ""} onChange={(e) => commit({ sets: e.target.value ? Number(e.target.value) : null })} placeholder="Sets" />
       <Input className="h-7 text-xs" value={local.reps} onChange={(e) => commit({ reps: e.target.value })} placeholder="Reps" />

@@ -184,23 +184,24 @@ function ProgrammingWorkspace() {
             <EditorPane sel={sel} onSelect={setSel} programs={programs} onNewProgram={() => setNewProgOpen(true)} />
           </div>
         ) : (
-          <div className="flex h-full">
-            <aside className="flex w-[300px] shrink-0 flex-col border-r">
-              <div className="flex items-center justify-between border-b px-3 py-2">
+          <ResizablePanelGroup className="h-full">
+            <ResizablePanel defaultSize="24" minSize="18" maxSize="42" className="flex flex-col border-r">
+              <div className="flex items-center justify-between border-b bg-card/40 px-3 py-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Programs</div>
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setNewProgOpen(true)} title="New program">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
               <div className="min-h-0 flex-1 overflow-auto p-2">{treeBody}</div>
-            </aside>
-            <section className="flex min-w-0 flex-1 flex-col">
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize="76" minSize="40" className="flex min-w-0 flex-col">
               <Breadcrumb sel={sel} programs={programs} onSelect={setSel} />
               <div className="min-h-0 flex-1 overflow-auto">
                 <EditorPane sel={sel} onSelect={setSel} programs={programs} onNewProgram={() => setNewProgOpen(true)} />
               </div>
-            </section>
-          </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         )}
       </div>
 
@@ -404,6 +405,7 @@ function ProgramNode({ program, sel, onSelect }: {
     ((sel.kind === "phase" || sel.kind === "cycle" || sel.kind === "session") && sel.programId === program.id);
   const [open, setOpen] = useState(contains);
   useEffect(() => { if (contains) setOpen(true); }, [contains]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: phases = [] } = useQuery(programPhasesQO(program.id));
   const { data: cycles = [] } = useQuery(programCyclesQO(program.id));
@@ -484,14 +486,14 @@ function ProgramNode({ program, sel, onSelect }: {
               if (n && n.trim()) rename.mutate(n.trim());
             }}><Pencil className="mr-2 h-3.5 w-3.5" />Rename</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { if (confirm(`Delete "${program.name}" and everything inside?`)) del.mutate(); }} className="text-destructive">
+            <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
             </DropdownMenuItem>
           </>
         }
       />
       {open && (
-        <ul className="ml-3 border-l pl-1">
+        <ul className="ml-3 border-l border-border/60 pl-2">
           {phases.length === 0 && (
             <li className="px-2 py-1 text-[11px] text-muted-foreground">
               <button onClick={() => addPhase.mutate()} className="inline-flex items-center gap-1 hover:text-foreground">
@@ -520,6 +522,14 @@ function ProgramNode({ program, sel, onSelect }: {
           </DndContext>
         </ul>
       )}
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete "${program.name}"?`}
+        description="This permanently removes the program and everything inside it — phases, cycles, sessions, and workouts. This can't be undone."
+        onConfirm={() => { del.mutate(); setConfirmDelete(false); }}
+        pending={del.isPending}
+      />
     </li>
   );
 }
@@ -536,6 +546,7 @@ function PhaseNode({ program, phase, cycles, sessions, sel, onSelect, dragHandle
       cycles.some((c) => c.id === (sel.kind === "cycle" ? sel.id : sessions.find((s) => s.id === (sel as { id: string }).id)?.cycle_id)));
   const [open, setOpen] = useState(contains);
   useEffect(() => { if (contains) setOpen(true); }, [contains]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const active = sel.kind === "phase" && sel.id === phase.id;
 
   const addCycle = useMutation({
@@ -604,14 +615,14 @@ function PhaseNode({ program, phase, cycles, sessions, sel, onSelect, dragHandle
           <>
             <DropdownMenuItem onClick={() => addCycle.mutate()}><FolderPlus className="mr-2 h-3.5 w-3.5" />Add cycle / week</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { if (confirm(`Delete phase "${phase.name}"?`)) del.mutate(); }} className="text-destructive">
+            <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
             </DropdownMenuItem>
           </>
         }
       />
       {open && (
-        <ul className="ml-3 border-l pl-1">
+        <ul className="ml-3 border-l border-border/60 pl-2">
           {cycles.length === 0 && (
             <li className="px-2 py-1 text-[11px] text-muted-foreground">
               <button onClick={() => addCycle.mutate()} className="inline-flex items-center gap-1 hover:text-foreground">
@@ -640,6 +651,14 @@ function PhaseNode({ program, phase, cycles, sessions, sel, onSelect, dragHandle
           </DndContext>
         </ul>
       )}
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete phase "${phase.name}"?`}
+        description="This permanently removes the phase along with its cycles and sessions. This can't be undone."
+        onConfirm={() => { del.mutate(); setConfirmDelete(false); }}
+        pending={del.isPending}
+      />
     </li>
   );
 }
@@ -655,6 +674,7 @@ function CycleNode({ program, phase, cycle, sessions, sel, onSelect, dragHandleP
     (sel.kind === "session" && sessions.some((s) => s.id === sel.id));
   const [open, setOpen] = useState(contains);
   useEffect(() => { if (contains) setOpen(true); }, [contains]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const active = sel.kind === "cycle" && sel.id === cycle.id;
 
   const addSession = useMutation({
@@ -737,14 +757,14 @@ function CycleNode({ program, phase, cycle, sessions, sel, onSelect, dragHandleP
           <>
             <DropdownMenuItem onClick={() => addSession.mutate()}><FilePlus2 className="mr-2 h-3.5 w-3.5" />Add session</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { if (confirm(`Delete cycle "${cycle.name}"?`)) del.mutate(); }} className="text-destructive">
+            <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
             </DropdownMenuItem>
           </>
         }
       />
       {open && (
-        <ul className="ml-3 border-l pl-1">
+        <ul className="ml-3 border-l border-border/60 pl-2">
           {sessions.length === 0 && (
             <li className="px-2 py-1 text-[11px] text-muted-foreground">
               <button onClick={() => addSession.mutate()} className="inline-flex items-center gap-1 hover:text-foreground">
@@ -771,6 +791,14 @@ function CycleNode({ program, phase, cycle, sessions, sel, onSelect, dragHandleP
           </DndContext>
         </ul>
       )}
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete cycle "${cycle.name}"?`}
+        description="This permanently removes the cycle and its sessions. This can't be undone."
+        onConfirm={() => { del.mutate(); setConfirmDelete(false); }}
+        pending={del.isPending}
+      />
     </li>
   );
 }
@@ -782,6 +810,7 @@ function SessionNode({ program, session, sel, onSelect, dragHandleProps }: {
   const qc = useQueryClient();
   const active = sel.kind === "session" && sel.id === session.id;
   const [pickerOpen, setPickerOpen] = useState<"copy" | "move" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const del = useMutation({
     mutationFn: async () => {
@@ -809,7 +838,7 @@ function SessionNode({ program, session, sel, onSelect, dragHandleProps }: {
             <DropdownMenuItem onClick={() => setPickerOpen("copy")}><Copy className="mr-2 h-3.5 w-3.5" />Copy to…</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setPickerOpen("move")}><ArrowRightLeft className="mr-2 h-3.5 w-3.5" />Move to…</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { if (confirm(`Delete "${session.name}"?`)) del.mutate(); }} className="text-destructive">
+            <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
             </DropdownMenuItem>
           </>
@@ -822,6 +851,14 @@ function SessionNode({ program, session, sel, onSelect, dragHandleProps }: {
           onClose={() => setPickerOpen(null)}
         />
       )}
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete "${session.name}"?`}
+        description="This permanently removes the session from the cycle. The workout itself stays around unless you also delete it separately. This can't be undone."
+        onConfirm={() => { del.mutate(); setConfirmDelete(false); }}
+        pending={del.isPending}
+      />
     </li>
   );
 }
@@ -845,6 +882,38 @@ function SortableWrap({ id, children }: {
 }
 
 // ================= Reusable tree row =================
+// Shared destructive-action confirmation, used in place of native confirm()
+// popups throughout the tree so deletes match the rest of the app's UI.
+function ConfirmDeleteDialog({ open, onOpenChange, title, description, onConfirm, pending }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string;
+  description: string;
+  onConfirm: () => void;
+  pending?: boolean;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={onConfirm}
+            disabled={pending}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function ChevronBtn({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <button
@@ -874,8 +943,8 @@ function Row({
     <div
       onClick={onClick}
       className={cn(
-        "group flex cursor-pointer items-center gap-1 rounded-md px-1 py-1 text-sm",
-        active ? "bg-primary/10 text-foreground ring-1 ring-primary/40" : "hover:bg-muted",
+        "group flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors",
+        active ? "bg-primary/10 font-medium text-foreground ring-1 ring-primary/40" : "hover:bg-muted",
       )}
     >
       {dragHandleProps && (
