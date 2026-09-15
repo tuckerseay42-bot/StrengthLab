@@ -1,0 +1,1 @@
+ALTER TABLE public.programs ALTER COLUMN weeks DROP NOT NULL; ALTER TABLE public.programs ALTER COLUMN weeks DROP DEFAULT;

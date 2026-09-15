@@ -1,0 +1,1 @@
+ALTER TABLE public.leaderboards ADD COLUMN IF NOT EXISTS gender text;

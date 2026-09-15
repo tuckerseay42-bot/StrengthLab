@@ -1,0 +1,1 @@
+ALTER TABLE public.workout_exercises ADD COLUMN IF NOT EXISTS superset_group text;

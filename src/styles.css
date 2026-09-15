@@ -1,0 +1,468 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Big Shoulders Display", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-neon-primary: var(--neon-primary);
+  --color-neon-accent: var(--neon-accent);
+  --color-paper: var(--paper);
+  --color-paper-foreground: var(--paper-foreground);
+  --color-paper-muted: var(--paper-muted);
+  --color-paper-border: var(--paper-border);
+  --color-paper-subtle: var(--paper-subtle);
+  --color-paper-accent: var(--paper-accent);
+  --color-paper-warm: var(--paper-warm);
+  --color-paper-danger: var(--paper-danger);
+  --color-paper-good: var(--paper-good);
+  --color-paper-diamond: var(--paper-diamond);
+  --color-paper-platinum: var(--paper-platinum);
+  --color-paper-gold: var(--paper-gold);
+  --color-paper-silver: var(--paper-silver);
+  --color-paper-bronze: var(--paper-bronze);
+  --color-paper-caution: var(--paper-caution);
+}
+
+/* Fixed light "printed report card" surface — identical in light and dark
+   themes so exported/printed reports always look like paper. */
+:root {
+  --paper: oklch(0.995 0.002 250);
+  --paper-foreground: oklch(0.22 0.02 260);
+  --paper-muted: oklch(0.55 0.015 260);
+  --paper-border: oklch(0.9 0.005 260);
+  --paper-subtle: oklch(0.972 0.004 260);
+  --paper-accent: oklch(0.52 0.19 258);
+  --paper-warm: oklch(0.66 0.15 60);
+  --paper-danger: oklch(0.55 0.19 25);
+  --paper-good: oklch(0.58 0.13 155);
+
+  /* Metal tier palette — no red/green, works for both light and dark report surfaces */
+  --paper-diamond: oklch(0.55 0.22 285);
+  --paper-platinum: oklch(0.60 0.14 250);
+  --paper-gold: oklch(0.65 0.16 75);
+  --paper-silver: oklch(0.55 0.02 260);
+  --paper-bronze: oklch(0.52 0.11 55);
+  --paper-caution: oklch(0.62 0.14 70);
+}
+
+/* ============================================================
+   Slate + Electric Blue — Stripe/Linear-inspired premium theme
+   for elite S&C coaching. Neutral slate dominates; a single
+   electric blue accent drives selection, links, and primary CTAs.
+   Status tokens stay constant across themes.
+   ============================================================ */
+
+:root {
+  --radius: 0.625rem;
+
+  /* Light theme — near-white slate with electric blue accent */
+  --background: oklch(0.99 0.004 250);
+  --foreground: oklch(0.21 0.03 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.03 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.03 260);
+  --primary: oklch(0.62 0.19 255);
+  --primary-foreground: oklch(0.99 0.004 250);
+  --secondary: oklch(0.965 0.008 255);
+  --secondary-foreground: oklch(0.27 0.04 260);
+  --muted: oklch(0.965 0.008 255);
+  --muted-foreground: oklch(0.5 0.02 258);
+  --accent: oklch(0.955 0.02 255);
+  --accent-foreground: oklch(0.35 0.13 258);
+  --destructive: oklch(0.6 0.22 27);
+  --destructive-foreground: oklch(0.99 0.004 250);
+  --success: oklch(0.62 0.15 152);
+  --success-foreground: oklch(0.99 0.004 250);
+  --border: oklch(0.27 0.04 260 / 10%);
+  --input: oklch(0.27 0.04 260 / 14%);
+  --ring: oklch(0.62 0.19 255 / 50%);
+
+  --sidebar: oklch(0.975 0.006 255);
+  --sidebar-foreground: oklch(0.3 0.03 260);
+  --sidebar-primary: oklch(0.62 0.19 255);
+  --sidebar-primary-foreground: oklch(0.99 0.004 250);
+  --sidebar-accent: oklch(0.94 0.015 255);
+  --sidebar-accent-foreground: oklch(0.35 0.13 258);
+  --sidebar-border: oklch(0.27 0.04 260 / 8%);
+  --sidebar-ring: oklch(0.62 0.19 255 / 50%);
+
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+
+  --status-pr: oklch(0.62 0.16 150);
+  --status-near: oklch(0.75 0.15 85);
+  --status-below: oklch(0.62 0.22 27);
+  --status-neutral: oklch(0.62 0.02 260);
+  --status-info: oklch(0.62 0.19 255);
+
+  --shadow-elegant: 0 1px 2px 0 oklch(0.21 0.03 260 / 5%), 0 4px 16px -6px oklch(0.21 0.03 260 / 10%);
+  --shadow-glow: 0 0 0 1px oklch(0.62 0.19 255 / 20%), 0 10px 32px -12px oklch(0.62 0.19 255 / 30%);
+  --gradient-primary: linear-gradient(135deg, oklch(0.62 0.19 255), oklch(0.7 0.16 245));
+  --gradient-surface: linear-gradient(180deg, oklch(1 0 0), oklch(0.98 0.006 255));
+
+  --lb-pr: var(--status-pr);
+  --lb-pr-bg: color-mix(in oklab, var(--status-pr) 18%, transparent);
+  --lb-warn: var(--status-near);
+  --lb-bad: var(--status-below);
+  --kpi-pr: var(--status-pr);
+  --kpi-up: var(--status-info);
+  --kpi-warn: var(--status-near);
+  --kpi-down: var(--status-below);
+  --kpi-none: var(--status-neutral);
+
+  /* Neon HUD accents — reserved for LIVE + ACHIEVEMENT states only */
+  --neon-primary: oklch(0.62 0.19 255);   /* Bar Blue — primary/live */
+  --neon-accent:  oklch(0.68 0.22 305);   /* Violet — achievements/PRs/tier-ups */
+}
+
+.dark {
+  --background: oklch(0.21 0.03 260);
+  --foreground: oklch(0.96 0.006 255);
+  --card: oklch(0.27 0.035 260);
+  --card-foreground: oklch(0.96 0.006 255);
+  --popover: oklch(0.27 0.035 260);
+  --popover-foreground: oklch(0.96 0.006 255);
+  --primary: oklch(0.68 0.18 250);
+  --primary-foreground: oklch(0.14 0.02 260);
+  --secondary: oklch(0.31 0.035 260);
+  --secondary-foreground: oklch(0.96 0.006 255);
+  --muted: oklch(0.29 0.03 260);
+  --muted-foreground: oklch(0.72 0.02 258);
+  --accent: oklch(0.35 0.07 255);
+  --accent-foreground: oklch(0.96 0.006 255);
+  --destructive: oklch(0.66 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.72 0.16 152);
+  --success-foreground: oklch(0.21 0.03 260);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.68 0.18 250 / 60%);
+
+  --sidebar: oklch(0.19 0.028 260);
+  --sidebar-foreground: oklch(0.9 0.008 255);
+  --sidebar-primary: oklch(0.68 0.18 250);
+  --sidebar-primary-foreground: oklch(0.14 0.02 260);
+  --sidebar-accent: oklch(0.29 0.035 260);
+  --sidebar-accent-foreground: oklch(0.96 0.006 255);
+  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-ring: oklch(0.68 0.18 250 / 60%);
+
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+
+  --status-info: oklch(0.68 0.18 250);
+
+  --shadow-elegant: 0 1px 2px 0 oklch(0 0 0 / 40%), 0 10px 28px -8px oklch(0 0 0 / 50%);
+  --shadow-glow: 0 0 0 1px oklch(0.68 0.18 250 / 30%), 0 14px 44px -12px oklch(0.68 0.18 250 / 45%);
+  --gradient-primary: linear-gradient(135deg, oklch(0.68 0.18 250), oklch(0.75 0.15 240));
+  --gradient-surface: linear-gradient(180deg, oklch(0.29 0.04 260), oklch(0.23 0.03 260));
+
+  --neon-primary: oklch(0.72 0.18 250);
+  --neon-accent:  oklch(0.74 0.22 305);
+}
+
+@keyframes pulseSlow { 0%,100% { opacity: 1 } 50% { opacity: 0.65 } }
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+@utility animate-pulse-slow { animation: pulseSlow 2s ease-in-out infinite; }
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+  }
+  body {
+    font-weight: 400;
+    letter-spacing: 0.005em;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
+    font-weight: 700;
+    text-transform: none;
+  }
+  /* Big Shoulders is condensed — headings need a touch more tracking than body */
+  h1 { letter-spacing: 0.015em; font-weight: 800; }
+  /* Tabular numerals everywhere numbers matter */
+  .tabular-nums, table, [data-slot="badge"] { font-variant-numeric: tabular-nums; }
+}
+
+@utility stat-number {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.015em;
+  line-height: 0.95;
+}
+
+@utility mono-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "zero", "ss01";
+}
+
+@utility eyebrow {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+@utility card-elevated {
+  background: var(--gradient-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elegant);
+}
+
+@utility card-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility grid-pattern {
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+@utility brand-bg { background-color: var(--brand); color: var(--brand-foreground); }
+@utility brand-fg { color: var(--brand); }
+@utility brand-gradient { background: var(--gradient-primary); color: var(--brand-foreground); }
+
+/* Mobile / kiosk touch safeguards */
+button, [role="button"], a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Prevent iOS auto-zoom on focus by keeping inputs at ≥16px on small screens */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Safe-area padding helper for sticky bottom bars */
+@utility safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+@utility safe-top {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+/* ============================================================
+   Neon HUD — reserved for LIVE + ACHIEVEMENT moments.
+   Two-color system: Bar Blue (primary/live) + Violet (accent/PRs).
+   Do NOT blanket-apply; use only where the state warrants it.
+   ============================================================ */
+
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--neon-primary) 55%, transparent),
+      0 0 24px -2px color-mix(in oklab, var(--neon-primary) 45%, transparent),
+      0 0 64px -12px color-mix(in oklab, var(--neon-primary) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--neon-primary) 70%, transparent),
+      0 0 32px -2px color-mix(in oklab, var(--neon-primary) 60%, transparent),
+      0 0 80px -10px color-mix(in oklab, var(--neon-primary) 50%, transparent);
+  }
+}
+@keyframes neonPulseAccent {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--neon-accent) 60%, transparent),
+      0 0 28px -2px color-mix(in oklab, var(--neon-accent) 55%, transparent),
+      0 0 72px -10px color-mix(in oklab, var(--neon-accent) 45%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--neon-accent) 80%, transparent),
+      0 0 40px -2px color-mix(in oklab, var(--neon-accent) 70%, transparent),
+      0 0 96px -8px color-mix(in oklab, var(--neon-accent) 55%, transparent);
+  }
+}
+
+/* Live glow — primary (Bar Blue). Use on the tile / card of an in-progress state. */
+@utility neon-live {
+  animation: neonPulse 2.6s ease-in-out infinite;
+  border-color: color-mix(in oklab, var(--neon-primary) 45%, transparent) !important;
+}
+
+/* Achievement glow — violet. Use on PR moments, tier-ups, badge unlocks. */
+@utility neon-pr {
+  animation: neonPulseAccent 1.6s ease-in-out infinite;
+  border-color: color-mix(in oklab, var(--neon-accent) 55%, transparent) !important;
+}
+
+/* Steady (non-animated) glow ring for hero cards that should feel "powered on". */
+@utility neon-ring {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--neon-primary) 40%, transparent),
+    0 0 28px -6px color-mix(in oklab, var(--neon-primary) 35%, transparent),
+    0 12px 40px -18px color-mix(in oklab, var(--neon-primary) 45%, transparent);
+}
+@utility neon-ring-accent {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--neon-accent) 45%, transparent),
+    0 0 32px -6px color-mix(in oklab, var(--neon-accent) 40%, transparent),
+    0 12px 40px -18px color-mix(in oklab, var(--neon-accent) 45%, transparent);
+}
+
+/* HUD grid — faint scanline/grid texture behind primary workspaces.
+   Sits at very low opacity, fades toward edges, never touches text. */
+@utility hud-grid {
+  position: relative;
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right,  color-mix(in oklab, var(--neon-primary) 10%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--neon-primary) 10%, transparent) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    mask-image: radial-gradient(ellipse at 50% 30%, black 40%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 40%, transparent 85%);
+  }
+}
+
+
+/* Small "LIVE" pill dot pulse */
+@keyframes livePulseDot {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%      { opacity: 0.55; transform: scale(1.35); }
+}
+@utility live-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--neon-primary);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--neon-primary) 70%, transparent);
+  animation: livePulseDot 1.6s ease-in-out infinite;
+}
+
+
+/* ============================================================
+   Print — make browser print output match the exported PDF:
+   only the paper report sheet prints, one full-width card per
+   column, colors preserved.
+   ============================================================ */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+
+  .print-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-single-column {
+    display: block !important;
+  }
+
+  .print-single-column > * {
+    margin-bottom: 0;
+  }
+
+  /* One athlete report card per printed page, scaled to fit. */
+  .print-sheet article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+    max-height: 9.4in;
+    overflow: hidden;
+    zoom: 0.85;
+  }
+
+  .print-single-column > *:last-child article,
+  .print-sheet article:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

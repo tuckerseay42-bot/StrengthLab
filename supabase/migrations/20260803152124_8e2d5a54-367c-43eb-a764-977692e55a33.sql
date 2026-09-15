@@ -1,0 +1,2 @@
+ALTER TABLE public.exercises DROP CONSTRAINT exercises_measurement_type_chk;
+ALTER TABLE public.exercises ADD CONSTRAINT exercises_measurement_type_chk CHECK (measurement_type = ANY (ARRAY['load'::text, 'inches'::text, 'seconds'::text, 'reps'::text, 'count'::text, 'mph'::text]));

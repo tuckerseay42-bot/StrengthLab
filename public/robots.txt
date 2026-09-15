@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /features
+Disallow: /pricing
+Disallow: /app
+Disallow: /auth
