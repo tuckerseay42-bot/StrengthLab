@@ -12,8 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 import type { Athlete, TestRow, LiftRow, AttendanceRow, RepMax, CustomTestType, CustomMetric } from "@/lib/queries";
-import { customMetricsQO } from "@/lib/queries";
+import { customMetricsQO, spiderTemplatesQO } from "@/lib/queries";
 import { computeMetric } from "@/lib/metrics";
+import { pickTemplate } from "@/lib/spider";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta } from "@/lib/domain";
 import { useUnitPrefs } from "@/hooks/use-units";
 import { secondsToMph, secondsToMps } from "@/lib/units";
@@ -278,7 +279,7 @@ function windowFilter(points: Point[], w: Window): Point[] {
   return points.filter((p) => p.date >= cutoff);
 }
 
-function KpiCard({ k, window }: { k: KpiComputed; window: Window }) {
+function KpiCard({ k, window, showSparkline = true, highlightPb = true }: { k: KpiComputed; window: Window; showSparkline?: boolean; highlightPb?: boolean }) {
   const filtered = useMemo(() => {
     const f = windowFilter(k.series, window);
     return f.length ? f : k.series.slice(-8);
@@ -319,10 +320,11 @@ function KpiCard({ k, window }: { k: KpiComputed; window: Window }) {
   const TrendIcon = pct == null ? ArrowRight : pct > 0.05 ? ArrowUp : pct < -0.05 ? ArrowDown : ArrowRight;
   const trendPositive = pct != null && pct > 0.05;
   const trendNegative = pct != null && pct < -0.05;
+  const isPb = highlightPb && displayView.current != null && displayView.best != null && displayView.current === displayView.best;
 
   return (
     <Card
-      className="relative overflow-hidden border-border"
+      className={cn("relative overflow-hidden border-border", isPb && "ring-1 ring-[color:var(--status-pr)]/50")}
       style={{ borderLeft: `3px solid ${color}` }}
     >
       <CardContent className="space-y-2 p-4">
@@ -336,6 +338,7 @@ function KpiCard({ k, window }: { k: KpiComputed; window: Window }) {
                 {displayView.current == null ? "—" : displayView.current.toFixed(displayView.unit === "reps" ? 0 : 2)}
               </span>
               {displayView.unit && <span className="text-xs text-muted-foreground">{displayView.unit}</span>}
+              {isPb && <Trophy className="h-3.5 w-3.5 text-[color:var(--status-pr)]" aria-label="Personal best" />}
             </div>
           </div>
           <span
@@ -376,7 +379,7 @@ function KpiCard({ k, window }: { k: KpiComputed; window: Window }) {
               </span>
             )}
           </div>
-          <Sparkline points={displayView.series} lowerIsBetter={displayView.lowerIsBetter} color={color} />
+          {showSparkline && <Sparkline points={displayView.series} lowerIsBetter={displayView.lowerIsBetter} color={color} />}
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
@@ -817,6 +820,12 @@ export function AthleteKpiDashboard({
   const { data: customMetrics = [] } = useQuery(customMetricsQO);
   const { data: pins = [] } = usePins(athlete.id);
   const { savePins } = usePinMutations(athlete.id);
+  const { data: spiderTemplates = [] } = useQuery(spiderTemplatesQO);
+  const dashboardTemplate = useMemo(() => pickTemplate(spiderTemplates, athlete), [spiderTemplates, athlete]);
+  const showSparkline = dashboardTemplate?.kpi_config?.sparkline ?? true;
+  const highlightPb = dashboardTemplate?.kpi_config?.highlight_pb ?? true;
+  const showProgress = dashboardTemplate?.options?.show_progress ?? true;
+  const showPrs = dashboardTemplate?.options?.show_prs ?? true;
 
   const ctx: Ctx = { athlete, tests, lifts, attendance, repMaxes, testMeta };
 
@@ -870,7 +879,9 @@ export function AthleteKpiDashboard({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {withData.map((k) => <KpiCard key={k.key} k={k} window={win} />)}
+        {withData.map((k) => (
+          <KpiCard key={k.key} k={k} window={win} showSparkline={showSparkline} highlightPb={highlightPb} />
+        ))}
       </div>
 
       {withoutData.length > 0 && (
@@ -879,10 +890,12 @@ export function AthleteKpiDashboard({
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ProgressBars ctx={ctx} athletesAll={athletesAll} />
-        <PersonalRecords ctx={ctx} />
-      </div>
+      {(showProgress || showPrs) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {showProgress && <ProgressBars ctx={ctx} athletesAll={athletesAll} />}
+          {showPrs && <PersonalRecords ctx={ctx} />}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,8 @@ import { estimate1RM, ONE_RM_META } from "@/lib/one-rm";
 import { useOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { athletesQO, testsQO, liftsQO, attendanceQO, teamsQO, exercisesQO, exerciseRelationshipsQO, programsQO, repMaxesQO, testTypesQO, athleteDisplayName } from "@/lib/queries";
+import { athletesQO, testsQO, liftsQO, attendanceQO, teamsQO, exercisesQO, exerciseRelationshipsQO, programsQO, repMaxesQO, testTypesQO, athleteDisplayName, spiderTemplatesQO } from "@/lib/queries";
+import { pickTemplate } from "@/lib/spider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ function AthleteCard() {
   const { data: programs = [] } = useQuery(programsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
+  const { data: spiderTemplates = [] } = useQuery(spiderTemplatesQO);
 
   const testTypeMeta = useMemo(() => {
     const m = new Map(customTypes.map((c) => [c.value, { value: c.value, label: c.label, unit: c.unit, lowerIsBetter: c.lower_is_better, group: c.group_name }]));
@@ -55,6 +57,11 @@ function AthleteCard() {
 
   const athlete = athletes.find((a) => a.id === id);
   const athleteId = athlete?.id ?? "";
+  const dashboardTemplate = useMemo(
+    () => (athlete ? pickTemplate(spiderTemplates, athlete) : null),
+    [spiderTemplates, athlete],
+  );
+  const showBadges = dashboardTemplate?.options?.show_badges ?? true;
   const team = teams.find((t) => t.id === athlete?.team_id);
   const teammates = useMemo(() => athletes.filter((a) => a.team_id === athlete?.team_id), [athletes, athlete?.team_id]);
   const displayName = athlete ? athleteDisplayName(athlete) : "";
@@ -200,14 +207,16 @@ function AthleteCard() {
         athletesAll={athletes}
       />
 
-      <BadgeShelf
-        athlete={athlete}
-        tests={myTests}
-        lifts={myLifts}
-        attendance={myAttendance}
-        repMaxes={repMaxes.filter((r) => r.athlete_id === athleteId)}
-        canAward
-      />
+      {showBadges && (
+        <BadgeShelf
+          athlete={athlete}
+          tests={myTests}
+          lifts={myLifts}
+          attendance={myAttendance}
+          repMaxes={repMaxes.filter((r) => r.athlete_id === athleteId)}
+          canAward
+        />
+      )}
 
 
 

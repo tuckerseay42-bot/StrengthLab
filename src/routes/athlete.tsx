@@ -10,8 +10,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  athletesQO, testsQO, testAssignmentsQO, testTypesQO, liftsQO, attendanceQO, repMaxesQO, teamsQO, programsQO, athleteDisplayName, type Athlete,
+  athletesQO, testsQO, testAssignmentsQO, testTypesQO, liftsQO, attendanceQO, repMaxesQO, teamsQO, programsQO, athleteDisplayName, spiderTemplatesQO, type Athlete,
 } from "@/lib/queries";
+import { pickTemplate } from "@/lib/spider";
 import { supabase as sb } from "@/integrations/supabase/client";
 import { LogOut, Trophy, Dumbbell, TrendingUp, ClipboardList, Check, KeyRound } from "lucide-react";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta } from "@/lib/domain";
@@ -103,6 +104,7 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: programs = [] } = useQuery(programsQO);
+  const { data: spiderTemplates = [] } = useQuery(spiderTemplatesQO);
 
   const testTypeMeta = useMemo(() => {
     const m = new Map(customTypes.map((c) => [c.value, { value: c.value, label: c.label, unit: c.unit, lowerIsBetter: c.lower_is_better, group: c.group_name }]));
@@ -120,6 +122,11 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
   const linked = athletes.find((a) => a.user_id === userId) as Athlete | undefined;
   const [previewId, setPreviewId] = useState<string | null>(null);
   const me = linked ?? (previewId ? athletes.find((a) => a.id === previewId) : undefined);
+  const dashboardTemplate = useMemo(
+    () => (me ? pickTemplate(spiderTemplates, me) : null),
+    [spiderTemplates, me],
+  );
+  const showBadges = dashboardTemplate?.options?.show_badges ?? true;
 
   // Assigned tests visible to this athlete (their own + their team's), from today forward
   const myAssignments = useMemo(() => {
@@ -293,14 +300,16 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         athletesAll={athletes}
       />
 
-      <BadgeShelf
-        athlete={me}
-        tests={tests.filter((t) => t.athlete_id === me.id)}
-        lifts={lifts.filter((l) => l.athlete_id === me.id)}
-        attendance={attendance.filter((a) => a.athlete_id === me.id)}
-        repMaxes={repMaxes.filter((r) => r.athlete_id === me.id)}
-        canAward={false}
-      />
+      {showBadges && (
+        <BadgeShelf
+          athlete={me}
+          tests={tests.filter((t) => t.athlete_id === me.id)}
+          lifts={lifts.filter((l) => l.athlete_id === me.id)}
+          attendance={attendance.filter((a) => a.athlete_id === me.id)}
+          repMaxes={repMaxes.filter((r) => r.athlete_id === me.id)}
+          canAward={false}
+        />
+      )}
 
       <PredictedHeightTool athlete={me} />
 
