@@ -39,6 +39,16 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { RackAssignmentBoard } from "@/components/rack-assignment-board";
 import {
   DropdownMenu,
@@ -805,6 +815,7 @@ function TrainingView() {
                   athletes={athletes}
                   teamById={teamById}
                   selectedIds={selectedIds}
+                  recentIds={recent}
                   onPick={(id) => toggleAthlete(id)}
                 />
               );
@@ -912,12 +923,14 @@ function SlotPicker({
   athletes,
   teamById,
   selectedIds,
+  recentIds,
   onPick,
 }: {
   index: number;
   athletes: Athlete[];
   teamById: Map<string, Team>;
   selectedIds: string[];
+  recentIds: string[];
   onPick: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -930,6 +943,16 @@ function SlotPicker({
         .sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b))),
     [athletes, selectedIds],
   );
+
+  // Most-recently-picked athletes (across the whole session), most recent
+  // first — a one-tap way to re-add someone you just removed instead of
+  // retyping their name.
+  const recentAvailable = useMemo(() => {
+    const byId = new Map(athletes.map((a) => [a.id, a]));
+    return recentIds
+      .map((id) => byId.get(id))
+      .filter((a): a is Athlete => !!a && !selectedIds.includes(a.id));
+  }, [athletes, recentIds, selectedIds]);
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -974,27 +997,22 @@ function SlotPicker({
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
-            {results.map((a) => {
-              const team = teamById.get(a.team_id ?? "") ?? null;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    onPick(a.id);
-                    setOpen(false);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
-                >
-                  <Avatar name={athleteDisplayName(a)} color={team?.color ?? null} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{athleteDisplayName(a)}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {team?.name ?? "—"}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+            {!q.trim() && recentAvailable.length > 0 && (
+              <>
+                <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Recent
+                </div>
+                {recentAvailable.map((a) => (
+                  <SlotPickerRow key={`recent-${a.id}`} athlete={a} team={teamById.get(a.team_id ?? "") ?? null} onPick={() => { onPick(a.id); setOpen(false); }} />
+                ))}
+                <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  All athletes
+                </div>
+              </>
+            )}
+            {results.map((a) => (
+              <SlotPickerRow key={a.id} athlete={a} team={teamById.get(a.team_id ?? "") ?? null} onPick={() => { onPick(a.id); setOpen(false); }} />
+            ))}
             {results.length === 0 && (
               <div className="px-2 py-6 text-center text-sm text-muted-foreground">
                 No athletes match.
@@ -1004,6 +1022,21 @@ function SlotPicker({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function SlotPickerRow({ athlete, team, onPick }: { athlete: Athlete; team: Team | null; onPick: () => void }) {
+  return (
+    <button
+      onClick={onPick}
+      className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+    >
+      <Avatar name={athleteDisplayName(athlete)} color={team?.color ?? null} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{athleteDisplayName(athlete)}</div>
+        <div className="truncate text-[11px] text-muted-foreground">{team?.name ?? "—"}</div>
+      </div>
+    </button>
   );
 }
 
@@ -1084,6 +1117,7 @@ type TileLogPayload = {
   notes: string | null;
   status: "completed" | "skipped";
   active_workout_id: string | null;
+  review_reason: string | null;
 };
 
 function AthleteTile(props: {
@@ -1199,6 +1233,10 @@ function AthleteTile(props: {
     (p) => !doneMap.has(doneKey(p.exercise.id, p.setPosition)),
   );
   const [cursorOverride, setCursorOverride] = useState<number | null>(null);
+  // Reopen (from FinishScreen) needs to actually swap the view back to the
+  // sheet — `finished` alone can't do that since it stays true once every
+  // set is logged, so it gates the FinishScreen render alongside it.
+  const [reopened, setReopened] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
   
   const cursor =
@@ -1397,10 +1435,17 @@ function AthleteTile(props: {
     } else if (currentMeasurement === "inches") {
       distIn = numOrNull(form.distance);
     }
+    // A completed load-based set beats the athlete's stored rep-max load: real
+    // PR, flag it via review_reason (override_status's CHECK constraint
+    // doesn't allow 'pr' — review_reason is free text and is already read as
+    // an equally-valid PR signal by the flash/confetti/FinishScreen logic).
+    const loggedLoad = currentMeasurement === "load" ? numOrNull(form.load) : null;
+    const priorBest = personalBestFor(repMaxes, athlete.id, current.exercise);
+    const isPr = status === "completed" && loggedLoad != null && !!priorBest && loggedLoad > priorBest.load;
     onLog({
       workout_exercise_id: current.exercise.id,
       set_position: current.setPosition,
-      load: currentMeasurement === "load" ? numOrNull(form.load) : null,
+      load: loggedLoad,
       reps: numOrNull(form.reps),
       avg_velocity: currentMeasurement === "load" ? numOrNull(form.avg_velocity) : null,
       time_seconds: timeSec,
@@ -1409,6 +1454,7 @@ function AthleteTile(props: {
       notes: form.notes.trim() || null,
       status,
       active_workout_id: workout.id,
+      review_reason: isPr ? "pr" : null,
     });
     setCursorOverride(null);
   };
@@ -1699,6 +1745,7 @@ function AthleteTile(props: {
           programs={programs}
           athleteProgramId={athlete.program_id}
           athleteId={athlete.id}
+          athleteName={athleteDisplayName(athlete)}
           currentWorkoutId={workout?.id ?? null}
           currentExerciseId={current?.exercise.id ?? null}
           currentExerciseLabel={currentExerciseName}
@@ -1758,11 +1805,14 @@ function AthleteTile(props: {
             }
           />
         </div>
-      ) : finished ? (
+      ) : finished && !reopened ? (
         <FinishScreen
           athlete={athlete}
           logs={logs}
-          onReopen={() => setCursorOverride(prescribed.length - 1)}
+          onReopen={() => {
+            setCursorOverride(prescribed.length - 1);
+            setReopened(true);
+          }}
         />
       ) : (
         /* Printed workout sheet — every exercise and every set visible, no drill-down */
@@ -1932,7 +1982,7 @@ function NumInput({
       </span>
       <Input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(sanitizeNumInput(e.target.value))}
         inputMode="decimal"
         placeholder="—"
         className="h-12 w-full min-w-0 px-1 text-center font-mono text-lg font-bold tabular-nums"
@@ -1940,6 +1990,16 @@ function NumInput({
     </label>
   );
 
+}
+
+// Digits + at most one decimal point, no sign — a mid-set weight/rep/time
+// entry is never negative, and a stray "-" or second "." typo shouldn't
+// reach the DB.
+function sanitizeNumInput(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
 }
 
 function NotePopover({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -1969,6 +2029,7 @@ function TileActions({
   programs,
   athleteProgramId,
   athleteId,
+  athleteName,
   currentWorkoutId,
   currentExerciseId,
   currentExerciseLabel,
@@ -1984,6 +2045,7 @@ function TileActions({
   programs: Program[];
   athleteProgramId: string | null;
   athleteId: string;
+  athleteName: string;
   currentWorkoutId: string | null;
   currentExerciseId: string | null;
   currentExerciseLabel: string;
@@ -1997,6 +2059,7 @@ function TileActions({
   const [swapSearch, setSwapSearch] = useState("");
   const [swapReason, setSwapReason] = useState("injury");
   const [customName, setCustomName] = useState("");
+  const [confirmReason, setConfirmReason] = useState<"injured" | "excused" | null>(null);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -2042,18 +2105,43 @@ function TileActions({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onMarkOut("injured")}>
+          <DropdownMenuItem onClick={() => setConfirmReason("injured")}>
             <HeartPulse className="mr-2 h-3.5 w-3.5" /> Mark injured (remove)
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onMarkOut("excused")}>
+          <DropdownMenuItem onClick={() => setConfirmReason("excused")}>
             <HeartPulse className="mr-2 h-3.5 w-3.5" /> Mark excused / out
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onRemove}>
-            <ArrowRightLeft className="mr-2 h-3.5 w-3.5" /> Swap out of quadrant
+            <ArrowRightLeft className="mr-2 h-3.5 w-3.5" /> Remove from grid
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <AlertDialog open={!!confirmReason} onOpenChange={(open) => !open && setConfirmReason(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Mark {athleteName} {confirmReason === "injured" ? "injured" : "excused"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This logs today's attendance as {confirmReason} and removes {athleteName} from the grid. You can
+              re-add them from an empty slot afterward if this was a mistake.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmReason) onMarkOut(confirmReason);
+                setConfirmReason(null);
+              }}
+            >
+              {confirmReason === "injured" ? "Mark injured" : "Mark excused"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
         <DialogContent className="max-w-md">
