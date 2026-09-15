@@ -18,11 +18,11 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  Plus, X, Users, User, Check, ChevronsUpDown, ChevronDown,
+  Plus, X, Users, User, Check, ChevronsUpDown, MoreHorizontal,
   GripVertical, Timer, StickyNote, Layers, CalendarDays, Trash2, Copy,
   Dumbbell, Activity, Clock, Target, Send, Eye, ClipboardCheck,
   Loader2,
@@ -537,49 +537,55 @@ export function WorkoutEditor({ workout, programContext }: {
             </Button>
           </div>
         ) : (
-          <ExerciseSortableList
-            rows={rows}
-            onReorder={(orderedIds) => reorderRows.mutate(orderedIds)}
-          >
-            {blocks.map((block, blockIdx) => {
-              const startIdx = rows.findIndex((r) => r.id === block.items[0].id);
-              const blockSets = block.items.reduce((n, r) => n + (setsByExercise.get(r.id)?.reduce((k, s) => k + (s.sets ?? 0), 0) ?? 0), 0);
-              return (
-                <li
-                  key={`block-${blockIdx}-${block.items[0].id}`}
-                  className={cn("px-3 py-2.5", block.group && "bg-primary/[0.03]")}
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className={cn(
-                      "grid h-5 min-w-[20px] place-items-center rounded-md px-1.5 text-[10px] font-bold uppercase tracking-widest",
-                      block.group ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
-                    )}>
-                      {block.group ? `SS ${block.group}` : `#${blockIdx + 1}`}
-                    </span>
-                    <span className="text-[11px] font-medium text-muted-foreground">
-                      {block.group ? `Superset · ${block.items.length} exercises back-to-back` : `Exercise ${startIdx + 1}`}
-                    </span>
-                    <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/70">{blockSets} sets</span>
-                  </div>
-                  <div className="space-y-2">
-                    {block.items.map((r, i) => (
-                      <SortableExerciseRow key={r.id} id={r.id}>
-                        <ExerciseBlock
-                          index={startIdx + i + 1}
-                          row={r}
-                          sets={setsByExercise.get(r.id) ?? []}
-                          exercises={visibleExercises}
-                          organizationId={workoutOrgId}
-                          onUpdate={(patch) => updateRow.mutate({ id: r.id, patch })}
-                          onRemove={() => removeRow.mutate(r.id)}
-                        />
-                      </SortableExerciseRow>
-                    ))}
-                  </div>
-                </li>
-              );
-            })}
-          </ExerciseSortableList>
+          <>
+            <div
+              className={cn(
+                "grid items-center gap-2 border-b border-border/50 bg-muted/40 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+                EXROW_COLS,
+              )}
+            >
+              <span>#</span>
+              <span>SS</span>
+              <span>Exercise</span>
+              <span>Sets</span>
+              <span>Reps</span>
+              <span>Load type</span>
+              <span>Prescription</span>
+              <span title="Target bar velocity (m/s)">Vel</span>
+              <span />
+              <span />
+            </div>
+            <ExerciseSortableList
+              rows={rows}
+              onReorder={(orderedIds) => reorderRows.mutate(orderedIds)}
+            >
+              {blocks.map((block, blockIdx) => {
+                const startIdx = rows.findIndex((r) => r.id === block.items[0].id);
+                return (
+                  <li
+                    key={`block-${blockIdx}-${block.items[0].id}`}
+                    className={cn(block.group && "border-l-2", block.group && SS_BORDER[block.group])}
+                  >
+                    <div className="divide-y divide-border/30">
+                      {block.items.map((r, i) => (
+                        <SortableExerciseRow key={r.id} id={r.id}>
+                          <ExerciseBlock
+                            index={startIdx + i + 1}
+                            row={r}
+                            sets={setsByExercise.get(r.id) ?? []}
+                            exercises={visibleExercises}
+                            organizationId={workoutOrgId}
+                            onUpdate={(patch) => updateRow.mutate({ id: r.id, patch })}
+                            onRemove={() => removeRow.mutate(r.id)}
+                          />
+                        </SortableExerciseRow>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ExerciseSortableList>
+          </>
         )}
       </section>
 
@@ -710,6 +716,31 @@ function SummaryCell({ icon, label, value }: { icon: React.ReactNode; label: str
     </div>
   );
 }
+
+// ---------- Spreadsheet-style exercise table shared layout ------------------
+// One grid column template shared by the header row and every exercise row
+// (both the primary row and any extra set-scheme rows) so everything lines
+// up like a real spreadsheet: # / SS / Exercise / Sets / Reps / Load type /
+// Prescription / Vel / remove-scheme / exercise-menu.
+const EXROW_COLS =
+  "grid-cols-[26px_46px_minmax(160px,1.4fr)_50px_50px_92px_minmax(90px,1fr)_60px_28px_28px]";
+
+const SS_CELL: Record<string, string> = {
+  A: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+  B: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  C: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  D: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  E: "bg-pink-500/15 text-pink-700 dark:text-pink-300",
+  F: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
+};
+const SS_BORDER: Record<string, string> = {
+  A: "border-orange-500/60",
+  B: "border-emerald-500/60",
+  C: "border-sky-500/60",
+  D: "border-violet-500/60",
+  E: "border-pink-500/60",
+  F: "border-teal-500/60",
+};
 
 // ---------- Sortable exercise list -----------------------------------------
 // One flat SortableContext wraps the whole exercise list. Blocks are still
@@ -881,7 +912,6 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
   onUpdate: (patch: Partial<WorkoutExercise>) => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(true);
   const [local, setLocal] = useState({
     exercise_id: row.exercise_id ?? "",
     exercise_name: row.exercise_name ?? "",
@@ -923,112 +953,21 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
     return data as { id: string; name: string };
   };
 
-  const setsSummary = sets.length
-    ? sets.map((s) => `${s.sets ?? "?"}×${s.reps || "?"}`).join(", ")
-    : "no sets";
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="rounded-md border border-border/50 bg-card transition-shadow hover:shadow-sm">
-        {/* Row header — always visible, dense */}
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="grid h-6 w-6 shrink-0 cursor-grab place-items-center rounded-sm text-muted-foreground hover:bg-muted">
-            <GripVertical className="h-3.5 w-3.5" />
-          </div>
-          <span className="mono-number w-5 shrink-0 text-center text-xs text-muted-foreground">
-            {index}
-          </span>
-          <div className="min-w-0 flex-1">
-            <ExerciseCombobox
-              value={local.exercise_id}
-              label={local.exercise_name}
-              exercises={exercises}
-              onSelect={(ex) => commit({ exercise_id: ex.id, exercise_name: ex.name })}
-              onCreate={async (name) => {
-                const created = await createExercise(name);
-                if (created) commit({ exercise_id: created.id, exercise_name: created.name });
-              }}
-            />
-          </div>
-          <Select value={local.superset_group || "__none"} onValueChange={(v) => commit({ superset_group: v === "__none" ? "" : v })}>
-            <SelectTrigger className="hidden h-7 w-14 border-border/60 text-xs sm:flex" title="Superset group">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none">Solo</SelectItem>
-              {["A","B","C","D","E","F"].map((g) => (
-                <SelectItem key={g} value={g}>SS {g}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <CollapsibleTrigger asChild>
-            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title={open ? "Collapse" : "Expand"}>
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
-            </Button>
-          </CollapsibleTrigger>
-          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={onRemove}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-
-        {/* Collapsed summary line */}
-        {!open && (
-          <div className="border-t border-border/50 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-            <span className="mono-number">{setsSummary}</span>
-            {local.tempo && <span className="ml-2">· tempo {local.tempo}</span>}
-            {local.rest_seconds != null && <span className="ml-2">· rest {local.rest_seconds}s</span>}
-          </div>
-        )}
-
-        {/* Expanded body — sets table + tempo/rest/notes */}
-        <CollapsibleContent>
-          <div className="border-t border-border/50 bg-muted/10">
-            <SetsEditor exerciseRowId={row.id} sets={sets} exercises={exercises} measurement={measurement} />
-          </div>
-          <div className="grid grid-cols-[80px_100px_1fr] items-center gap-2 border-t border-border/50 px-2 py-2">
-            <div className="flex items-center gap-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Tempo</Label>
-              <Input className="h-7 text-xs" value={local.tempo ?? ""} onChange={(e) => commit({ tempo: e.target.value })} placeholder="3-0-1" />
-            </div>
-            <div className="flex items-center gap-1">
-              <Timer className="h-3 w-3 text-muted-foreground" />
-              <Input className="h-7 text-xs" type="number" value={local.rest_seconds ?? ""} onChange={(e) => commit({ rest_seconds: e.target.value ? Number(e.target.value) : null })} placeholder="Rest s" />
-            </div>
-            <div className="flex items-center gap-1">
-              <StickyNote className="h-3 w-3 text-muted-foreground" />
-              <Input className="h-7 text-xs" value={local.notes ?? ""} onChange={(e) => commit({ notes: e.target.value })} placeholder="Notes / cues" />
-            </div>
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
-  );
-}
-
-type SetMode = "load" | "percent" | "rm" | "seconds" | "inches" | "mph";
-
-function SetsEditor({ exerciseRowId, sets, exercises, measurement }: {
-  exerciseRowId: string;
-  sets: WorkoutSet[];
-  exercises: { id: string; name: string }[];
-  measurement: "load" | "seconds" | "inches" | "reps" | "mph";
-}) {
-  const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["workout_sets"] });
-
-  const add = useMutation({
+  // Set-scheme mutations (one exercise can have several: e.g. a warm-up
+  // scheme plus a working-sets scheme).
+  const invalidateSets = () => qc.invalidateQueries({ queryKey: ["workout_sets"] });
+  const addSet = useMutation({
     mutationFn: async () => {
       const nextPos = sets.length ? sets[sets.length - 1].position + 1 : 0;
       const { error } = await supabase.from("workout_sets").insert({
-        workout_exercise_id: exerciseRowId, position: nextPos, sets: 3, reps: "5",
+        workout_exercise_id: row.id, position: nextPos, sets: 3, reps: "5",
       });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateSets,
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
-
-  const upd = useMutation({
+  const updSet = useMutation({
     // Keystrokes save immediately. Serialize them so a slower earlier request
     // cannot arrive after the final value and overwrite it in the database.
     scope: { id: "workout-set-updates" },
@@ -1036,56 +975,132 @@ function SetsEditor({ exerciseRowId, sets, exercises, measurement }: {
       const { error } = await supabase.from("workout_sets").update(patch).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateSets,
   });
-
-  const del = useMutation({
+  const delSet = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("workout_sets").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateSets,
   });
+
+  const groupCellClass = local.superset_group ? SS_CELL[local.superset_group] : "";
+
+  const identityCells = (
+    <>
+      <span className="mono-number text-center text-[11px] text-muted-foreground">{index}</span>
+      <Select value={local.superset_group || "__none"} onValueChange={(v) => commit({ superset_group: v === "__none" ? "" : v })}>
+        <SelectTrigger
+          className={cn("h-7 justify-center border-border/60 px-1 text-[11px] font-bold", groupCellClass || "text-muted-foreground")}
+          title="Superset group"
+        >
+          <SelectValue placeholder="—" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none">Solo</SelectItem>
+          {["A", "B", "C", "D", "E", "F"].map((g) => (
+            <SelectItem key={g} value={g}>SS {g}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <ExerciseCombobox
+        value={local.exercise_id}
+        label={local.exercise_name}
+        exercises={exercises}
+        onSelect={(ex) => commit({ exercise_id: ex.id, exercise_name: ex.name })}
+        onCreate={async (name) => {
+          const created = await createExercise(name);
+          if (created) commit({ exercise_id: created.id, exercise_name: created.name });
+        }}
+      />
+    </>
+  );
+
+  const rowMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" title="Exercise actions">
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => addSet.mutate()}>
+          <Plus className="mr-2 h-3.5 w-3.5" /> Add set scheme
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onRemove} className="text-destructive">
+          <Trash2 className="mr-2 h-3.5 w-3.5" /> Remove exercise
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <div>
-      <div className="grid grid-cols-[24px_56px_56px_104px_1fr_72px_28px] items-center gap-2 border-b border-border/50 bg-muted/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <span>#</span>
-        <span>Sets</span>
-        <span>Reps</span>
-        <span>Load type</span>
-        <span>Prescription</span>
-        <span title="Target bar velocity (m/s)">Vel m/s</span>
-        <span />
-      </div>
       {sets.length === 0 ? (
-        <div className="px-2 py-3 text-center text-xs text-muted-foreground">No set schemes.</div>
+        <div className={cn("grid items-center gap-2 px-2 py-1.5", EXROW_COLS)}>
+          {identityCells}
+          <button
+            type="button"
+            onClick={() => addSet.mutate()}
+            className="col-span-5 flex items-center gap-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="h-3 w-3" /> Add set scheme
+          </button>
+          <span />
+          {rowMenu}
+        </div>
       ) : (
-        <div className="divide-y divide-border/40">
-          {sets.map((s, i) => (
+        sets.map((s, i) => (
+          <div
+            key={s.id}
+            className={cn("grid items-center gap-2 px-2 py-1.5 transition-colors hover:bg-muted/30", EXROW_COLS)}
+          >
+            {i === 0 ? identityCells : (
+              <>
+                <span />
+                <span />
+                <span className="truncate pl-1 text-[10px] text-muted-foreground/50">↳</span>
+              </>
+            )}
             <SetSchemeRow
-              key={s.id}
-              index={i + 1}
               set={s}
               exercises={exercises}
               measurement={measurement}
-              onUpdate={(patch) => upd.mutate({ id: s.id, patch })}
-              onRemove={() => del.mutate(s.id)}
+              onUpdate={(patch) => updSet.mutate({ id: s.id, patch })}
+              onRemove={() => delSet.mutate(s.id)}
             />
-          ))}
-        </div>
+            {i === 0 ? rowMenu : <span />}
+          </div>
+        ))
       )}
-      <div className="border-t border-border/40 px-2 py-1">
-        <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => add.mutate()}>
-          <Plus className="h-3 w-3" /> Add set scheme
-        </Button>
+
+      {/* Tempo / Rest / Notes — compact, always visible (no collapse to hide behind) */}
+      <div className="grid grid-cols-[1fr_1fr_2fr] items-center gap-2 border-t border-border/20 bg-muted/5 px-2 py-1">
+        <div className="flex items-center gap-1">
+          <span className="shrink-0 text-[9px] uppercase tracking-wider text-muted-foreground">Tempo</span>
+          <Input className="h-6 text-[11px]" value={local.tempo ?? ""} onChange={(e) => commit({ tempo: e.target.value })} placeholder="3-0-1" />
+        </div>
+        <div className="flex items-center gap-1">
+          <Timer className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <Input className="h-6 text-[11px]" type="number" value={local.rest_seconds ?? ""} onChange={(e) => commit({ rest_seconds: e.target.value ? Number(e.target.value) : null })} placeholder="Rest s" />
+        </div>
+        <div className="flex items-center gap-1">
+          <StickyNote className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <Input className="h-6 text-[11px]" value={local.notes ?? ""} onChange={(e) => commit({ notes: e.target.value })} placeholder="Notes / cues" />
+        </div>
       </div>
     </div>
   );
 }
 
-function SetSchemeRow({ index, set, exercises, measurement, onUpdate, onRemove }: {
-  index: number;
+type SetMode = "load" | "percent" | "rm" | "seconds" | "inches" | "mph";
+
+// Renders just the Sets/Reps/Load-type/Prescription/Vel/Remove cells for one
+// set scheme — a bare fragment, not its own grid, so it lines up as trailing
+// columns in whatever grid row ExerciseBlock places it in (the primary row,
+// alongside the exercise identity cells, or a lean extra-scheme row).
+function SetSchemeRow({ set, exercises, measurement, onUpdate, onRemove }: {
   set: WorkoutSet;
   exercises: { id: string; name: string }[];
   measurement: "load" | "seconds" | "inches" | "reps" | "mph";
@@ -1136,8 +1151,7 @@ function SetSchemeRow({ index, set, exercises, measurement, onUpdate, onRemove }
   };
 
   return (
-    <div className="grid grid-cols-[24px_56px_56px_104px_1fr_72px_28px] items-center gap-2 px-2 py-2 transition-colors hover:bg-muted/30">
-      <span className="mono-number text-[11px] text-muted-foreground">{index}</span>
+    <>
       <Input className="h-7 text-xs" type="number" min={1} value={local.sets ?? ""} onChange={(e) => commit({ sets: e.target.value ? Number(e.target.value) : null })} placeholder="Sets" />
       <Input className="h-7 text-xs" value={local.reps} onChange={(e) => commit({ reps: e.target.value })} placeholder="Reps" />
       <Select value={local.mode} onValueChange={(v) => commit({ mode: v as SetMode })}>
@@ -1202,10 +1216,10 @@ function SetSchemeRow({ index, set, exercises, measurement, onUpdate, onRemove }
         value={local.target_velocity ?? ""}
         onChange={(e) => commit({ target_velocity: e.target.value ? Number(e.target.value) : null })}
       />
-      <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove}>
+      <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove} title="Remove this set scheme">
         <X className="h-3 w-3" />
       </Button>
-    </div>
+    </>
   );
 }
 
