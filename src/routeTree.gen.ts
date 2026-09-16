@@ -9,254 +9,75 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WorkoutsRouteImport } from './routes/workouts'
-import { Route as TrainingRouteImport } from './routes/training'
-import { Route as TestsRouteImport } from './routes/tests'
-import { Route as TeamsRouteImport } from './routes/teams'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as SetupRouteImport } from './routes/setup'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as RackConsoleRouteImport } from './routes/rack-console'
-import { Route as ProgramsRouteImport } from './routes/programs'
-import { Route as ProgrammingRouteImport } from './routes/programming'
-import { Route as ProgramDeliveryRouteImport } from './routes/program-delivery'
-import { Route as PricingRouteImport } from './routes/pricing'
-import { Route as PermissionsRouteImport } from './routes/permissions'
-import { Route as OverheadDisplayRouteImport } from './routes/overhead-display'
-import { Route as OrganizationsRouteImport } from './routes/organizations'
-import { Route as OrgMembersRouteImport } from './routes/org-members'
-import { Route as MetricsRouteImport } from './routes/metrics'
-import { Route as MaxesRouteImport } from './routes/maxes'
-import { Route as LogReviewRouteImport } from './routes/log-review'
-import { Route as LiveLeaderboardRouteImport } from './routes/live-leaderboard'
-import { Route as LiftsRouteImport } from './routes/lifts'
-import { Route as LeaderboardsRouteImport } from './routes/leaderboards'
-import { Route as ImportRouteImport } from './routes/import'
-import { Route as GpsRouteImport } from './routes/gps'
-import { Route as FeaturesRouteImport } from './routes/features'
-import { Route as ExercisesRouteImport } from './routes/exercises'
-import { Route as DashboardSettingsRouteImport } from './routes/dashboard-settings'
-import { Route as BadgesRouteImport } from './routes/badges'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AttendanceRouteImport } from './routes/attendance'
-import { Route as AthletesRouteImport } from './routes/athletes'
-import { Route as AthleteQrRouteImport } from './routes/athlete-qr'
-import { Route as AthletePinSetupRouteImport } from './routes/athlete-pin-setup'
-import { Route as AthleteLoginRouteImport } from './routes/athlete-login'
-import { Route as AthleteRouteImport } from './routes/athlete'
-import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TrainingIndexRouteImport } from './routes/training.index'
-import { Route as ReportsIndexRouteImport } from './routes/reports.index'
-import { Route as WorkoutsIdRouteImport } from './routes/workouts.$id'
-import { Route as TrainingTodayRouteImport } from './routes/training.today'
-import { Route as TrainingLiveRouteImport } from './routes/training.live'
-import { Route as TrainingCompletedRouteImport } from './routes/training.completed'
-import { Route as TrainingCalendarRouteImport } from './routes/training.calendar'
-import { Route as TrainingAssignedRouteImport } from './routes/training.assigned'
-import { Route as TrainingAnalyticsRouteImport } from './routes/training.analytics'
-import { Route as TrainingViewSessionRouteImport } from './routes/training-view.session'
-import { Route as TrainingViewCheckInRouteImport } from './routes/training-view.check-in'
-import { Route as TrainingViewAttendanceRouteImport } from './routes/training-view.attendance'
-import { Route as ReportsSpeedPotentialRouteImport } from './routes/reports.speed-potential'
-import { Route as ReportsKpiReportRouteImport } from './routes/reports.kpi-report'
-import { Route as ReportsGpsReportRouteImport } from './routes/reports.gps-report'
-import { Route as ProgramsIdRouteImport } from './routes/programs.$id'
-import { Route as JoinTokenRouteImport } from './routes/join.$token'
-import { Route as InviteTokenRouteImport } from './routes/invite.$token'
-import { Route as CheckinTokenRouteImport } from './routes/checkin.$token'
-import { Route as AthletesIdRouteImport } from './routes/athletes.$id'
-import { Route as AthleteTodayRouteImport } from './routes/athlete.today'
+import { Route as AppRouteImport } from './routes/app'
+import { Route as AthleteRouteImport } from './routes/athlete'
+import { Route as AthleteLoginRouteImport } from './routes/athlete-login'
+import { Route as AthletePinSetupRouteImport } from './routes/athlete-pin-setup'
+import { Route as AthleteQrRouteImport } from './routes/athlete-qr'
+import { Route as AthletesRouteImport } from './routes/athletes'
+import { Route as AttendanceRouteImport } from './routes/attendance'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as BadgesRouteImport } from './routes/badges'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard-settings'
+import { Route as ExercisesRouteImport } from './routes/exercises'
+import { Route as FeaturesRouteImport } from './routes/features'
+import { Route as GpsRouteImport } from './routes/gps'
+import { Route as ImportRouteImport } from './routes/import'
+import { Route as LeaderboardsRouteImport } from './routes/leaderboards'
+import { Route as LiftsRouteImport } from './routes/lifts'
+import { Route as LiveLeaderboardRouteImport } from './routes/live-leaderboard'
+import { Route as LogReviewRouteImport } from './routes/log-review'
+import { Route as MaxesRouteImport } from './routes/maxes'
+import { Route as MetricsRouteImport } from './routes/metrics'
+import { Route as OrgMembersRouteImport } from './routes/org-members'
+import { Route as OrganizationsRouteImport } from './routes/organizations'
+import { Route as OverheadDisplayRouteImport } from './routes/overhead-display'
+import { Route as PerformanceRouteImport } from './routes/performance'
+import { Route as PermissionsRouteImport } from './routes/permissions'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ProgramDeliveryRouteImport } from './routes/program-delivery'
+import { Route as ProgrammingRouteImport } from './routes/programming'
+import { Route as ProgramsRouteImport } from './routes/programs'
+import { Route as RackConsoleRouteImport } from './routes/rack-console'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TeamsRouteImport } from './routes/teams'
+import { Route as TestsRouteImport } from './routes/tests'
+import { Route as TrainingRouteImport } from './routes/training'
+import { Route as WorkoutsRouteImport } from './routes/workouts'
 import { Route as AthleteJoinTokenRouteImport } from './routes/athlete-join.$token'
-import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
-import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
+import { Route as AthleteTodayRouteImport } from './routes/athlete.today'
+import { Route as AthletesIdRouteImport } from './routes/athletes.$id'
+import { Route as CheckinTokenRouteImport } from './routes/checkin.$token'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as JoinTokenRouteImport } from './routes/join.$token'
+import { Route as ProgramsIdRouteImport } from './routes/programs.$id'
+import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsGpsReportRouteImport } from './routes/reports.gps-report'
+import { Route as ReportsKpiReportRouteImport } from './routes/reports.kpi-report'
+import { Route as ReportsSpeedPotentialRouteImport } from './routes/reports.speed-potential'
+import { Route as TrainingViewAttendanceRouteImport } from './routes/training-view.attendance'
+import { Route as TrainingViewCheckInRouteImport } from './routes/training-view.check-in'
+import { Route as TrainingViewSessionRouteImport } from './routes/training-view.session'
+import { Route as TrainingIndexRouteImport } from './routes/training.index'
+import { Route as TrainingAnalyticsRouteImport } from './routes/training.analytics'
+import { Route as TrainingAssignedRouteImport } from './routes/training.assigned'
+import { Route as TrainingCalendarRouteImport } from './routes/training.calendar'
+import { Route as TrainingCompletedRouteImport } from './routes/training.completed'
+import { Route as TrainingLiveRouteImport } from './routes/training.live'
+import { Route as TrainingTodayRouteImport } from './routes/training.today'
+import { Route as WorkoutsIdRouteImport } from './routes/workouts.$id'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
+import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
+import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 
-const WorkoutsRoute = WorkoutsRouteImport.update({
-  id: '/workouts',
-  path: '/workouts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrainingRoute = TrainingRouteImport.update({
-  id: '/training',
-  path: '/training',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestsRoute = TestsRouteImport.update({
-  id: '/tests',
-  path: '/tests',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TeamsRoute = TeamsRouteImport.update({
-  id: '/teams',
-  path: '/teams',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SetupRoute = SetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RackConsoleRoute = RackConsoleRouteImport.update({
-  id: '/rack-console',
-  path: '/rack-console',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProgramsRoute = ProgramsRouteImport.update({
-  id: '/programs',
-  path: '/programs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProgrammingRoute = ProgrammingRouteImport.update({
-  id: '/programming',
-  path: '/programming',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProgramDeliveryRoute = ProgramDeliveryRouteImport.update({
-  id: '/program-delivery',
-  path: '/program-delivery',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PricingRoute = PricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PermissionsRoute = PermissionsRouteImport.update({
-  id: '/permissions',
-  path: '/permissions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OverheadDisplayRoute = OverheadDisplayRouteImport.update({
-  id: '/overhead-display',
-  path: '/overhead-display',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OrganizationsRoute = OrganizationsRouteImport.update({
-  id: '/organizations',
-  path: '/organizations',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OrgMembersRoute = OrgMembersRouteImport.update({
-  id: '/org-members',
-  path: '/org-members',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MetricsRoute = MetricsRouteImport.update({
-  id: '/metrics',
-  path: '/metrics',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MaxesRoute = MaxesRouteImport.update({
-  id: '/maxes',
-  path: '/maxes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LogReviewRoute = LogReviewRouteImport.update({
-  id: '/log-review',
-  path: '/log-review',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LiveLeaderboardRoute = LiveLeaderboardRouteImport.update({
-  id: '/live-leaderboard',
-  path: '/live-leaderboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LiftsRoute = LiftsRouteImport.update({
-  id: '/lifts',
-  path: '/lifts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LeaderboardsRoute = LeaderboardsRouteImport.update({
-  id: '/leaderboards',
-  path: '/leaderboards',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImportRoute = ImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GpsRoute = GpsRouteImport.update({
-  id: '/gps',
-  path: '/gps',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FeaturesRoute = FeaturesRouteImport.update({
-  id: '/features',
-  path: '/features',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExercisesRoute = ExercisesRouteImport.update({
-  id: '/exercises',
-  path: '/exercises',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
-  id: '/dashboard-settings',
-  path: '/dashboard-settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BadgesRoute = BadgesRouteImport.update({
-  id: '/badges',
-  path: '/badges',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AttendanceRoute = AttendanceRouteImport.update({
-  id: '/attendance',
-  path: '/attendance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AthletesRoute = AthletesRouteImport.update({
-  id: '/athletes',
-  path: '/athletes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AthleteQrRoute = AthleteQrRouteImport.update({
-  id: '/athlete-qr',
-  path: '/athlete-qr',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AthletePinSetupRoute = AthletePinSetupRouteImport.update({
-  id: '/athlete-pin-setup',
-  path: '/athlete-pin-setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AthleteLoginRoute = AthleteLoginRouteImport.update({
-  id: '/athlete-login',
-  path: '/athlete-login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AthleteRoute = AthleteRouteImport.update({
-  id: '/athlete',
-  path: '/athlete',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -264,94 +85,214 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AthleteRoute = AthleteRouteImport.update({
+  id: '/athlete',
+  path: '/athlete',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TrainingIndexRoute = TrainingIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => TrainingRoute,
+const AthleteLoginRoute = AthleteLoginRouteImport.update({
+  id: '/athlete-login',
+  path: '/athlete-login',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const ReportsIndexRoute = ReportsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ReportsRoute,
+const AthletePinSetupRoute = AthletePinSetupRouteImport.update({
+  id: '/athlete-pin-setup',
+  path: '/athlete-pin-setup',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const WorkoutsIdRoute = WorkoutsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => WorkoutsRoute,
+const AthleteQrRoute = AthleteQrRouteImport.update({
+  id: '/athlete-qr',
+  path: '/athlete-qr',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const TrainingTodayRoute = TrainingTodayRouteImport.update({
+const AthletesRoute = AthletesRouteImport.update({
+  id: '/athletes',
+  path: '/athletes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AttendanceRoute = AttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BadgesRoute = BadgesRouteImport.update({
+  id: '/badges',
+  path: '/badges',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/dashboard-settings',
+  path: '/dashboard-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExercisesRoute = ExercisesRouteImport.update({
+  id: '/exercises',
+  path: '/exercises',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeaturesRoute = FeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GpsRoute = GpsRouteImport.update({
+  id: '/gps',
+  path: '/gps',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardsRoute = LeaderboardsRouteImport.update({
+  id: '/leaderboards',
+  path: '/leaderboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiftsRoute = LiftsRouteImport.update({
+  id: '/lifts',
+  path: '/lifts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiveLeaderboardRoute = LiveLeaderboardRouteImport.update({
+  id: '/live-leaderboard',
+  path: '/live-leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogReviewRoute = LogReviewRouteImport.update({
+  id: '/log-review',
+  path: '/log-review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaxesRoute = MaxesRouteImport.update({
+  id: '/maxes',
+  path: '/maxes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetricsRoute = MetricsRouteImport.update({
+  id: '/metrics',
+  path: '/metrics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrgMembersRoute = OrgMembersRouteImport.update({
+  id: '/org-members',
+  path: '/org-members',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrganizationsRoute = OrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OverheadDisplayRoute = OverheadDisplayRouteImport.update({
+  id: '/overhead-display',
+  path: '/overhead-display',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerformanceRoute = PerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PermissionsRoute = PermissionsRouteImport.update({
+  id: '/permissions',
+  path: '/permissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramDeliveryRoute = ProgramDeliveryRouteImport.update({
+  id: '/program-delivery',
+  path: '/program-delivery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgrammingRoute = ProgrammingRouteImport.update({
+  id: '/programming',
+  path: '/programming',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramsRoute = ProgramsRouteImport.update({
+  id: '/programs',
+  path: '/programs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RackConsoleRoute = RackConsoleRouteImport.update({
+  id: '/rack-console',
+  path: '/rack-console',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamsRoute = TeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestsRoute = TestsRouteImport.update({
+  id: '/tests',
+  path: '/tests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrainingRoute = TrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkoutsRoute = WorkoutsRouteImport.update({
+  id: '/workouts',
+  path: '/workouts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AthleteJoinTokenRoute = AthleteJoinTokenRouteImport.update({
+  id: '/athlete-join/$token',
+  path: '/athlete-join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AthleteTodayRoute = AthleteTodayRouteImport.update({
   id: '/today',
   path: '/today',
-  getParentRoute: () => TrainingRoute,
+  getParentRoute: () => AthleteRoute,
 } as any)
-const TrainingLiveRoute = TrainingLiveRouteImport.update({
-  id: '/live',
-  path: '/live',
-  getParentRoute: () => TrainingRoute,
-} as any)
-const TrainingCompletedRoute = TrainingCompletedRouteImport.update({
-  id: '/completed',
-  path: '/completed',
-  getParentRoute: () => TrainingRoute,
-} as any)
-const TrainingCalendarRoute = TrainingCalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => TrainingRoute,
-} as any)
-const TrainingAssignedRoute = TrainingAssignedRouteImport.update({
-  id: '/assigned',
-  path: '/assigned',
-  getParentRoute: () => TrainingRoute,
-} as any)
-const TrainingAnalyticsRoute = TrainingAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => TrainingRoute,
-} as any)
-const TrainingViewSessionRoute = TrainingViewSessionRouteImport.update({
-  id: '/training-view/session',
-  path: '/training-view/session',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrainingViewCheckInRoute = TrainingViewCheckInRouteImport.update({
-  id: '/training-view/check-in',
-  path: '/training-view/check-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrainingViewAttendanceRoute = TrainingViewAttendanceRouteImport.update({
-  id: '/training-view/attendance',
-  path: '/training-view/attendance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportsSpeedPotentialRoute = ReportsSpeedPotentialRouteImport.update({
-  id: '/speed-potential',
-  path: '/speed-potential',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ReportsKpiReportRoute = ReportsKpiReportRouteImport.update({
-  id: '/kpi-report',
-  path: '/kpi-report',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ReportsGpsReportRoute = ReportsGpsReportRouteImport.update({
-  id: '/gps-report',
-  path: '/gps-report',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ProgramsIdRoute = ProgramsIdRouteImport.update({
+const AthletesIdRoute = AthletesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => ProgramsRoute,
+  getParentRoute: () => AthletesRoute,
 } as any)
-const JoinTokenRoute = JoinTokenRouteImport.update({
-  id: '/join/$token',
-  path: '/join/$token',
+const CheckinTokenRoute = CheckinTokenRouteImport.update({
+  id: '/checkin/$token',
+  path: '/checkin/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -359,24 +300,99 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CheckinTokenRoute = CheckinTokenRouteImport.update({
-  id: '/checkin/$token',
-  path: '/checkin/$token',
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AthletesIdRoute = AthletesIdRouteImport.update({
+const ProgramsIdRoute = ProgramsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AthletesRoute,
+  getParentRoute: () => ProgramsRoute,
 } as any)
-const AthleteTodayRoute = AthleteTodayRouteImport.update({
+const ReportsIndexRoute = ReportsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsGpsReportRoute = ReportsGpsReportRouteImport.update({
+  id: '/gps-report',
+  path: '/gps-report',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsKpiReportRoute = ReportsKpiReportRouteImport.update({
+  id: '/kpi-report',
+  path: '/kpi-report',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsSpeedPotentialRoute = ReportsSpeedPotentialRouteImport.update({
+  id: '/speed-potential',
+  path: '/speed-potential',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const TrainingViewAttendanceRoute = TrainingViewAttendanceRouteImport.update({
+  id: '/training-view/attendance',
+  path: '/training-view/attendance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrainingViewCheckInRoute = TrainingViewCheckInRouteImport.update({
+  id: '/training-view/check-in',
+  path: '/training-view/check-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrainingViewSessionRoute = TrainingViewSessionRouteImport.update({
+  id: '/training-view/session',
+  path: '/training-view/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrainingIndexRoute = TrainingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingAnalyticsRoute = TrainingAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingAssignedRoute = TrainingAssignedRouteImport.update({
+  id: '/assigned',
+  path: '/assigned',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingCalendarRoute = TrainingCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingCompletedRoute = TrainingCompletedRouteImport.update({
+  id: '/completed',
+  path: '/completed',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingLiveRoute = TrainingLiveRouteImport.update({
+  id: '/live',
+  path: '/live',
+  getParentRoute: () => TrainingRoute,
+} as any)
+const TrainingTodayRoute = TrainingTodayRouteImport.update({
   id: '/today',
   path: '/today',
-  getParentRoute: () => AthleteRoute,
+  getParentRoute: () => TrainingRoute,
 } as any)
-const AthleteJoinTokenRoute = AthleteJoinTokenRouteImport.update({
-  id: '/athlete-join/$token',
-  path: '/athlete-join/$token',
+const WorkoutsIdRoute = WorkoutsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => WorkoutsRoute,
+} as any)
+const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
+  id: '/lovable/email/auth/preview',
+  path: '/lovable/email/auth/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
+  id: '/lovable/email/auth/webhook',
+  path: '/lovable/email/auth/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LovableEmailQueueProcessRoute =
@@ -385,16 +401,6 @@ const LovableEmailQueueProcessRoute =
     path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
-  id: '/lovable/email/auth/webhook',
-  path: '/lovable/email/auth/webhook',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
-  id: '/lovable/email/auth/preview',
-  path: '/lovable/email/auth/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -421,6 +427,7 @@ export interface FileRoutesByFullPath {
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/overhead-display': typeof OverheadDisplayRoute
+  '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
   '/pricing': typeof PricingRoute
   '/program-delivery': typeof ProgramDeliveryRoute
@@ -487,8 +494,10 @@ export interface FileRoutesByTo {
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/overhead-display': typeof OverheadDisplayRoute
+  '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
   '/pricing': typeof PricingRoute
+  '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
   '/rack-console': typeof RackConsoleRoute
@@ -551,6 +560,7 @@ export interface FileRoutesById {
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/overhead-display': typeof OverheadDisplayRoute
+  '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
   '/pricing': typeof PricingRoute
   '/program-delivery': typeof ProgramDeliveryRoute
@@ -619,6 +629,7 @@ export interface FileRouteTypes {
     | '/org-members'
     | '/organizations'
     | '/overhead-display'
+    | '/performance'
     | '/permissions'
     | '/pricing'
     | '/program-delivery'
@@ -685,6 +696,7 @@ export interface FileRouteTypes {
     | '/org-members'
     | '/organizations'
     | '/overhead-display'
+    | '/performance'
     | '/permissions'
     | '/pricing'
     | '/program-delivery'
@@ -749,6 +761,7 @@ export interface FileRouteTypes {
     | '/org-members'
     | '/organizations'
     | '/overhead-display'
+    | '/performance'
     | '/permissions'
     | '/pricing'
     | '/program-delivery'
@@ -816,6 +829,7 @@ export interface RootRouteChildren {
   OrgMembersRoute: typeof OrgMembersRoute
   OrganizationsRoute: typeof OrganizationsRoute
   OverheadDisplayRoute: typeof OverheadDisplayRoute
+  PerformanceRoute: typeof PerformanceRoute
   PermissionsRoute: typeof PermissionsRoute
   PricingRoute: typeof PricingRoute
   ProgramDeliveryRoute: typeof ProgramDeliveryRoute
@@ -845,263 +859,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/workouts': {
-      id: '/workouts'
-      path: '/workouts'
-      fullPath: '/workouts'
-      preLoaderRoute: typeof WorkoutsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/training': {
-      id: '/training'
-      path: '/training'
-      fullPath: '/training'
-      preLoaderRoute: typeof TrainingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tests': {
-      id: '/tests'
-      path: '/tests'
-      fullPath: '/tests'
-      preLoaderRoute: typeof TestsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/teams': {
-      id: '/teams'
-      path: '/teams'
-      fullPath: '/teams'
-      preLoaderRoute: typeof TeamsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reports': {
-      id: '/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rack-console': {
-      id: '/rack-console'
-      path: '/rack-console'
-      fullPath: '/rack-console'
-      preLoaderRoute: typeof RackConsoleRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/programs': {
-      id: '/programs'
-      path: '/programs'
-      fullPath: '/programs'
-      preLoaderRoute: typeof ProgramsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/programming': {
-      id: '/programming'
-      path: '/programming'
-      fullPath: '/programming'
-      preLoaderRoute: typeof ProgrammingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/program-delivery': {
-      id: '/program-delivery'
-      path: '/program-delivery'
-      fullPath: '/program-delivery'
-      preLoaderRoute: typeof ProgramDeliveryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/permissions': {
-      id: '/permissions'
-      path: '/permissions'
-      fullPath: '/permissions'
-      preLoaderRoute: typeof PermissionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/overhead-display': {
-      id: '/overhead-display'
-      path: '/overhead-display'
-      fullPath: '/overhead-display'
-      preLoaderRoute: typeof OverheadDisplayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/organizations': {
-      id: '/organizations'
-      path: '/organizations'
-      fullPath: '/organizations'
-      preLoaderRoute: typeof OrganizationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/org-members': {
-      id: '/org-members'
-      path: '/org-members'
-      fullPath: '/org-members'
-      preLoaderRoute: typeof OrgMembersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/metrics': {
-      id: '/metrics'
-      path: '/metrics'
-      fullPath: '/metrics'
-      preLoaderRoute: typeof MetricsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/maxes': {
-      id: '/maxes'
-      path: '/maxes'
-      fullPath: '/maxes'
-      preLoaderRoute: typeof MaxesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/log-review': {
-      id: '/log-review'
-      path: '/log-review'
-      fullPath: '/log-review'
-      preLoaderRoute: typeof LogReviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/live-leaderboard': {
-      id: '/live-leaderboard'
-      path: '/live-leaderboard'
-      fullPath: '/live-leaderboard'
-      preLoaderRoute: typeof LiveLeaderboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lifts': {
-      id: '/lifts'
-      path: '/lifts'
-      fullPath: '/lifts'
-      preLoaderRoute: typeof LiftsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/leaderboards': {
-      id: '/leaderboards'
-      path: '/leaderboards'
-      fullPath: '/leaderboards'
-      preLoaderRoute: typeof LeaderboardsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/import': {
-      id: '/import'
-      path: '/import'
-      fullPath: '/import'
-      preLoaderRoute: typeof ImportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gps': {
-      id: '/gps'
-      path: '/gps'
-      fullPath: '/gps'
-      preLoaderRoute: typeof GpsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/features': {
-      id: '/features'
-      path: '/features'
-      fullPath: '/features'
-      preLoaderRoute: typeof FeaturesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/exercises': {
-      id: '/exercises'
-      path: '/exercises'
-      fullPath: '/exercises'
-      preLoaderRoute: typeof ExercisesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard-settings': {
-      id: '/dashboard-settings'
-      path: '/dashboard-settings'
-      fullPath: '/dashboard-settings'
-      preLoaderRoute: typeof DashboardSettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/badges': {
-      id: '/badges'
-      path: '/badges'
-      fullPath: '/badges'
-      preLoaderRoute: typeof BadgesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/attendance': {
-      id: '/attendance'
-      path: '/attendance'
-      fullPath: '/attendance'
-      preLoaderRoute: typeof AttendanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/athletes': {
-      id: '/athletes'
-      path: '/athletes'
-      fullPath: '/athletes'
-      preLoaderRoute: typeof AthletesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/athlete-qr': {
-      id: '/athlete-qr'
-      path: '/athlete-qr'
-      fullPath: '/athlete-qr'
-      preLoaderRoute: typeof AthleteQrRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/athlete-pin-setup': {
-      id: '/athlete-pin-setup'
-      path: '/athlete-pin-setup'
-      fullPath: '/athlete-pin-setup'
-      preLoaderRoute: typeof AthletePinSetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/athlete-login': {
-      id: '/athlete-login'
-      path: '/athlete-login'
-      fullPath: '/athlete-login'
-      preLoaderRoute: typeof AthleteLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/athlete': {
-      id: '/athlete'
-      path: '/athlete'
-      fullPath: '/athlete'
-      preLoaderRoute: typeof AthleteRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -1111,130 +873,298 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/athlete': {
+      id: '/athlete'
+      path: '/athlete'
+      fullPath: '/athlete'
+      preLoaderRoute: typeof AthleteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/training/': {
-      id: '/training/'
-      path: '/'
-      fullPath: '/training/'
-      preLoaderRoute: typeof TrainingIndexRouteImport
-      parentRoute: typeof TrainingRoute
+    '/athlete-login': {
+      id: '/athlete-login'
+      path: '/athlete-login'
+      fullPath: '/athlete-login'
+      preLoaderRoute: typeof AthleteLoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/reports/': {
-      id: '/reports/'
-      path: '/'
-      fullPath: '/reports/'
-      preLoaderRoute: typeof ReportsIndexRouteImport
-      parentRoute: typeof ReportsRoute
+    '/athlete-pin-setup': {
+      id: '/athlete-pin-setup'
+      path: '/athlete-pin-setup'
+      fullPath: '/athlete-pin-setup'
+      preLoaderRoute: typeof AthletePinSetupRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/workouts/$id': {
-      id: '/workouts/$id'
-      path: '/$id'
-      fullPath: '/workouts/$id'
-      preLoaderRoute: typeof WorkoutsIdRouteImport
-      parentRoute: typeof WorkoutsRoute
+    '/athlete-qr': {
+      id: '/athlete-qr'
+      path: '/athlete-qr'
+      fullPath: '/athlete-qr'
+      preLoaderRoute: typeof AthleteQrRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/training/today': {
-      id: '/training/today'
+    '/athletes': {
+      id: '/athletes'
+      path: '/athletes'
+      fullPath: '/athletes'
+      preLoaderRoute: typeof AthletesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/attendance': {
+      id: '/attendance'
+      path: '/attendance'
+      fullPath: '/attendance'
+      preLoaderRoute: typeof AttendanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/badges': {
+      id: '/badges'
+      path: '/badges'
+      fullPath: '/badges'
+      preLoaderRoute: typeof BadgesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard-settings': {
+      id: '/dashboard-settings'
+      path: '/dashboard-settings'
+      fullPath: '/dashboard-settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exercises': {
+      id: '/exercises'
+      path: '/exercises'
+      fullPath: '/exercises'
+      preLoaderRoute: typeof ExercisesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/features': {
+      id: '/features'
+      path: '/features'
+      fullPath: '/features'
+      preLoaderRoute: typeof FeaturesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gps': {
+      id: '/gps'
+      path: '/gps'
+      fullPath: '/gps'
+      preLoaderRoute: typeof GpsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboards': {
+      id: '/leaderboards'
+      path: '/leaderboards'
+      fullPath: '/leaderboards'
+      preLoaderRoute: typeof LeaderboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lifts': {
+      id: '/lifts'
+      path: '/lifts'
+      fullPath: '/lifts'
+      preLoaderRoute: typeof LiftsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/live-leaderboard': {
+      id: '/live-leaderboard'
+      path: '/live-leaderboard'
+      fullPath: '/live-leaderboard'
+      preLoaderRoute: typeof LiveLeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/log-review': {
+      id: '/log-review'
+      path: '/log-review'
+      fullPath: '/log-review'
+      preLoaderRoute: typeof LogReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/maxes': {
+      id: '/maxes'
+      path: '/maxes'
+      fullPath: '/maxes'
+      preLoaderRoute: typeof MaxesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metrics': {
+      id: '/metrics'
+      path: '/metrics'
+      fullPath: '/metrics'
+      preLoaderRoute: typeof MetricsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/org-members': {
+      id: '/org-members'
+      path: '/org-members'
+      fullPath: '/org-members'
+      preLoaderRoute: typeof OrgMembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/organizations': {
+      id: '/organizations'
+      path: '/organizations'
+      fullPath: '/organizations'
+      preLoaderRoute: typeof OrganizationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/overhead-display': {
+      id: '/overhead-display'
+      path: '/overhead-display'
+      fullPath: '/overhead-display'
+      preLoaderRoute: typeof OverheadDisplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/performance': {
+      id: '/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof PerformanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/permissions': {
+      id: '/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof PermissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/program-delivery': {
+      id: '/program-delivery'
+      path: '/program-delivery'
+      fullPath: '/program-delivery'
+      preLoaderRoute: typeof ProgramDeliveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/programming': {
+      id: '/programming'
+      path: '/programming'
+      fullPath: '/programming'
+      preLoaderRoute: typeof ProgrammingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/programs': {
+      id: '/programs'
+      path: '/programs'
+      fullPath: '/programs'
+      preLoaderRoute: typeof ProgramsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rack-console': {
+      id: '/rack-console'
+      path: '/rack-console'
+      fullPath: '/rack-console'
+      preLoaderRoute: typeof RackConsoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teams': {
+      id: '/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof TeamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tests': {
+      id: '/tests'
+      path: '/tests'
+      fullPath: '/tests'
+      preLoaderRoute: typeof TestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/training': {
+      id: '/training'
+      path: '/training'
+      fullPath: '/training'
+      preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workouts': {
+      id: '/workouts'
+      path: '/workouts'
+      fullPath: '/workouts'
+      preLoaderRoute: typeof WorkoutsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/athlete-join/$token': {
+      id: '/athlete-join/$token'
+      path: '/athlete-join/$token'
+      fullPath: '/athlete-join/$token'
+      preLoaderRoute: typeof AthleteJoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/athlete/today': {
+      id: '/athlete/today'
       path: '/today'
-      fullPath: '/training/today'
-      preLoaderRoute: typeof TrainingTodayRouteImport
-      parentRoute: typeof TrainingRoute
+      fullPath: '/athlete/today'
+      preLoaderRoute: typeof AthleteTodayRouteImport
+      parentRoute: typeof AthleteRoute
     }
-    '/training/live': {
-      id: '/training/live'
-      path: '/live'
-      fullPath: '/training/live'
-      preLoaderRoute: typeof TrainingLiveRouteImport
-      parentRoute: typeof TrainingRoute
-    }
-    '/training/completed': {
-      id: '/training/completed'
-      path: '/completed'
-      fullPath: '/training/completed'
-      preLoaderRoute: typeof TrainingCompletedRouteImport
-      parentRoute: typeof TrainingRoute
-    }
-    '/training/calendar': {
-      id: '/training/calendar'
-      path: '/calendar'
-      fullPath: '/training/calendar'
-      preLoaderRoute: typeof TrainingCalendarRouteImport
-      parentRoute: typeof TrainingRoute
-    }
-    '/training/assigned': {
-      id: '/training/assigned'
-      path: '/assigned'
-      fullPath: '/training/assigned'
-      preLoaderRoute: typeof TrainingAssignedRouteImport
-      parentRoute: typeof TrainingRoute
-    }
-    '/training/analytics': {
-      id: '/training/analytics'
-      path: '/analytics'
-      fullPath: '/training/analytics'
-      preLoaderRoute: typeof TrainingAnalyticsRouteImport
-      parentRoute: typeof TrainingRoute
-    }
-    '/training-view/session': {
-      id: '/training-view/session'
-      path: '/training-view/session'
-      fullPath: '/training-view/session'
-      preLoaderRoute: typeof TrainingViewSessionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/training-view/check-in': {
-      id: '/training-view/check-in'
-      path: '/training-view/check-in'
-      fullPath: '/training-view/check-in'
-      preLoaderRoute: typeof TrainingViewCheckInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/training-view/attendance': {
-      id: '/training-view/attendance'
-      path: '/training-view/attendance'
-      fullPath: '/training-view/attendance'
-      preLoaderRoute: typeof TrainingViewAttendanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reports/speed-potential': {
-      id: '/reports/speed-potential'
-      path: '/speed-potential'
-      fullPath: '/reports/speed-potential'
-      preLoaderRoute: typeof ReportsSpeedPotentialRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/reports/kpi-report': {
-      id: '/reports/kpi-report'
-      path: '/kpi-report'
-      fullPath: '/reports/kpi-report'
-      preLoaderRoute: typeof ReportsKpiReportRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/reports/gps-report': {
-      id: '/reports/gps-report'
-      path: '/gps-report'
-      fullPath: '/reports/gps-report'
-      preLoaderRoute: typeof ReportsGpsReportRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/programs/$id': {
-      id: '/programs/$id'
+    '/athletes/$id': {
+      id: '/athletes/$id'
       path: '/$id'
-      fullPath: '/programs/$id'
-      preLoaderRoute: typeof ProgramsIdRouteImport
-      parentRoute: typeof ProgramsRoute
+      fullPath: '/athletes/$id'
+      preLoaderRoute: typeof AthletesIdRouteImport
+      parentRoute: typeof AthletesRoute
     }
-    '/join/$token': {
-      id: '/join/$token'
-      path: '/join/$token'
-      fullPath: '/join/$token'
-      preLoaderRoute: typeof JoinTokenRouteImport
+    '/checkin/$token': {
+      id: '/checkin/$token'
+      path: '/checkin/$token'
+      fullPath: '/checkin/$token'
+      preLoaderRoute: typeof CheckinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -1244,39 +1174,130 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/checkin/$token': {
-      id: '/checkin/$token'
-      path: '/checkin/$token'
-      fullPath: '/checkin/$token'
-      preLoaderRoute: typeof CheckinTokenRouteImport
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/athletes/$id': {
-      id: '/athletes/$id'
+    '/programs/$id': {
+      id: '/programs/$id'
       path: '/$id'
-      fullPath: '/athletes/$id'
-      preLoaderRoute: typeof AthletesIdRouteImport
-      parentRoute: typeof AthletesRoute
+      fullPath: '/programs/$id'
+      preLoaderRoute: typeof ProgramsIdRouteImport
+      parentRoute: typeof ProgramsRoute
     }
-    '/athlete/today': {
-      id: '/athlete/today'
-      path: '/today'
-      fullPath: '/athlete/today'
-      preLoaderRoute: typeof AthleteTodayRouteImport
-      parentRoute: typeof AthleteRoute
+    '/reports/': {
+      id: '/reports/'
+      path: '/'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof ReportsIndexRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/athlete-join/$token': {
-      id: '/athlete-join/$token'
-      path: '/athlete-join/$token'
-      fullPath: '/athlete-join/$token'
-      preLoaderRoute: typeof AthleteJoinTokenRouteImport
+    '/reports/gps-report': {
+      id: '/reports/gps-report'
+      path: '/gps-report'
+      fullPath: '/reports/gps-report'
+      preLoaderRoute: typeof ReportsGpsReportRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/kpi-report': {
+      id: '/reports/kpi-report'
+      path: '/kpi-report'
+      fullPath: '/reports/kpi-report'
+      preLoaderRoute: typeof ReportsKpiReportRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/speed-potential': {
+      id: '/reports/speed-potential'
+      path: '/speed-potential'
+      fullPath: '/reports/speed-potential'
+      preLoaderRoute: typeof ReportsSpeedPotentialRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/training-view/attendance': {
+      id: '/training-view/attendance'
+      path: '/training-view/attendance'
+      fullPath: '/training-view/attendance'
+      preLoaderRoute: typeof TrainingViewAttendanceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lovable/email/queue/process': {
-      id: '/lovable/email/queue/process'
-      path: '/lovable/email/queue/process'
-      fullPath: '/lovable/email/queue/process'
-      preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
+    '/training-view/check-in': {
+      id: '/training-view/check-in'
+      path: '/training-view/check-in'
+      fullPath: '/training-view/check-in'
+      preLoaderRoute: typeof TrainingViewCheckInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/training-view/session': {
+      id: '/training-view/session'
+      path: '/training-view/session'
+      fullPath: '/training-view/session'
+      preLoaderRoute: typeof TrainingViewSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/training/': {
+      id: '/training/'
+      path: '/'
+      fullPath: '/training/'
+      preLoaderRoute: typeof TrainingIndexRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/analytics': {
+      id: '/training/analytics'
+      path: '/analytics'
+      fullPath: '/training/analytics'
+      preLoaderRoute: typeof TrainingAnalyticsRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/assigned': {
+      id: '/training/assigned'
+      path: '/assigned'
+      fullPath: '/training/assigned'
+      preLoaderRoute: typeof TrainingAssignedRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/calendar': {
+      id: '/training/calendar'
+      path: '/calendar'
+      fullPath: '/training/calendar'
+      preLoaderRoute: typeof TrainingCalendarRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/completed': {
+      id: '/training/completed'
+      path: '/completed'
+      fullPath: '/training/completed'
+      preLoaderRoute: typeof TrainingCompletedRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/live': {
+      id: '/training/live'
+      path: '/live'
+      fullPath: '/training/live'
+      preLoaderRoute: typeof TrainingLiveRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/training/today': {
+      id: '/training/today'
+      path: '/today'
+      fullPath: '/training/today'
+      preLoaderRoute: typeof TrainingTodayRouteImport
+      parentRoute: typeof TrainingRoute
+    }
+    '/workouts/$id': {
+      id: '/workouts/$id'
+      path: '/$id'
+      fullPath: '/workouts/$id'
+      preLoaderRoute: typeof WorkoutsIdRouteImport
+      parentRoute: typeof WorkoutsRoute
+    }
+    '/lovable/email/auth/preview': {
+      id: '/lovable/email/auth/preview'
+      path: '/lovable/email/auth/preview'
+      fullPath: '/lovable/email/auth/preview'
+      preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/auth/webhook': {
@@ -1286,11 +1307,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailAuthWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lovable/email/auth/preview': {
-      id: '/lovable/email/auth/preview'
-      path: '/lovable/email/auth/preview'
-      fullPath: '/lovable/email/auth/preview'
-      preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
+    '/lovable/email/queue/process': {
+      id: '/lovable/email/queue/process'
+      path: '/lovable/email/queue/process'
+      fullPath: '/lovable/email/queue/process'
+      preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -1409,6 +1430,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrgMembersRoute: OrgMembersRoute,
   OrganizationsRoute: OrganizationsRoute,
   OverheadDisplayRoute: OverheadDisplayRoute,
+  PerformanceRoute: PerformanceRoute,
   PermissionsRoute: PermissionsRoute,
   PricingRoute: PricingRoute,
   ProgramDeliveryRoute: ProgramDeliveryRoute,

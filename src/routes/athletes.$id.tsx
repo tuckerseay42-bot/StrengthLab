@@ -9,16 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta, bwCoefficient, percentImprovement, estimateMax } from "@/lib/domain";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LineChart } from "lucide-react";
 import { AthleteInvite } from "@/components/athlete-invite";
 import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
 import { AthleteQuickStats } from "@/components/athlete-quick-stats";
 import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
 import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
-import { AthleteMetricReport } from "@/components/athlete-metric-report";
-import { TeamMetricReport } from "@/components/team-metric-report";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/athletes/$id")({
   head: () => ({ meta: [{ title: "Athlete — Strength Lab" }] }),
@@ -198,35 +195,24 @@ function AthleteCard() {
 
       <AthleteQuickStats athlete={athlete} lifts={lifts} attendance={attendance} />
 
-      <Tabs defaultValue="athlete">
-        <TabsList>
-          <TabsTrigger value="athlete">Athlete Dashboard</TabsTrigger>
-          <TabsTrigger value="team">Team Dashboard</TabsTrigger>
-        </TabsList>
-        <TabsContent value="athlete" className="mt-3 space-y-4">
-          <AthleteSpiderGraph athlete={athlete} />
-          <AthleteKpiDashboard
-            athlete={athlete}
-            tests={tests}
-            lifts={lifts}
-            attendance={attendance}
-            repMaxes={repMaxes}
-            customTypes={customTypes}
-            athletesAll={athletes}
-          />
-          <AthleteMetricReport athlete={athlete} tests={tests} repMaxes={repMaxes} customTypes={customTypes} />
-        </TabsContent>
-        <TabsContent value="team" className="mt-3">
-          <TeamMetricReport
-            athletes={athletes}
-            tests={tests}
-            repMaxes={repMaxes}
-            customTypes={customTypes}
-            teams={teams}
-            defaultTeamId={athlete.team_id}
-          />
-        </TabsContent>
-      </Tabs>
+      <div className="flex justify-end">
+        <Button asChild variant="outline" size="sm">
+          <Link to="/performance" search={{ athlete: athlete.id }}>
+            <LineChart className="mr-1.5 h-3.5 w-3.5" /> Open in Performance Dashboard
+          </Link>
+        </Button>
+      </div>
+
+      <AthleteSpiderGraph athlete={athlete} />
+      <AthleteKpiDashboard
+        athlete={athlete}
+        tests={tests}
+        lifts={lifts}
+        attendance={attendance}
+        repMaxes={repMaxes}
+        customTypes={customTypes}
+        athletesAll={athletes}
+      />
 
       {showBadges && (
         <BadgeShelf

@@ -133,6 +133,18 @@
   --status-neutral: oklch(0.62 0.02 260);
   --status-info: oklch(0.62 0.19 255);
 
+  /* Categorical series palette (dataviz skill reference, light) — fixed hue
+     order, validated for CVD-safe adjacent contrast. Use in fixed slot order,
+     never cycled/reassigned per filter. */
+  --series-1: #2a78d6; /* blue */
+  --series-2: #eb6834; /* orange */
+  --series-3: #1baf7a; /* aqua */
+  --series-4: #eda100; /* yellow */
+  --series-5: #e87ba4; /* magenta */
+  --series-6: #008300; /* green */
+  --series-7: #4a3aa7; /* violet */
+  --series-8: #e34948; /* red */
+
   --shadow-elegant: 0 1px 2px 0 oklch(0.21 0.03 260 / 5%), 0 4px 16px -6px oklch(0.21 0.03 260 / 10%);
   --shadow-glow: 0 0 0 1px oklch(0.62 0.19 255 / 20%), 0 10px 32px -12px oklch(0.62 0.19 255 / 30%);
   --gradient-primary: linear-gradient(135deg, oklch(0.62 0.19 255), oklch(0.7 0.16 245));
@@ -189,6 +201,17 @@
   --brand-foreground: var(--primary-foreground);
 
   --status-info: oklch(0.68 0.18 250);
+
+  /* Categorical series palette (dataviz skill reference, dark) — same eight
+     hues, stepped for the dark surface. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
 
   --shadow-elegant: 0 1px 2px 0 oklch(0 0 0 / 40%), 0 10px 28px -8px oklch(0 0 0 / 50%);
   --shadow-glow: 0 0 0 1px oklch(0.68 0.18 250 / 30%), 0 14px 44px -12px oklch(0.68 0.18 250 / 45%);

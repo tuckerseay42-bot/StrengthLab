@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Satellite,
   LayoutDashboard,
+  Activity,
   Users,
   UsersRound,
   CalendarDays,
@@ -87,6 +88,7 @@ const GROUPS: Group[] = [
   {
     label: "Analysis",
     items: [
+      { to: "/performance", label: "Performance Dashboard", icon: Activity },
       { to: "/metrics", label: "Metrics", icon: LineChart },
       { to: "/leaderboards", label: "Leaderboards", icon: Trophy },
       { to: "/live-leaderboard", label: "Live View", icon: Tv },
