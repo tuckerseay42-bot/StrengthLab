@@ -30,7 +30,7 @@ import {
   CELL_TONE_CLASS,
   type ReportWindow,
   type CellTone,
-} from "@/lib/report-metrics";
+} from "@/lib/dashboard-report-metrics";
 
 const MAX_COLUMNS = 8;
 
