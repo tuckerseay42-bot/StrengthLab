@@ -1244,6 +1244,10 @@ function AthleteTile(props: {
   // set is logged, so it gates the FinishScreen render alongside it.
   const [reopened, setReopened] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
+  // Athletes only need the exercise they're on right now in front of them —
+  // everything else collapses to a one-line "done / up next" summary. A
+  // coach who wants the whole printed sheet can still expand it.
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   
   const cursor =
     cursorOverride ?? (autoCursor >= 0 ? autoCursor : Math.max(0, prescribed.length - 1));
@@ -1821,73 +1825,101 @@ function AthleteTile(props: {
           }}
         />
       ) : (
-        /* Printed workout sheet — every exercise and every set visible, no drill-down */
+        /* Focus view — only the current exercise prints its full set table;
+           everything else is a tappable one-line "done / up next" summary. */
         <div className="px-2 pb-2">
+          {sheet.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSheetExpanded((v) => !v)}
+              className="mb-1 ml-auto block text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              {sheetExpanded ? "Show current exercise only" : "Show full workout sheet"}
+            </button>
+          )}
           {sheet.map((g) => {
             const isActive = current?.exercise.id === g.ex.id;
             const ov = overrides.get(g.ex.id) ?? null;
             const name = ov?.substitute_exercise_name ?? g.ex.exercise_name;
-                    const showVel = g.rows.some((r) => r.vel != null);
-                    return (
-                      <div key={g.ex.id} className="mt-1.5 overflow-hidden rounded-md border border-border/50">
-                        <div
+            const showVel = g.rows.some((r) => r.vel != null);
+            const doneCount = g.rows.filter((r) => r.log?.status === "completed").length;
+            const allDone = doneCount === g.rows.length;
+            const badgeClass = cn(
+              "grid h-4 w-6 shrink-0 place-items-center rounded-[3px] text-[9px] font-bold text-white",
+              allDone ? "bg-emerald-500" : (SUPERSET_ACCENT[g.label[0]!] ?? "bg-slate-500"),
+            );
+
+            if (!isActive && !sheetExpanded) {
+              return (
+                <button
+                  key={g.ex.id}
+                  type="button"
+                  onClick={() => setCursorOverride(g.rows.find((r) => r.log?.status !== "completed")?.idx ?? g.rows[0].idx)}
+                  className="mt-1.5 flex w-full items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-1.5 py-1.5 text-left hover:bg-muted/40"
+                >
+                  <span className={badgeClass}>{g.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold uppercase tracking-tight text-muted-foreground">
+                    {name}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    {doneCount}/{g.rows.length}
+                  </span>
+                  {allDone && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />}
+                </button>
+              );
+            }
+
+            return (
+              <div key={g.ex.id} className="mt-1.5 overflow-hidden rounded-md border border-border/50">
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 px-1.5 py-1",
+                    isActive ? "bg-primary/10" : "bg-muted/40",
+                  )}
+                >
+                  <span className={badgeClass}>{g.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-bold uppercase tracking-tight">
+                    {name}
+                  </span>
+                  {g.max != null && (
+                    <span className="shrink-0 text-[9px] font-semibold uppercase tabular-nums text-muted-foreground">
+                      Max {g.max}
+                    </span>
+                  )}
+                </div>
+
+                <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
+                  <thead>
+                    <tr className="text-[8px] uppercase tracking-wider text-muted-foreground">
+                      <th className="w-10 px-1 py-0.5 text-left font-medium">Set</th>
+                      <th className="px-1 py-0.5 text-left font-medium">Reps</th>
+                      <th className="px-1 py-0.5 text-left font-medium">Wt</th>
+                      {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
+                      <th className="w-8 px-1 py-0.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map((r) => {
+                      const done = r.log?.status === "completed";
+                      const skipped = r.log?.status === "skipped";
+                      const isCurrent = current?.exercise.id === g.ex.id && current.setPosition === r.pos;
+                      return (
+                        <tr
+                          key={r.pos}
+                          onClick={() => setCursorOverride(r.idx)}
                           className={cn(
-                            "flex items-center gap-1.5 px-1.5 py-1",
-                            isActive ? "bg-primary/10" : "bg-muted/40",
+                            "cursor-pointer border-t border-border/30",
+                            done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                            skipped && "text-muted-foreground line-through",
+                            isCurrent && !done && "bg-primary/10 font-semibold",
                           )}
                         >
-                          <span
-                            className={cn(
-                              "grid h-4 w-6 shrink-0 place-items-center rounded-[3px] text-[9px] font-bold text-white",
-                              g.rows.every((r) => r.log?.status === "completed")
-                                ? "bg-emerald-500"
-                                : (SUPERSET_ACCENT[g.label[0]!] ?? "bg-slate-500"),
-                            )}
-                          >
-                            {g.label}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-[12px] font-bold uppercase tracking-tight">
-                            {name}
-                          </span>
-                          {g.max != null && (
-                            <span className="shrink-0 text-[9px] font-semibold uppercase tabular-nums text-muted-foreground">
-                              Max {g.max}
-                            </span>
-                          )}
-                        </div>
-
-                        <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
-                          <thead>
-                            <tr className="text-[8px] uppercase tracking-wider text-muted-foreground">
-                              <th className="w-10 px-1 py-0.5 text-left font-medium">Set</th>
-                              <th className="px-1 py-0.5 text-left font-medium">Reps</th>
-                              <th className="px-1 py-0.5 text-left font-medium">Wt</th>
-                              {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
-                              <th className="w-8 px-1 py-0.5" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.rows.map((r) => {
-                              const done = r.log?.status === "completed";
-                              const skipped = r.log?.status === "skipped";
-                              const isCurrent = current?.exercise.id === g.ex.id && current.setPosition === r.pos;
-                              return (
-                                <tr
-                                  key={r.pos}
-                                  onClick={() => setCursorOverride(r.idx)}
-                                  className={cn(
-                                    "cursor-pointer border-t border-border/30",
-                                    done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                                    skipped && "text-muted-foreground line-through",
-                                    isCurrent && !done && "bg-primary/10 font-semibold",
-                                  )}
-                                >
-                                  <td className="px-1 py-1">{r.pos}</td>
-                                  <td className="px-1 py-1">{done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}</td>
-                                  <td className="px-1 py-1 font-semibold">
-                                    {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
-                                  </td>
-                                  {showVel && (
+                          <td className="px-1 py-1">{r.pos}</td>
+                          <td className="px-1 py-1">{done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}</td>
+                          <td className="px-1 py-1 font-semibold">
+                            {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
+                          </td>
+                          {showVel && (
                             <td className="px-1 py-1">
                               {done
                                 ? (r.log?.avg_velocity ?? "—")

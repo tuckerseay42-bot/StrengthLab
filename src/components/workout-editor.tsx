@@ -123,6 +123,11 @@ export function WorkoutEditor({ workout, programContext }: {
   type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  // Simple (default) hides supersets, velocity targets, and tempo/rest/notes
+  // so most coaches only ever see Exercise / Sets / Reps / Load. Advanced
+  // reveals everything, including the velocity/mph/seconds/inches prescription
+  // types — one toggle away instead of always-on clutter.
+  const [advanced, setAdvanced] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflightRef = useRef<Promise<void> | null>(null);
   const metaRef = useRef(meta);
@@ -514,9 +519,28 @@ export function WorkoutEditor({ workout, programContext }: {
           </span>
           {rows.length > 0 && (
             <div className="ml-auto flex items-center gap-1">
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => addRow.mutate({ superset_group: nextSupersetGroup(rows) })} disabled={addRow.isPending}>
-                <Layers className="h-3.5 w-3.5" /> Superset
-              </Button>
+              <div className="mr-1 flex rounded-md border border-border p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setAdvanced(false)}
+                  className={cn("rounded px-2 py-1 font-medium", !advanced ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  Simple
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdvanced(true)}
+                  className={cn("rounded px-2 py-1 font-medium", advanced ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+                  title="Supersets, velocity targets, tempo/rest/notes"
+                >
+                  Advanced
+                </button>
+              </div>
+              {advanced && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => addRow.mutate({ superset_group: nextSupersetGroup(rows) })} disabled={addRow.isPending}>
+                  <Layers className="h-3.5 w-3.5" /> Superset
+                </Button>
+              )}
               <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => addRow.mutate(undefined)} disabled={addRow.isPending}>
                 <Plus className="h-3.5 w-3.5" /> Exercise
               </Button>
@@ -546,13 +570,13 @@ export function WorkoutEditor({ workout, programContext }: {
                 )}
               >
                 <span>#</span>
-                <span>SS</span>
+                <span>{advanced && "SS"}</span>
                 <span>Exercise</span>
                 <span>Sets</span>
                 <span>Reps</span>
                 <span>Load type</span>
                 <span>Prescription</span>
-                <span title="Target bar velocity (m/s)">Vel</span>
+                <span title="Target bar velocity (m/s)">{advanced && "Vel"}</span>
                 <span />
                 <span />
               </div>
@@ -576,6 +600,7 @@ export function WorkoutEditor({ workout, programContext }: {
                               sets={setsByExercise.get(r.id) ?? []}
                               exercises={visibleExercises}
                               organizationId={workoutOrgId}
+                              advanced={advanced}
                               onUpdate={(patch) => updateRow.mutate({ id: r.id, patch })}
                               onRemove={() => removeRow.mutate(r.id)}
                             />
@@ -726,6 +751,10 @@ function SummaryCell({ icon, label, value }: { icon: React.ReactNode; label: str
 // Prescription / Vel / remove-scheme / exercise-menu.
 const EXROW_COLS =
   "grid-cols-[26px_46px_minmax(160px,1.4fr)_50px_50px_92px_minmax(90px,1fr)_60px_28px_28px]";
+
+function measurementBadge(m: "load" | "seconds" | "inches" | "reps") {
+  return m === "seconds" ? "Time" : m === "inches" ? "Height" : m === "reps" ? "Reps" : "Load";
+}
 
 const SS_CELL: Record<string, string> = {
   A: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
@@ -905,12 +934,13 @@ function nextSupersetGroup(rows: WorkoutExercise[]): string {
   return "A";
 }
 
-function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, onRemove }: {
+function ExerciseBlock({ index, row, sets, exercises, organizationId, advanced, onUpdate, onRemove }: {
   index: number;
   row: WorkoutExercise;
   sets: WorkoutSet[];
   exercises: { id: string; name: string; measurement_type?: string | null }[];
   organizationId: string;
+  advanced: boolean;
   onUpdate: (patch: Partial<WorkoutExercise>) => void;
   onRemove: () => void;
 }) {
@@ -997,30 +1027,42 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
   const identityCells = (
     <>
       <span className="mono-number text-center text-[11px] text-muted-foreground">{index}</span>
-      <Select value={local.superset_group || "__none"} onValueChange={(v) => commit({ superset_group: v === "__none" ? "" : v })}>
-        <SelectTrigger
-          className={cn("h-7 justify-center border-border/60 px-1 text-[11px] font-bold", groupCellClass || "text-muted-foreground")}
-          title="Superset group"
-        >
-          <SelectValue placeholder="—" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none">Solo</SelectItem>
-          {["A", "B", "C", "D", "E", "F"].map((g) => (
-            <SelectItem key={g} value={g}>SS {g}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <ExerciseCombobox
-        value={local.exercise_id}
-        label={local.exercise_name}
-        exercises={exercises}
-        onSelect={(ex) => commit({ exercise_id: ex.id, exercise_name: ex.name })}
-        onCreate={async (name) => {
-          const created = await createExercise(name);
-          if (created) commit({ exercise_id: created.id, exercise_name: created.name });
-        }}
-      />
+      {advanced ? (
+        <Select value={local.superset_group || "__none"} onValueChange={(v) => commit({ superset_group: v === "__none" ? "" : v })}>
+          <SelectTrigger
+            className={cn("h-7 justify-center border-border/60 px-1 text-[11px] font-bold", groupCellClass || "text-muted-foreground")}
+            title="Superset group"
+          >
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">Solo</SelectItem>
+            {["A", "B", "C", "D", "E", "F"].map((g) => (
+              <SelectItem key={g} value={g}>SS {g}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : <span />}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <ExerciseCombobox
+          value={local.exercise_id}
+          label={local.exercise_name}
+          exercises={exercises}
+          onSelect={(ex) => commit({ exercise_id: ex.id, exercise_name: ex.name })}
+          onCreate={async (name) => {
+            const created = await createExercise(name);
+            if (created) commit({ exercise_id: created.id, exercise_name: created.name });
+          }}
+        />
+        {measurement !== "load" && (
+          <span
+            className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+            title="This exercise's measurement type, set in the Exercise Library"
+          >
+            {measurementBadge(measurement)}
+          </span>
+        )}
+      </div>
     </>
   );
 
@@ -1092,6 +1134,7 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
                 exercises={exercises}
                 measurement={measurement}
                 label={schemeLabels[i]}
+                advanced={advanced}
                 onUpdate={(patch) => updSet.mutate({ id: s.id, patch })}
                 onRemove={() => delSet.mutate(s.id)}
               />
@@ -1111,21 +1154,23 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
         })
       )}
 
-      {/* Tempo / Rest / Notes — compact, always visible (no collapse to hide behind) */}
-      <div className="grid grid-cols-[1fr_1fr_2fr] items-center gap-2 border-t border-border/20 bg-muted/5 px-2 py-1">
-        <div className="flex items-center gap-1">
-          <span className="shrink-0 text-[9px] uppercase tracking-wider text-muted-foreground">Tempo</span>
-          <Input className="h-6 text-[11px]" value={local.tempo ?? ""} onChange={(e) => commit({ tempo: e.target.value })} placeholder="3-0-1" />
+      {/* Tempo / Rest / Notes — advanced-only, hidden in Simple mode */}
+      {advanced && (
+        <div className="grid grid-cols-[1fr_1fr_2fr] items-center gap-2 border-t border-border/20 bg-muted/5 px-2 py-1">
+          <div className="flex items-center gap-1">
+            <span className="shrink-0 text-[9px] uppercase tracking-wider text-muted-foreground">Tempo</span>
+            <Input className="h-6 text-[11px]" value={local.tempo ?? ""} onChange={(e) => commit({ tempo: e.target.value })} placeholder="3-0-1" />
+          </div>
+          <div className="flex items-center gap-1">
+            <Timer className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <Input className="h-6 text-[11px]" type="number" value={local.rest_seconds ?? ""} onChange={(e) => commit({ rest_seconds: e.target.value ? Number(e.target.value) : null })} placeholder="Rest s" />
+          </div>
+          <div className="flex items-center gap-1">
+            <StickyNote className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <Input className="h-6 text-[11px]" value={local.notes ?? ""} onChange={(e) => commit({ notes: e.target.value })} placeholder="Notes / cues" />
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Timer className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <Input className="h-6 text-[11px]" type="number" value={local.rest_seconds ?? ""} onChange={(e) => commit({ rest_seconds: e.target.value ? Number(e.target.value) : null })} placeholder="Rest s" />
-        </div>
-        <div className="flex items-center gap-1">
-          <StickyNote className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <Input className="h-6 text-[11px]" value={local.notes ?? ""} onChange={(e) => commit({ notes: e.target.value })} placeholder="Notes / cues" />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1136,13 +1181,14 @@ type SetMode = "load" | "percent" | "rm" | "seconds" | "inches" | "mph";
 // set scheme — a bare fragment, not its own grid, so it lines up as trailing
 // columns in whatever grid row ExerciseBlock places it in (the primary row,
 // alongside the exercise identity cells, or a lean extra-scheme row).
-function SetSchemeRow({ set, exercises, measurement, label, onUpdate, onRemove }: {
+function SetSchemeRow({ set, exercises, measurement, label, advanced, onUpdate, onRemove }: {
   set: WorkoutSet;
   exercises: { id: string; name: string }[];
   measurement: "load" | "seconds" | "inches" | "reps" | "mph";
   /** "Set 2" / "Sets 3–5" — shown when an exercise has more than one scheme,
    * so each row's place in the set-by-set sequence is unambiguous. */
   label?: string;
+  advanced: boolean;
   onUpdate: (patch: Partial<WorkoutSet>) => void;
   onRemove: () => void;
 }) {
@@ -1249,15 +1295,17 @@ function SetSchemeRow({ set, exercises, measurement, label, onUpdate, onRemove }
           </div>
         )}
       </div>
-      <Input
-        className="h-7 text-xs tabular-nums"
-        type="number"
-        step="0.01"
-        min={0}
-        placeholder="—"
-        value={local.target_velocity ?? ""}
-        onChange={(e) => commit({ target_velocity: e.target.value ? Number(e.target.value) : null })}
-      />
+      {advanced ? (
+        <Input
+          className="h-7 text-xs tabular-nums"
+          type="number"
+          step="0.01"
+          min={0}
+          placeholder="m/s"
+          value={local.target_velocity ?? ""}
+          onChange={(e) => commit({ target_velocity: e.target.value ? Number(e.target.value) : null })}
+        />
+      ) : <span />}
       <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove} title="Remove this set scheme">
         <X className="h-3 w-3" />
       </Button>
