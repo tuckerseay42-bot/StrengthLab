@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, Download, Pencil, Trash2, ExternalLink, Users, Mail, Send, RotateCcw, CheckSquare } from "lucide-react";
+import { Plus, Download, Pencil, Trash2, ExternalLink, Users, Mail, Send, RotateCcw, CheckSquare, Filter } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useServerFn } from "@tanstack/react-start";
 import { sendPinSetupEmails } from "@/lib/pin-invite.functions";
@@ -102,7 +102,7 @@ function AthletesPage() {
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: programs = [] } = useQuery(programsQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
-  const [activeTeamId] = useActiveTeamId();
+  const [activeTeamId, setActiveTeamId] = useActiveTeamId();
   const [prefs] = useUnitPrefs();
   const { allowed: canAssignProgram } = usePermission("workouts.edit");
   const [filters, setFilters] = useState({ ...emptyFilters, from: "", to: "" });
@@ -484,6 +484,19 @@ function AthletesPage() {
           </>
         )}
       </div>
+
+      {activeTeamId && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm">
+          <Filter className="h-4 w-4 shrink-0 text-primary" />
+          <span>
+            Showing only <span className="font-semibold">{teams.find((t) => t.id === activeTeamId)?.name ?? "one team"}</span> — the
+            team filter at the top of the page is hiding everyone else, not just this roster.
+          </span>
+          <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => setActiveTeamId(null)}>
+            Show all teams
+          </Button>
+        </div>
+      )}
 
       <DuplicateAthletesBanner groups={dupGroups} dismiss={dismissDup} />
 
