@@ -11,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+} from "recharts";
 import { Users, Trophy, Award, TrendingUp } from "lucide-react";
 import {
   athleteDisplayName,
@@ -122,6 +125,26 @@ export function TeamMetricReport({
     return { teamAvg, top, mostImproved, tested: rows.length, total: pool.length };
   }, [rows, metric, pool.length]);
 
+  const chartData = useMemo(() => {
+    if (!metric) return [];
+    return rows.slice(0, 20).map((r) => {
+      const last = r.points[r.points.length - 1];
+      return {
+        name: athleteDisplayName(r.athlete),
+        value: last.value,
+        tone: cellTone(last.value, summary?.teamAvg ?? null, metric.lowerIsBetter, last.isPR),
+      };
+    });
+  }, [rows, metric, summary?.teamAvg]);
+
+  const TONE_BAR_COLOR: Record<CellTone, string> = {
+    pr: "var(--status-pr)",
+    up: "var(--status-info)",
+    down: "var(--status-below)",
+    flat: "var(--muted-foreground)",
+    empty: "var(--muted-foreground)",
+  };
+
   return (
     <Card className="overflow-hidden border-border/60">
       <CardHeader className="pb-2">
@@ -223,6 +246,40 @@ export function TeamMetricReport({
             No data logged for this metric yet.
           </p>
         ) : (
+          <>
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={100}
+                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  interval={0}
+                />
+                {summary && (
+                  <ReferenceLine
+                    x={summary.teamAvg}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="4 4"
+                    label={{ value: "avg", fontSize: 10, fill: "var(--muted-foreground)", position: "top" }}
+                  />
+                )}
+                <Tooltip
+                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }}
+                  formatter={(v: number) => [`${v.toFixed(metric?.unit === "lb" ? 0 : 2)} ${metric?.unit ?? ""}`, metric?.label ?? ""]}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={16}>
+                  {chartData.map((d, i) => (
+                    <Cell key={i} fill={TONE_BAR_COLOR[d.tone]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
           <div className="overflow-x-auto rounded-md border border-border/60">
             <table className="w-full border-collapse text-xs">
               <thead>
@@ -268,6 +325,7 @@ export function TeamMetricReport({
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">

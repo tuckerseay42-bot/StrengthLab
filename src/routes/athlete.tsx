@@ -27,6 +27,8 @@ import { setAthletePin, getMyPinStatus } from "@/lib/athlete-pin.functions";
 import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteProfileHero } from "@/components/athlete-profile-hero";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
+import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
+import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { PredictedHeightTool } from "@/components/predicted-height-tool";
 import { TodaysLiftCard } from "@/components/todays-lift-card";
 import { AthleteMetricReport } from "@/components/athlete-metric-report";
@@ -383,7 +385,17 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
           <TabsTrigger value="athlete">Athlete Dashboard</TabsTrigger>
           <TabsTrigger value="team">Team Dashboard</TabsTrigger>
         </TabsList>
-        <TabsContent value="athlete" className="mt-3">
+        <TabsContent value="athlete" className="mt-3 space-y-4">
+          <AthleteSpiderGraph athlete={me} />
+          <AthleteKpiDashboard
+            athlete={me}
+            tests={tests}
+            lifts={lifts}
+            attendance={attendance}
+            repMaxes={repMaxes}
+            customTypes={customTypes}
+            athletesAll={athletes}
+          />
           <AthleteMetricReport athlete={me} tests={tests} repMaxes={repMaxes} customTypes={customTypes} />
         </TabsContent>
         <TabsContent value="team" className="mt-3">

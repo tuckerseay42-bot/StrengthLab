@@ -14,6 +14,8 @@ import { AthleteInvite } from "@/components/athlete-invite";
 import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
 import { AthleteQuickStats } from "@/components/athlete-quick-stats";
+import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
+import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { AthleteMetricReport } from "@/components/athlete-metric-report";
 import { TeamMetricReport } from "@/components/team-metric-report";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -201,7 +203,17 @@ function AthleteCard() {
           <TabsTrigger value="athlete">Athlete Dashboard</TabsTrigger>
           <TabsTrigger value="team">Team Dashboard</TabsTrigger>
         </TabsList>
-        <TabsContent value="athlete" className="mt-3">
+        <TabsContent value="athlete" className="mt-3 space-y-4">
+          <AthleteSpiderGraph athlete={athlete} />
+          <AthleteKpiDashboard
+            athlete={athlete}
+            tests={tests}
+            lifts={lifts}
+            attendance={attendance}
+            repMaxes={repMaxes}
+            customTypes={customTypes}
+            athletesAll={athletes}
+          />
           <AthleteMetricReport athlete={athlete} tests={tests} repMaxes={repMaxes} customTypes={customTypes} />
         </TabsContent>
         <TabsContent value="team" className="mt-3">
