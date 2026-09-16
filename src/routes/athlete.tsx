@@ -24,13 +24,14 @@ import {
 } from "recharts";
 import { useServerFn } from "@tanstack/react-start";
 import { setAthletePin, getMyPinStatus } from "@/lib/athlete-pin.functions";
-import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteProfileHero } from "@/components/athlete-profile-hero";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
-import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
 import { PredictedHeightTool } from "@/components/predicted-height-tool";
 import { TodaysLiftCard } from "@/components/todays-lift-card";
+import { AthleteMetricReport } from "@/components/athlete-metric-report";
+import { TeamMetricReport } from "@/components/team-metric-report";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 export const Route = createFileRoute("/athlete")({
@@ -370,8 +371,6 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
       {/* Today's Lift — hero */}
       <TodaysLiftCard athleteId={me.id} programId={me.program_id ?? null} />
 
-      <AthleteSpiderGraph athlete={me} />
-
       <AthleteProfileHero
         athlete={me}
         athletes={athletes}
@@ -379,15 +378,25 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         attendance={attendance}
       />
 
-      <AthleteKpiDashboard
-        athlete={me}
-        tests={tests}
-        lifts={lifts}
-        attendance={attendance}
-        repMaxes={repMaxes}
-        customTypes={customTypes}
-        athletesAll={athletes}
-      />
+      <Tabs defaultValue="athlete">
+        <TabsList>
+          <TabsTrigger value="athlete">Athlete Dashboard</TabsTrigger>
+          <TabsTrigger value="team">Team Dashboard</TabsTrigger>
+        </TabsList>
+        <TabsContent value="athlete" className="mt-3">
+          <AthleteMetricReport athlete={me} tests={tests} repMaxes={repMaxes} customTypes={customTypes} />
+        </TabsContent>
+        <TabsContent value="team" className="mt-3">
+          <TeamMetricReport
+            athletes={athletes}
+            tests={tests}
+            repMaxes={repMaxes}
+            customTypes={customTypes}
+            teams={teams}
+            defaultTeamId={me.team_id}
+          />
+        </TabsContent>
+      </Tabs>
 
       {showBadges && (
         <BadgeShelf

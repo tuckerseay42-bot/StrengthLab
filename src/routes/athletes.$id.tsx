@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta, bwCoefficient, percentImprovement, estimateMax } from "@/lib/domain";
 import { ArrowLeft } from "lucide-react";
 import { AthleteInvite } from "@/components/athlete-invite";
-import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
-import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
 import { AthleteQuickStats } from "@/components/athlete-quick-stats";
+import { AthleteMetricReport } from "@/components/athlete-metric-report";
+import { TeamMetricReport } from "@/components/team-metric-report";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/athletes/$id")({
   head: () => ({ meta: [{ title: "Athlete — Strength Lab" }] }),
@@ -195,17 +196,25 @@ function AthleteCard() {
 
       <AthleteQuickStats athlete={athlete} lifts={lifts} attendance={attendance} />
 
-      <AthleteSpiderGraph athlete={athlete} />
-
-      <AthleteKpiDashboard
-        athlete={athlete}
-        tests={tests}
-        lifts={lifts}
-        attendance={attendance}
-        repMaxes={repMaxes}
-        customTypes={customTypes}
-        athletesAll={athletes}
-      />
+      <Tabs defaultValue="athlete">
+        <TabsList>
+          <TabsTrigger value="athlete">Athlete Dashboard</TabsTrigger>
+          <TabsTrigger value="team">Team Dashboard</TabsTrigger>
+        </TabsList>
+        <TabsContent value="athlete" className="mt-3">
+          <AthleteMetricReport athlete={athlete} tests={tests} repMaxes={repMaxes} customTypes={customTypes} />
+        </TabsContent>
+        <TabsContent value="team" className="mt-3">
+          <TeamMetricReport
+            athletes={athletes}
+            tests={tests}
+            repMaxes={repMaxes}
+            customTypes={customTypes}
+            teams={teams}
+            defaultTeamId={athlete.team_id}
+          />
+        </TabsContent>
+      </Tabs>
 
       {showBadges && (
         <BadgeShelf
