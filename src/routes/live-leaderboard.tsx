@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { estimate1RM } from "@/lib/one-rm";
 import { getOrg1RMFormula } from "@/hooks/use-1rm-formula";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -125,6 +125,27 @@ function useNow(interval = 5000) {
     return () => window.clearInterval(id);
   }, [interval]);
   return now;
+}
+
+function useLocalStorage<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => {
+    if (typeof window === "undefined") return initial;
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback((next: T) => {
+    setV(next);
+    try {
+      window.localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }, [key]);
+  return [v, set];
 }
 
 const fmtDate = formatDateOnly;
@@ -353,6 +374,7 @@ function LiveLeaderboardPage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [showRosters, setShowRosters] = useLocalStorage<boolean>("sl.commandCenter.showRosters", false);
 
   useEffect(() => {
     if (metricId && metricOptions.find((o) => o.id === metricId)) return;
@@ -544,6 +566,7 @@ function LiveLeaderboardPage() {
   type RackCard = {
     session: RackSessionRow;
     activeAthlete: Athlete | null;
+    athletes: Athlete[];
     athleteCount: number;
     lastLog: FeedItem | null;
     setsLogged: number;
@@ -579,12 +602,17 @@ function LiveLeaderboardPage() {
       const setsPrescribed = prescribedBySession.get(s.id) ?? 0;
       const completionPct = setsPrescribed > 0 ? Math.min(100, (setsLogged / setsPrescribed) * 100) : 0;
       const activeAthlete = s.active_athlete_id ? athleteById.get(s.active_athlete_id) ?? null : null;
+      const athletes = (s.athlete_ids ?? [])
+        .map((id) => athleteById.get(id))
+        .filter((a): a is Athlete => !!a)
+        .sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)));
       const flagged = logs.some((l) => l.kind === "flag");
       const needsReview = logs.some((l) => l.kind === "review");
       const isPR = logs.some((l) => l.kind === "pr" && (Date.now() - l.ts) < JUST_LOGGED_MS);
       return {
         session: s,
         activeAthlete,
+        athletes,
         athleteCount: s.athlete_ids?.length ?? 0,
         lastLog,
         setsLogged,
@@ -650,7 +678,7 @@ function LiveLeaderboardPage() {
 
         {/* ---------- LIVE NOW ---------- */}
         <TabsContent value="live" className="space-y-5">
-          <RackGrid cards={rackCards} now={now} />
+          <RackGrid cards={rackCards} now={now} showRosters={showRosters} onShowRostersChange={setShowRosters} />
           <div className="grid gap-5 xl:grid-cols-3">
             <div className="space-y-5 xl:col-span-2">
               <ActivityFeedPanel feed={feed} now={now} />
@@ -926,6 +954,7 @@ function KpiStrip({ items }: { items: Array<{ label: string; value: string | num
 type RackCardProps = {
   session: RackSessionRow;
   activeAthlete: Athlete | null;
+  athletes: Athlete[];
   athleteCount: number;
   lastLog: {
     ts: number; kind: string; exercise: string;
@@ -942,7 +971,12 @@ type RackCardProps = {
   needsReview: boolean;
 };
 
-function RackGrid({ cards, now }: { cards: RackCardProps[]; now: number }) {
+function RackGrid({
+  cards, now, showRosters, onShowRostersChange,
+}: {
+  cards: RackCardProps[]; now: number;
+  showRosters: boolean; onShowRostersChange: (v: boolean) => void;
+}) {
   if (!cards.length) {
     return (
       <Card className="card-elevated">
@@ -959,20 +993,26 @@ function RackGrid({ cards, now }: { cards: RackCardProps[]; now: number }) {
   }
   return (
     <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="eyebrow">Rack Floor · {cards.length} active</h2>
-        <Link to="/rack-console" className="text-xs text-primary hover:underline">Open Rack Console →</Link>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs">
+            <span className="text-muted-foreground">Show Rosters</span>
+            <Switch checked={showRosters} onCheckedChange={onShowRostersChange} />
+          </label>
+          <Link to="/rack-console" className="text-xs text-primary hover:underline">Open Rack Console →</Link>
+        </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {cards.sort((a, b) => a.session.rack_number - b.session.rack_number).map((c) => (
-          <RackCardView key={c.session.id} card={c} now={now} />
+          <RackCardView key={c.session.id} card={c} now={now} showRosters={showRosters} />
         ))}
       </div>
     </div>
   );
 }
 
-function RackCardView({ card, now }: { card: RackCardProps; now: number }) {
+function RackCardView({ card, now, showRosters }: { card: RackCardProps; now: number; showRosters: boolean }) {
   const justLogged = card.lastLoggedMs != null && (now - card.lastLoggedMs) < JUST_LOGGED_MS;
   const ringCls =
     card.flagged ? "ring-2 ring-[color:var(--status-below)]/60"
@@ -1001,6 +1041,26 @@ function RackCardView({ card, now }: { card: RackCardProps; now: number }) {
           </div>
         </div>
       </div>
+
+      {showRosters && card.athletes.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1">
+          {card.athletes.map((a) => {
+            const isActive = a.id === card.activeAthlete?.id;
+            return (
+              <span
+                key={a.id}
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] leading-tight",
+                  isActive ? "bg-primary/15 font-semibold text-primary" : "bg-muted text-muted-foreground",
+                )}
+                title={isActive ? "Currently logging" : undefined}
+              >
+                {athleteDisplayName(a)}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-3 space-y-1.5">
         <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
