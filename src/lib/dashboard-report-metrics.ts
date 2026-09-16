@@ -1,8 +1,9 @@
 // Shared metric catalog + per-athlete series builder for the Athlete/Team
-// dashboard reports. Unifies two data sources into one "reportable metric"
-// concept: logged test results (weekly measurements) and rep_maxes-derived
-// estimated 1RMs (PRs), so both can be picked from the same filter UI.
-import type { TestRow, RepMax, CustomTestType } from "@/lib/queries";
+// dashboard reports. Unifies three data sources into one "reportable metric"
+// concept: logged test results (weekly measurements), rep_maxes-derived
+// estimated 1RMs (PR testing), and everyday logged lifts (training loads),
+// so all three can be picked from the same filter UI.
+import type { TestRow, RepMax, CustomTestType, LiftRow } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 
 export type ReportMetric = {
@@ -54,11 +55,24 @@ export function prReportMetrics(repMaxes: RepMax[]): ReportMetric[] {
   }));
 }
 
+/** One metric per exercise actually logged in training (the `lifts` table) — distinct from PR testing. */
+export function liftReportMetrics(lifts: LiftRow[]): ReportMetric[] {
+  const names = Array.from(new Set(lifts.filter((l) => l.load != null).map((l) => l.exercise))).sort();
+  return names.map((n) => ({
+    key: `lift:${n}`,
+    label: n,
+    unit: "lb",
+    lowerIsBetter: false,
+    group: "Lifts",
+  }));
+}
+
 export function allReportMetrics(
   customTypes: CustomTestType[],
   repMaxes: RepMax[],
+  lifts: LiftRow[] = [],
 ): ReportMetric[] {
-  return [...testReportMetrics(customTypes), ...prReportMetrics(repMaxes)];
+  return [...testReportMetrics(customTypes), ...liftReportMetrics(lifts), ...prReportMetrics(repMaxes)];
 }
 
 function est1RM(load: number, reps: number) {
@@ -71,6 +85,7 @@ export function reportSeries(
   athleteId: string,
   tests: TestRow[],
   repMaxes: RepMax[],
+  lifts: LiftRow[] = [],
 ): ReportPoint[] {
   const map = new Map<string, number>();
   const consider = (date: string, value: number) => {
@@ -88,6 +103,12 @@ export function reportSeries(
     for (const r of repMaxes) {
       if (r.athlete_id === athleteId && r.exercise_name === exerciseName)
         consider(r.tested_at, est1RM(Number(r.load), r.reps));
+    }
+  } else if (metric.key.startsWith("lift:")) {
+    const exerciseName = metric.key.slice(5);
+    for (const l of lifts) {
+      if (l.athlete_id === athleteId && l.exercise === exerciseName && l.load != null)
+        consider(l.lift_date, Number(l.load));
     }
   }
   return Array.from(map.entries())

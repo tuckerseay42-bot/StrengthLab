@@ -5,6 +5,7 @@ import {
   athletesQO,
   testsQO,
   repMaxesQO,
+  liftsQO,
   testTypesQO,
   teamsQO,
   athleteDisplayName,
@@ -53,6 +54,7 @@ function PerformanceDashboard() {
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: tests = [] } = useQuery(testsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
+  const { data: lifts = [] } = useQuery(liftsQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
   const { data: teams = [] } = useQuery(teamsQO);
 
@@ -134,6 +136,7 @@ function PerformanceDashboard() {
               peers={peers}
               tests={tests}
               repMaxes={repMaxes}
+              lifts={lifts}
               customTypes={customTypes}
             />
           </div>
@@ -145,6 +148,7 @@ function PerformanceDashboard() {
           athletes={athletes}
           tests={tests}
           repMaxes={repMaxes}
+          lifts={lifts}
           customTypes={customTypes}
           teams={teams}
         />

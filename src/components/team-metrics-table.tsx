@@ -7,7 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -15,6 +17,7 @@ import {
   athleteDisplayName,
   type Athlete,
   type TestRow,
+  type LiftRow,
   type RepMax,
   type CustomTestType,
   type Team,
@@ -41,19 +44,33 @@ export function TeamMetricsTable({
   athletes,
   tests,
   repMaxes,
+  lifts,
   customTypes,
   teams,
 }: {
   athletes: Athlete[];
   tests: TestRow[];
   repMaxes: RepMax[];
+  lifts: LiftRow[];
   customTypes: CustomTestType[];
   teams: Team[];
 }) {
   const allMetrics = useMemo(
-    () => allReportMetrics(customTypes, repMaxes),
-    [customTypes, repMaxes],
+    () => allReportMetrics(customTypes, repMaxes, lifts),
+    [customTypes, repMaxes, lifts],
   );
+  const metricGroups = useMemo(() => {
+    const order = ["Speed", "Jumps", "Strength", "Lifts", "PRs (est. 1RM)"];
+    const groups = Array.from(new Set(allMetrics.map((m) => m.group)));
+    return groups.sort((a, b) => {
+      const ai = order.indexOf(a);
+      const bi = order.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [allMetrics]);
   const [metricKey, setMetricKey] = useState("");
   useEffect(() => {
     if (!metricKey && allMetrics.length) setMetricKey(allMetrics[0].key);
@@ -89,12 +106,12 @@ export function TeamMetricsTable({
     if (!metric) return [];
     return pool.map((a) => {
       const flagged = withPRFlags(
-        reportSeries(metric, a.id, tests, repMaxes),
+        reportSeries(metric, a.id, tests, repMaxes, lifts),
         metric.lowerIsBetter,
       );
       return { athlete: a, points: flagged };
     });
-  }, [pool, metric, tests, repMaxes]);
+  }, [pool, metric, tests, repMaxes, lifts]);
 
   const dates = useMemo(() => {
     const set = new Set<string>();
@@ -136,10 +153,15 @@ export function TeamMetricsTable({
                 <SelectValue placeholder="Metric" />
               </SelectTrigger>
               <SelectContent>
-                {allMetrics.map((m) => (
-                  <SelectItem key={m.key} value={m.key}>
-                    {m.label}
-                  </SelectItem>
+                {metricGroups.map((g) => (
+                  <SelectGroup key={g}>
+                    <SelectLabel className="text-[10px] uppercase tracking-wider">{g}</SelectLabel>
+                    {allMetrics.filter((m) => m.group === g).map((m) => (
+                      <SelectItem key={m.key} value={m.key}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
