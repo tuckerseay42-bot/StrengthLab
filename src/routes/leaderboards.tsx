@@ -21,6 +21,7 @@ import { Plus, Trash2, Trophy, Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export const Route = createFileRoute("/leaderboards")({
   head: () => ({ meta: [{ title: "Leaderboards — Strength Lab" }] }),
@@ -101,6 +102,7 @@ function LeaderboardsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Leaderboard | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [deleteTarget, setDeleteTarget] = useState<Leaderboard | null>(null);
 
   const metricById = useMemo(() => new Map(metrics.map((m) => [m.id, m])), [metrics]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
@@ -199,7 +201,7 @@ function LeaderboardsPage() {
               customTypes={customTypes}
               teamsByAthlete={teamsByAthlete}
               onEdit={() => openEdit(b)}
-              onDelete={() => { if (confirm(`Delete ${b.name}?`)) del.mutate(b.id); }}
+              onDelete={() => setDeleteTarget(b)}
             />
           );
         })}
@@ -289,6 +291,15 @@ function LeaderboardsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This permanently removes the leaderboard configuration. This can't be undone."
+        onConfirm={() => { if (deleteTarget) del.mutate(deleteTarget.id); setDeleteTarget(null); }}
+        pending={del.isPending}
+      />
     </div>
   );
 }

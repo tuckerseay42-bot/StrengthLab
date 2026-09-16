@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -882,38 +883,6 @@ function SortableWrap({ id, children }: {
 }
 
 // ================= Reusable tree row =================
-// Shared destructive-action confirmation, used in place of native confirm()
-// popups throughout the tree so deletes match the rest of the app's UI.
-function ConfirmDeleteDialog({ open, onOpenChange, title, description, onConfirm, pending }: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  title: string;
-  description: string;
-  onConfirm: () => void;
-  pending?: boolean;
-}) {
-  return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onClick={onConfirm}
-            disabled={pending}
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
 function ChevronBtn({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <button

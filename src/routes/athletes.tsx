@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { athletesQO, teamsQO, programsQO, athleteTeamsQO, athleteDisplayName, type Athlete } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,7 @@ import { PageSkeleton } from "@/components/loading";
 import { SPORTS, GRADES, GENDERS, GENDER_LABELS, downloadCSV, gradeToGradYear, gradYearToGrade } from "@/lib/domain";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { useUnitPrefs } from "@/hooks/use-units";
 import { fromLb, toLb, fromIn, toIn } from "@/lib/units";
 import { athleteInputSchema, findDuplicateAthlete } from "@/lib/validation";
@@ -33,6 +34,9 @@ import { getScopedOrgId } from "@/lib/scoped-insert";
 
 export const Route = createFileRoute("/athletes")({
   head: () => ({ meta: [{ title: "Athletes — Strength Lab" }] }),
+  validateSearch: (s: Record<string, unknown>): { edit?: string } => ({
+    edit: typeof s.edit === "string" ? s.edit : undefined,
+  }),
   component: AthletesPage,
 });
 
@@ -92,6 +96,8 @@ function RosterAvatar({ name, photoUrl }: { name: string; photoUrl: string | nul
 
 function AthletesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { edit: editId } = Route.useSearch();
   const { data: athletes = [], isLoading } = useQuery(athletesQO);
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: programs = [] } = useQuery(programsQO);
@@ -112,6 +118,9 @@ function AthletesPage() {
     team_id: "__keep", status: "__keep", grade: "__keep", sport: "__keep",
     gender: "__keep", class_period: "__keep", program_id: "__keep", training_group: "__keep",
   });
+  const [pinInviteConfirmOpen, setPinInviteConfirmOpen] = useState(false);
+  const [resetPinTarget, setResetPinTarget] = useState<Athlete | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Athlete | null>(null);
 
 
   const { groups: dupGroups, duplicateIds, dismiss: dismissDup } = useDuplicateAthletes(athletes);
@@ -367,6 +376,18 @@ function AthletesPage() {
     setOpen(true);
   };
 
+  // Deep-link support: /athletes?edit=<id> (used by the athlete profile
+  // page's "Edit profile" button) opens straight into that athlete's dialog.
+  // Waits for the roster to finish loading before looking the athlete up,
+  // so a fast redirect-and-clear doesn't race the still-empty initial data.
+  useEffect(() => {
+    if (!editId || isLoading) return;
+    const a = athletes.find((x) => x.id === editId);
+    if (a) openEdit(a);
+    void navigate({ to: "/athletes", search: {}, replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, isLoading, athletes]);
+
   const exportCSV = () => downloadCSV("athletes.csv", filtered.map((a) => ({
     name: athleteDisplayName(a),
     team: teamMap.get(a.team_id ?? "")?.name ?? "",
@@ -395,8 +416,7 @@ function AthletesPage() {
                   toast.info("No eligible athletes — need an email on file and not already active.");
                   return;
                 }
-                if (!confirm(`Send PIN setup email to ${eligibleForPinInvite.length} athlete${eligibleForPinInvite.length === 1 ? "" : "s"}?`)) return;
-                pinInvite.mutate({ ids: eligibleForPinInvite.map((a) => a.id) });
+                setPinInviteConfirmOpen(true);
               }}
               disabled={pinInvite.isPending || !eligibleForPinInvite.length}
               title="Send a magic-link email so athletes can set their 6-digit PIN"
@@ -595,10 +615,7 @@ function AthletesPage() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7"
-                            onClick={() => {
-                              if (!confirm(`Reset ${athleteDisplayName(a)}'s PIN and send a new setup email?`)) return;
-                              pinInvite.mutate({ ids: [a.id], mode: "reset" });
-                            }}
+                            onClick={() => setResetPinTarget(a)}
                             disabled={pinInvite.isPending}
                             aria-label="Reset PIN"
                             title="Reset PIN and send a new setup email"
@@ -610,7 +627,7 @@ function AthletesPage() {
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7"
-                          onClick={() => { if (confirm(`Remove ${athleteDisplayName(a)}? All their tests, lifts, and attendance will also be deleted.`)) del.mutate(a.id); }}
+                          onClick={() => setRemoveTarget(a)}
                           aria-label="Delete"
                         >
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -861,6 +878,35 @@ function AthletesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={pinInviteConfirmOpen}
+        onOpenChange={setPinInviteConfirmOpen}
+        title="Send PIN setup emails?"
+        description={`This sends a magic-link email to ${eligibleForPinInvite.length} athlete${eligibleForPinInvite.length === 1 ? "" : "s"} so they can set their 6-digit sign-in PIN.`}
+        confirmLabel="Send"
+        onConfirm={() => { pinInvite.mutate({ ids: eligibleForPinInvite.map((a) => a.id) }); setPinInviteConfirmOpen(false); }}
+        pending={pinInvite.isPending}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!resetPinTarget}
+        onOpenChange={(o) => !o && setResetPinTarget(null)}
+        title="Reset PIN?"
+        description={resetPinTarget ? `This resets ${athleteDisplayName(resetPinTarget)}'s PIN and sends a new setup email. Their old PIN will stop working.` : ""}
+        confirmLabel="Reset & send"
+        onConfirm={() => { if (resetPinTarget) pinInvite.mutate({ ids: [resetPinTarget.id], mode: "reset" }); setResetPinTarget(null); }}
+        pending={pinInvite.isPending}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!removeTarget}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title={`Remove ${removeTarget ? athleteDisplayName(removeTarget) : ""}?`}
+        description="This permanently deletes the athlete along with all their tests, lifts, and attendance records. This can't be undone."
+        onConfirm={() => { if (removeTarget) del.mutate(removeTarget.id); setRemoveTarget(null); }}
+        pending={del.isPending}
+      />
     </div>
   );
 }

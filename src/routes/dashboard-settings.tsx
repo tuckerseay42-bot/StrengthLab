@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import {
   spiderTemplatesQO, spiderMetricsQO, teamsQO, customMetricsQO, testTypesQO,
   type SpiderTemplate, type SpiderMetric,
@@ -41,6 +42,7 @@ function DashboardSettingsPage() {
   const { data: customTypes = [] } = useQuery(testTypesQO);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const selected = templates.find((t) => t.id === selectedId) ?? templates[0] ?? null;
   const selectedMetrics = useMemo(
     () => selected ? metrics.filter((m) => m.template_id === selected.id).slice().sort((a, b) => a.position - b.position) : [],
@@ -327,7 +329,7 @@ function DashboardSettingsPage() {
                   <Button size="sm" variant={selected.is_default ? "default" : "outline"} onClick={() => setDefault.mutate(selected.id)}>
                     <Star className="mr-1 h-3 w-3" /> {selected.is_default ? "Default template" : "Set as default"}
                   </Button>
-                  <Button size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => confirm("Delete template?") && deleteTemplate.mutate(selected.id)}>
+                  <Button size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => setDeleteConfirmOpen(true)}>
                     <Trash2 className="mr-1 h-3 w-3" /> Delete
                   </Button>
                 </div>
@@ -431,6 +433,15 @@ function DashboardSettingsPage() {
           </CardContent></Card>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={`Delete "${selected?.name}"?`}
+        description="This permanently removes the template and its metrics. Athletes matched to it will fall back to another template if one exists, or lose their dashboard's spider graph until you create a new one. This can't be undone."
+        onConfirm={() => { if (selected) deleteTemplate.mutate(selected.id); setDeleteConfirmOpen(false); }}
+        pending={deleteTemplate.isPending}
+      />
     </div>
   );
 }

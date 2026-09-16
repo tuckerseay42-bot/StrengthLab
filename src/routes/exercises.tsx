@@ -17,6 +17,7 @@ import { PageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { z } from "zod";
 import { LiftsPanel } from "@/components/lifts-panel";
 
@@ -67,6 +68,7 @@ function ExerciseLibraryPanel() {
   const [form, setForm] = useState({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load" as "load" | "seconds" | "inches" | "reps" | "mph", is_metric: false });
   const [linkFor, setLinkFor] = useState<Exercise | null>(null);
   const [mergeFor, setMergeFor] = useState<Exercise | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null);
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
 
@@ -207,7 +209,7 @@ function ExerciseLibraryPanel() {
                       <Button size="icon" variant="ghost" title="Merge into another exercise" onClick={() => setMergeFor(e)}><GitMerge className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => openEdit(e)}><Pencil className="h-4 w-4" /></Button>
                       {e.is_custom && (
-                        <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete ${e.name}?`)) del.mutate(e.id); }}>
+                        <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(e)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
@@ -280,6 +282,15 @@ function ExerciseLibraryPanel() {
         onClose={() => setMergeFor(null)}
         exercises={exercises}
       />
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This permanently removes the custom exercise from your library. This can't be undone."
+        onConfirm={() => { if (deleteTarget) del.mutate(deleteTarget.id); setDeleteTarget(null); }}
+        pending={del.isPending}
+      />
     </div>
   );
 }
@@ -294,6 +305,7 @@ function MergeDialog({
   const qc = useQueryClient();
   const [primaryId, setPrimaryId] = useState("");
   const [search, setSearch] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const candidates = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -367,18 +379,22 @@ function MergeDialog({
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button
             variant="destructive"
-            onClick={() => {
-              if (!primary) return;
-              if (confirm(`Merge "${exercise?.name}" into "${primary.name}"? This cannot be undone.`)) {
-                merge.mutate();
-              }
-            }}
+            onClick={() => { if (primary) setConfirmOpen(true); }}
             disabled={!primaryId || merge.isPending}
           >
             {merge.isPending ? "Merging…" : "Merge"}
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Merge "${exercise?.name}" into "${primary?.name}"?`}
+        description={`This repoints every workout, rep max, and lift from "${exercise?.name}" to "${primary?.name}" and deletes "${exercise?.name}". This can't be undone.`}
+        confirmLabel="Merge"
+        onConfirm={() => { merge.mutate(); setConfirmOpen(false); }}
+        pending={merge.isPending}
+      />
     </Dialog>
   );
 }
@@ -425,6 +441,7 @@ function RelationshipsDialog({
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["exercise_relationships"] }); },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
   return (

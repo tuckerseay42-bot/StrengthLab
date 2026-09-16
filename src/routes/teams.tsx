@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, QrCode, RefreshCw, Archive, Check, X, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export const Route = createFileRoute("/teams")({
   head: () => ({ meta: [{ title: "Teams — Strength Lab" }] }),
@@ -33,6 +34,7 @@ function TeamsPage() {
   const [editing, setEditing] = useState<Team | null>(null);
   const [form, setForm] = useState({ name: "", sport: "", season: "", color: "#F97316", notes: "" });
   const [qrTeam, setQrTeam] = useState<Team | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Team | null>(null);
   const [activeOrgId] = useActiveOrgId();
   const visibleTeams = useMemo(() => {
     if (!activeOrgId) return teams;
@@ -145,7 +147,7 @@ function TeamsPage() {
                   setForm({ name: t.name, sport: t.sport ?? "", season: t.season ?? "", color: t.color ?? "#F97316", notes: t.notes ?? "" });
                   setOpen(true);
                 }}>Edit</Button>
-                <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Archive ${t.name}?`)) archive.mutate(t); }}>
+                <Button size="sm" variant="ghost" onClick={() => setArchiveTarget(t)}>
                   <Archive className="h-4 w-4" />
                 </Button>
               </CardContent>
@@ -189,6 +191,16 @@ function TeamsPage() {
           {qrTeam && <QRPanel team={qrTeam} onRegen={() => regen.mutate(qrTeam)} />}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!archiveTarget}
+        onOpenChange={(o) => !o && setArchiveTarget(null)}
+        title={`Archive "${archiveTarget?.name}"?`}
+        description="Archived teams are hidden from active rosters and selectors. Their data isn't deleted, but there's no self-service way to unarchive a team yet."
+        confirmLabel="Archive"
+        onConfirm={() => { if (archiveTarget) archive.mutate(archiveTarget); setArchiveTarget(null); }}
+        pending={archive.isPending}
+      />
     </div>
   );
 }

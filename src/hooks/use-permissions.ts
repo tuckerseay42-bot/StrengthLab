@@ -40,6 +40,27 @@ export const PERMISSION_KEYS = [
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
+export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  "athletes.view": "View athletes",
+  "athletes.create": "Add athletes",
+  "athletes.edit": "Edit athletes",
+  "athletes.delete": "Delete athletes",
+  "tests.view": "View test results",
+  "tests.edit": "Log & edit tests",
+  "lifts.view": "View lifts",
+  "lifts.edit": "Log & edit lifts",
+  "attendance.view": "View attendance",
+  "attendance.edit": "Log & edit attendance",
+  "workouts.view": "View programs & workouts",
+  "workouts.edit": "Build & edit programs",
+  "metrics.view": "View custom metrics",
+  "metrics.create": "Create custom metrics",
+  "reports.view": "View reports",
+  "reports.create": "Create reports",
+  "dashboards.view": "View dashboards",
+  "dashboards.build": "Build dashboards",
+};
+
 /** Loads the current user's roles + effective permissions from role_permissions. */
 export function useMyPermissions() {
   return useQuery({

@@ -144,6 +144,7 @@ function TestsPage() {
   const del = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("tests").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tests"] }); toast.success("Deleted"); },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
   const schedule = useMutation({
@@ -178,6 +179,7 @@ function TestsPage() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["test_assignments"] }); toast.success("Removed"); },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
   const upcoming = useMemo(() => {
@@ -548,6 +550,7 @@ function ManageTestTypesDialog({
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["test_types"] }); toast.success("Removed"); },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
   return (

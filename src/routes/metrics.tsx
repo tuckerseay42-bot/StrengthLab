@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export const Route = createFileRoute("/metrics")({
   head: () => ({ meta: [{ title: "Custom Metrics — Strength Lab" }] }),
@@ -73,6 +74,7 @@ function MetricsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CustomMetric | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [deleteTarget, setDeleteTarget] = useState<CustomMetric | null>(null);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -126,6 +128,7 @@ function MetricsPage() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["custom_metrics"] }); toast.success("Removed"); },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
   const openEdit = (m: CustomMetric) => {
@@ -194,7 +197,7 @@ function MetricsPage() {
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
                     <Button size="icon" variant="ghost" onClick={() => openEdit(m)}><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => { if (confirm(`Delete ${m.name}?`)) del.mutate(m.id); }}>
+                    <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(m)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -343,6 +346,15 @@ function MetricsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This permanently removes the custom metric. This can't be undone."
+        onConfirm={() => { if (deleteTarget) del.mutate(deleteTarget.id); setDeleteTarget(null); }}
+        pending={del.isPending}
+      />
     </div>
   );
 }

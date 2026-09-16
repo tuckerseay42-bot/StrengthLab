@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
-import { ALL_ROLES, PERMISSION_KEYS, ROLE_LABELS, useMyPermissions, type AppRole, type PermissionKey } from "@/hooks/use-permissions";
+import { ALL_ROLES, PERMISSION_KEYS, PERMISSION_LABELS, ROLE_LABELS, useMyPermissions, type AppRole, type PermissionKey } from "@/hooks/use-permissions";
 
 export const Route = createFileRoute("/permissions")({
   head: () => ({ meta: [{ title: "Roles & Permissions — Strength Lab" }] }),
@@ -77,7 +77,10 @@ function PermissionsPage() {
             <tbody>
               {PERMISSION_KEYS.map((perm) => (
                 <tr key={perm} className="border-b hover:bg-muted/40">
-                  <td className="p-2 font-mono text-xs">{perm}</td>
+                  <td className="p-2">
+                    <div className="font-medium">{PERMISSION_LABELS[perm] ?? perm}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground">{perm}</div>
+                  </td>
                   {editableRoles.map((role) => {
                     const on = matrix.has(`${role}::${perm}`);
                     return (

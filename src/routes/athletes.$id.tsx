@@ -392,7 +392,7 @@ function AthleteCard() {
       </div>
 
       <div className="flex justify-end">
-        <Link to="/athletes"><Button variant="outline" size="sm">Edit profile</Button></Link>
+        <Link to="/athletes" search={{ edit: athlete.id }}><Button variant="outline" size="sm">Edit profile</Button></Link>
       </div>
     </div>
   );
