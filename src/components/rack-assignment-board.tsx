@@ -3,7 +3,7 @@
 // live Training View (rack-console.tsx) and Program Delivery's rack sheets
 // already read — this is the piece that was missing: an actual builder for
 // them, instead of Training View's hardcoded single rack per team per day.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -21,11 +21,14 @@ import {
   athletesQO,
   athleteTeamsQO,
   teamsQO,
+  repMaxesQO,
   athleteDisplayName,
   type Athlete,
 } from "@/lib/queries";
 import { rosterForTeam } from "@/lib/program-delivery";
 import { useActiveTeamId } from "@/hooks/use-active-team";
+import { estimate1RM } from "@/lib/one-rm";
+import { getOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { Input } from "@/components/ui/input";
@@ -49,7 +52,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/page-header";
-import { Plus, Search, Trash2, Users } from "lucide-react";
+import { ArrowDownWideNarrow, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const RACK_CAPACITY = 4;
@@ -66,15 +69,54 @@ export function RackAssignmentBoard() {
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
+  const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const [search, setSearch] = useState("");
   const [dragAthleteId, setDragAthleteId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RackRow | null>(null);
+  const [sortExercise, setSortExercise] = useState<string>("");
+
+  useEffect(() => { setSortExercise(""); }, [teamId]);
 
   const roster = useMemo(
     () => rosterForTeam(athletes, athleteTeams, teamId || null),
     [athletes, athleteTeams, teamId],
   );
   const rosterById = useMemo(() => new Map(roster.map((a) => [a.id, a])), [roster]);
+
+  const rosterIds = useMemo(() => new Set(roster.map((a) => a.id)), [roster]);
+  const liftOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of repMaxes) if (rosterIds.has(r.athlete_id)) s.add(r.exercise_name);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [repMaxes, rosterIds]);
+
+  // Best estimated 1RM per athlete for the selected lift — used to sort the
+  // roster and rack cards so a coach can group similarly-loaded athletes
+  // together (fewer plate changes per rack).
+  const weightByAthlete = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!sortExercise) return m;
+    const formula = getOrg1RMFormula();
+    for (const r of repMaxes) {
+      if (r.exercise_name !== sortExercise) continue;
+      const est = estimate1RM(r.load, r.reps, formula) ?? r.load;
+      const cur = m.get(r.athlete_id);
+      if (cur == null || est > cur) m.set(r.athlete_id, est);
+    }
+    return m;
+  }, [repMaxes, sortExercise]);
+
+  const byWeightDesc = useMemo(() => {
+    if (!sortExercise) return null;
+    return (a: Athlete, b: Athlete) => {
+      const wa = weightByAthlete.get(a.id);
+      const wb = weightByAthlete.get(b.id);
+      if (wa == null && wb == null) return athleteDisplayName(a).localeCompare(athleteDisplayName(b));
+      if (wa == null) return 1;
+      if (wb == null) return -1;
+      return wb - wa;
+    };
+  }, [sortExercise, weightByAthlete]);
 
   const racksQ = useQuery({
     queryKey: ["rack-assignment-racks", teamId, today()],
@@ -113,15 +155,15 @@ export function RackAssignmentBoard() {
 
   const rackGroups = useMemo<RackGroup[]>(
     () =>
-      racks.map((r) => ({
-        ...r,
-        athletes: members
+      racks.map((r) => {
+        const members_ = members
           .filter((m) => m.rack_session_id === r.id)
           .sort((a, b) => a.quadrant - b.quadrant)
           .map((m) => rosterById.get(m.athlete_id))
-          .filter((a): a is Athlete => !!a),
-      })),
-    [racks, members, rosterById],
+          .filter((a): a is Athlete => !!a);
+        return { ...r, athletes: byWeightDesc ? [...members_].sort(byWeightDesc) : members_ };
+      }),
+    [racks, members, rosterById, byWeightDesc],
   );
 
   const assignedIds = useMemo(() => new Set(members.map((m) => m.athlete_id)), [members]);
@@ -135,8 +177,8 @@ export function RackAssignmentBoard() {
           athleteDisplayName(a).toLowerCase().includes(needle) ||
           (a.position ?? "").toLowerCase().includes(needle),
       )
-      .sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)));
-  }, [roster, assignedIds, search]);
+      .sort(byWeightDesc ?? ((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b))));
+  }, [roster, assignedIds, search, byWeightDesc]);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["rack-assignment-racks"] });
@@ -274,9 +316,34 @@ export function RackAssignmentBoard() {
           </Select>
         </div>
         {teamId && (
-          <Button size="sm" onClick={() => addRack.mutate()} disabled={addRack.isPending}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add rack
-          </Button>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Sort by weight
+              </label>
+              <div className="mt-1 flex items-center gap-1">
+                <Select value={sortExercise} onValueChange={setSortExercise} disabled={!liftOptions.length}>
+                  <SelectTrigger className="h-9 w-[180px]">
+                    <ArrowDownWideNarrow className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder={liftOptions.length ? "Pick a lift…" : "No rep maxes on file"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {liftOptions.map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {sortExercise && (
+                  <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground" onClick={() => setSortExercise("")}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <Button size="sm" onClick={() => addRack.mutate()} disabled={addRack.isPending}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add rack
+            </Button>
+          </div>
         )}
       </div>
 
@@ -299,6 +366,7 @@ export function RackAssignmentBoard() {
               onSearch={setSearch}
               total={roster.length}
               assignedCount={assignedIds.size}
+              weightByAthlete={weightByAthlete}
             />
             <div className="min-h-0 overflow-y-auto pr-1">
               {rackGroups.length === 0 ? (
@@ -310,14 +378,14 @@ export function RackAssignmentBoard() {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {rackGroups.map((r) => (
-                    <RackCard key={r.id} rack={r} onDelete={() => setDeleteTarget(r)} />
+                    <RackCard key={r.id} rack={r} onDelete={() => setDeleteTarget(r)} weightByAthlete={weightByAthlete} />
                   ))}
                 </div>
               )}
             </div>
           </div>
           <DragOverlay>
-            {dragAthlete ? <AthleteChipPreview athlete={dragAthlete} /> : null}
+            {dragAthlete ? <AthleteChipPreview athlete={dragAthlete} weight={weightByAthlete.get(dragAthlete.id)} /> : null}
           </DragOverlay>
         </DndContext>
       )}
@@ -355,12 +423,14 @@ function RosterPanel({
   onSearch,
   total,
   assignedCount,
+  weightByAthlete,
 }: {
   athletes: Athlete[];
   search: string;
   onSearch: (v: string) => void;
   total: number;
   assignedCount: number;
+  weightByAthlete: Map<string, number>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "unassigned-zone" });
   return (
@@ -386,14 +456,18 @@ function RosterPanel({
             {search ? "No matches." : "Everyone is assigned."}
           </div>
         ) : (
-          athletes.map((a) => <AthleteChip key={a.id} athlete={a} />)
+          athletes.map((a) => <AthleteChip key={a.id} athlete={a} weight={weightByAthlete.get(a.id)} />)
         )}
       </CardContent>
     </Card>
   );
 }
 
-function RackCard({ rack, onDelete }: { rack: RackGroup; onDelete: () => void }) {
+function RackCard({
+  rack, onDelete, weightByAthlete,
+}: {
+  rack: RackGroup; onDelete: () => void; weightByAthlete: Map<string, number>;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: rack.id });
   const full = rack.athletes.length >= RACK_CAPACITY;
   return (
@@ -427,7 +501,7 @@ function RackCard({ rack, onDelete }: { rack: RackGroup; onDelete: () => void })
       </CardHeader>
       <CardContent ref={setNodeRef} className="min-h-[120px] flex-1 space-y-1 pt-0">
         {rack.athletes.map((a) => (
-          <AthleteChip key={a.id} athlete={a} />
+          <AthleteChip key={a.id} athlete={a} weight={weightByAthlete.get(a.id)} />
         ))}
         {Array.from({ length: RACK_CAPACITY - rack.athletes.length }).map((_, i) => (
           <div
@@ -442,7 +516,7 @@ function RackCard({ rack, onDelete }: { rack: RackGroup; onDelete: () => void })
   );
 }
 
-function AthleteChip({ athlete }: { athlete: Athlete }) {
+function AthleteChip({ athlete, weight }: { athlete: Athlete; weight?: number }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: athlete.id });
   return (
     <div
@@ -461,17 +535,27 @@ function AthleteChip({ athlete }: { athlete: Athlete }) {
           <div className="truncate text-[10px] text-muted-foreground">{athlete.position}</div>
         )}
       </div>
+      {weight != null && (
+        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
+          {Math.round(weight)} lb
+        </span>
+      )}
     </div>
   );
 }
 
-function AthleteChipPreview({ athlete }: { athlete: Athlete }) {
+function AthleteChipPreview({ athlete, weight }: { athlete: Athlete; weight?: number }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-card px-2 py-1.5 text-xs shadow-lg">
       <AthleteAvatar name={athleteDisplayName(athlete)} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{athleteDisplayName(athlete)}</div>
       </div>
+      {weight != null && (
+        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
+          {Math.round(weight)} lb
+        </span>
+      )}
     </div>
   );
 }
