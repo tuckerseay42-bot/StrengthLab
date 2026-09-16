@@ -537,55 +537,57 @@ export function WorkoutEditor({ workout, programContext }: {
             </Button>
           </div>
         ) : (
-          <>
-            <div
-              className={cn(
-                "grid items-center gap-2 border-b border-border/50 bg-muted/40 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
-                EXROW_COLS,
-              )}
-            >
-              <span>#</span>
-              <span>SS</span>
-              <span>Exercise</span>
-              <span>Sets</span>
-              <span>Reps</span>
-              <span>Load type</span>
-              <span>Prescription</span>
-              <span title="Target bar velocity (m/s)">Vel</span>
-              <span />
-              <span />
+          <div className="overflow-x-auto">
+            <div className="min-w-[720px]">
+              <div
+                className={cn(
+                  "grid items-center gap-2 border-b border-border/50 bg-muted/40 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+                  EXROW_COLS,
+                )}
+              >
+                <span>#</span>
+                <span>SS</span>
+                <span>Exercise</span>
+                <span>Sets</span>
+                <span>Reps</span>
+                <span>Load type</span>
+                <span>Prescription</span>
+                <span title="Target bar velocity (m/s)">Vel</span>
+                <span />
+                <span />
+              </div>
+              <ExerciseSortableList
+                rows={rows}
+                onReorder={(orderedIds) => reorderRows.mutate(orderedIds)}
+              >
+                {blocks.map((block, blockIdx) => {
+                  const startIdx = rows.findIndex((r) => r.id === block.items[0].id);
+                  return (
+                    <li
+                      key={`block-${blockIdx}-${block.items[0].id}`}
+                      className={cn(block.group && "border-l-2", block.group && SS_BORDER[block.group])}
+                    >
+                      <div className="divide-y divide-border/30">
+                        {block.items.map((r, i) => (
+                          <SortableExerciseRow key={r.id} id={r.id}>
+                            <ExerciseBlock
+                              index={startIdx + i + 1}
+                              row={r}
+                              sets={setsByExercise.get(r.id) ?? []}
+                              exercises={visibleExercises}
+                              organizationId={workoutOrgId}
+                              onUpdate={(patch) => updateRow.mutate({ id: r.id, patch })}
+                              onRemove={() => removeRow.mutate(r.id)}
+                            />
+                          </SortableExerciseRow>
+                        ))}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ExerciseSortableList>
             </div>
-            <ExerciseSortableList
-              rows={rows}
-              onReorder={(orderedIds) => reorderRows.mutate(orderedIds)}
-            >
-              {blocks.map((block, blockIdx) => {
-                const startIdx = rows.findIndex((r) => r.id === block.items[0].id);
-                return (
-                  <li
-                    key={`block-${blockIdx}-${block.items[0].id}`}
-                    className={cn(block.group && "border-l-2", block.group && SS_BORDER[block.group])}
-                  >
-                    <div className="divide-y divide-border/30">
-                      {block.items.map((r, i) => (
-                        <SortableExerciseRow key={r.id} id={r.id}>
-                          <ExerciseBlock
-                            index={startIdx + i + 1}
-                            row={r}
-                            sets={setsByExercise.get(r.id) ?? []}
-                            exercises={visibleExercises}
-                            organizationId={workoutOrgId}
-                            onUpdate={(patch) => updateRow.mutate({ id: r.id, patch })}
-                            onRemove={() => removeRow.mutate(r.id)}
-                          />
-                        </SortableExerciseRow>
-                      ))}
-                    </div>
-                  </li>
-                );
-              })}
-            </ExerciseSortableList>
-          </>
+          </div>
         )}
       </section>
 
@@ -953,14 +955,19 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
     return data as { id: string; name: string };
   };
 
-  // Set-scheme mutations (one exercise can have several: e.g. a warm-up
-  // scheme plus a working-sets scheme).
+  // Set-scheme mutations (one exercise can have several: e.g. set 1 at 50%,
+  // set 2 at 65%, each its own scheme with sets=1). The first scheme for an
+  // exercise defaults to a normal "3x5"; every scheme after that defaults to
+  // a single set — that's the whole point of adding another one — and
+  // inherits the previous scheme's reps so the coach only has to change load.
   const invalidateSets = () => qc.invalidateQueries({ queryKey: ["workout_sets"] });
   const addSet = useMutation({
     mutationFn: async () => {
       const nextPos = sets.length ? sets[sets.length - 1].position + 1 : 0;
+      const prev = sets[sets.length - 1];
+      const defaults = prev ? { sets: 1, reps: prev.reps || "5" } : { sets: 3, reps: "5" };
       const { error } = await supabase.from("workout_sets").insert({
-        workout_exercise_id: row.id, position: nextPos, sets: 3, reps: "5",
+        workout_exercise_id: row.id, position: nextPos, ...defaults,
       });
       if (error) throw error;
     },
@@ -1035,6 +1042,21 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
     </DropdownMenu>
   );
 
+  // Running "Set N" / "Sets N–M" label per scheme, so a coach building a
+  // set-by-set sequence (e.g. set 1 @50%, set 2 @65%) can see exactly which
+  // row is which set. Only shown once there's more than one scheme — a
+  // single "3x5" scheme doesn't need it.
+  const schemeLabels = useMemo(() => {
+    if (sets.length < 2) return sets.map(() => undefined);
+    let cursor = 1;
+    return sets.map((s) => {
+      const count = Math.max(1, s.sets ?? 1);
+      const label = count === 1 ? `Set ${cursor}` : `Sets ${cursor}–${cursor + count - 1}`;
+      cursor += count;
+      return label;
+    });
+  }, [sets]);
+
   return (
     <div>
       {sets.length === 0 ? (
@@ -1051,28 +1073,42 @@ function ExerciseBlock({ index, row, sets, exercises, organizationId, onUpdate, 
           {rowMenu}
         </div>
       ) : (
-        sets.map((s, i) => (
-          <div
-            key={s.id}
-            className={cn("grid items-center gap-2 px-2 py-1.5 transition-colors hover:bg-muted/30", EXROW_COLS)}
-          >
-            {i === 0 ? identityCells : (
-              <>
-                <span />
-                <span />
-                <span className="truncate pl-1 text-[10px] text-muted-foreground/50">↳</span>
-              </>
-            )}
-            <SetSchemeRow
-              set={s}
-              exercises={exercises}
-              measurement={measurement}
-              onUpdate={(patch) => updSet.mutate({ id: s.id, patch })}
-              onRemove={() => delSet.mutate(s.id)}
-            />
-            {i === 0 ? rowMenu : <span />}
-          </div>
-        ))
+        sets.map((s, i) => {
+          const isLast = i === sets.length - 1;
+          return (
+            <div
+              key={s.id}
+              className={cn("grid items-center gap-2 px-2 py-1.5 transition-colors hover:bg-muted/30", EXROW_COLS)}
+            >
+              {i === 0 ? identityCells : (
+                <>
+                  <span />
+                  <span />
+                  <span />
+                </>
+              )}
+              <SetSchemeRow
+                set={s}
+                exercises={exercises}
+                measurement={measurement}
+                label={schemeLabels[i]}
+                onUpdate={(patch) => updSet.mutate({ id: s.id, patch })}
+                onRemove={() => delSet.mutate(s.id)}
+              />
+              {i === 0 ? rowMenu : isLast ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => addSet.mutate()}
+                  title="Add another set (e.g. a different %)"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              ) : <span />}
+            </div>
+          );
+        })
       )}
 
       {/* Tempo / Rest / Notes — compact, always visible (no collapse to hide behind) */}
@@ -1100,10 +1136,13 @@ type SetMode = "load" | "percent" | "rm" | "seconds" | "inches" | "mph";
 // set scheme — a bare fragment, not its own grid, so it lines up as trailing
 // columns in whatever grid row ExerciseBlock places it in (the primary row,
 // alongside the exercise identity cells, or a lean extra-scheme row).
-function SetSchemeRow({ set, exercises, measurement, onUpdate, onRemove }: {
+function SetSchemeRow({ set, exercises, measurement, label, onUpdate, onRemove }: {
   set: WorkoutSet;
   exercises: { id: string; name: string }[];
   measurement: "load" | "seconds" | "inches" | "reps" | "mph";
+  /** "Set 2" / "Sets 3–5" — shown when an exercise has more than one scheme,
+   * so each row's place in the set-by-set sequence is unambiguous. */
+  label?: string;
   onUpdate: (patch: Partial<WorkoutSet>) => void;
   onRemove: () => void;
 }) {
@@ -1152,7 +1191,10 @@ function SetSchemeRow({ set, exercises, measurement, onUpdate, onRemove }: {
 
   return (
     <>
-      <Input className="h-7 text-xs" type="number" min={1} value={local.sets ?? ""} onChange={(e) => commit({ sets: e.target.value ? Number(e.target.value) : null })} placeholder="Sets" />
+      <div className="flex flex-col gap-0.5">
+        {label && <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-primary/80">{label}</span>}
+        <Input className="h-7 text-xs" type="number" min={1} value={local.sets ?? ""} onChange={(e) => commit({ sets: e.target.value ? Number(e.target.value) : null })} placeholder="Sets" />
+      </div>
       <Input className="h-7 text-xs" value={local.reps} onChange={(e) => commit({ reps: e.target.value })} placeholder="Reps" />
       <Select value={local.mode} onValueChange={(v) => commit({ mode: v as SetMode })}>
         <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
