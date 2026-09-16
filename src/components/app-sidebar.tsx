@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Satellite,
   LayoutDashboard,
-  Activity,
   Users,
   UsersRound,
   CalendarDays,
@@ -51,7 +50,7 @@ type Group = { label: string; items: Item[] };
 const GROUPS: Group[] = [
   {
     label: "Overview",
-    items: [{ to: "/app", label: "Dashboard", icon: LayoutDashboard }],
+    items: [{ to: "/performance", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     label: "Roster",
@@ -88,7 +87,6 @@ const GROUPS: Group[] = [
   {
     label: "Analysis",
     items: [
-      { to: "/performance", label: "Performance Dashboard", icon: Activity },
       { to: "/metrics", label: "Metrics", icon: LineChart },
       { to: "/leaderboards", label: "Leaderboards", icon: Trophy },
       { to: "/live-leaderboard", label: "Live View", icon: Tv },
@@ -114,12 +112,12 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) =>
-    to === "/app" ? pathname === "/app" : pathname === to || pathname.startsWith(to + "/");
+    to === "/performance" ? pathname === "/performance" : pathname === to || pathname.startsWith(to + "/");
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border/60 px-2 py-2.5">
-        <Link to="/app" className="flex items-center gap-2 px-1">
+        <Link to="/performance" className="flex items-center gap-2 px-1">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md brand-bg font-display text-sm shadow-sm">
             SL
           </span>

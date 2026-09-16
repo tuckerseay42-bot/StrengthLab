@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppRouteImport } from './routes/app'
 import { Route as AthleteRouteImport } from './routes/athlete'
 import { Route as AthleteLoginRouteImport } from './routes/athlete-login'
 import { Route as AthletePinSetupRouteImport } from './routes/athlete-pin-setup'
@@ -78,11 +77,6 @@ import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/e
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/app',
-  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AthleteRoute = AthleteRouteImport.update({
@@ -404,7 +398,6 @@ const LovableEmailQueueProcessRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
   '/athlete': typeof AthleteRouteWithChildren
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
@@ -471,7 +464,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
   '/athlete': typeof AthleteRouteWithChildren
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
@@ -537,7 +529,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
   '/athlete': typeof AthleteRouteWithChildren
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
@@ -606,7 +597,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/app'
     | '/athlete'
     | '/athlete-login'
     | '/athlete-pin-setup'
@@ -673,7 +663,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/app'
     | '/athlete'
     | '/athlete-login'
     | '/athlete-pin-setup'
@@ -738,7 +727,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/app'
     | '/athlete'
     | '/athlete-login'
     | '/athlete-pin-setup'
@@ -806,7 +794,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AppRoute: typeof AppRoute
   AthleteRoute: typeof AthleteRouteWithChildren
   AthleteLoginRoute: typeof AthleteLoginRoute
   AthletePinSetupRoute: typeof AthletePinSetupRoute
@@ -864,13 +851,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app': {
-      id: '/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/athlete': {
@@ -1407,7 +1387,6 @@ const WorkoutsRouteWithChildren = WorkoutsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AppRoute: AppRoute,
   AthleteRoute: AthleteRouteWithChildren,
   AthleteLoginRoute: AthleteLoginRoute,
   AthletePinSetupRoute: AthletePinSetupRoute,

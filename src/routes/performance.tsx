@@ -23,9 +23,9 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { Check, ChevronsUpDown, User, UsersRound } from "lucide-react";
+import { Check, ChevronsUpDown, User, UsersRound, ArrowLeft } from "lucide-react";
 import { AthleteAnalyticsPanel } from "@/components/athlete-analytics-panel";
-import { GroupTrendChart } from "@/components/group-trend-chart";
+import { TeamMetricsTable } from "@/components/team-metrics-table";
 
 export const Route = createFileRoute("/performance")({
   head: () => ({ meta: [{ title: "Performance Dashboard — Strength Lab" }] }),
@@ -88,7 +88,7 @@ function PerformanceDashboard() {
         <div>
           <h1 className="text-2xl font-semibold sm:text-3xl">Performance Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Deep-dive one athlete, or watch how a team, position, grade, or sport group is trending.
+            Pull up one athlete's profile, or the whole team's numbers side by side.
           </p>
         </div>
         <div className="flex gap-1 rounded-md border border-border p-0.5 text-sm">
@@ -101,7 +101,7 @@ function PerformanceDashboard() {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <User className="h-3.5 w-3.5" /> Athlete
+            <User className="h-3.5 w-3.5" /> Athlete Profile
           </button>
           <button
             onClick={() => setMode("group")}
@@ -112,15 +112,23 @@ function PerformanceDashboard() {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <UsersRound className="h-3.5 w-3.5" /> Team / Group
+            <UsersRound className="h-3.5 w-3.5" /> Team Metrics Table
           </button>
         </div>
       </div>
 
       {mode === "athlete" ? (
-        <div className="space-y-4">
-          <AthletePicker athletes={athletes} value={athleteId} onChange={setAthleteId} />
-          {athlete ? (
+        athlete ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => setAthleteId(null)}
+                className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" /> All athletes
+              </button>
+              <AthletePicker athletes={athletes} value={athleteId} onChange={setAthleteId} />
+            </div>
             <AthleteAnalyticsPanel
               athlete={athlete}
               peers={peers}
@@ -128,16 +136,12 @@ function PerformanceDashboard() {
               repMaxes={repMaxes}
               customTypes={customTypes}
             />
-          ) : (
-            <Card className="border-dashed border-border/60">
-              <CardContent className="py-16 text-center text-muted-foreground">
-                Search for an athlete above to see their trends, percentiles, and PRs.
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </div>
+        ) : (
+          <AthleteRoster athletes={athletes} teams={teams} onSelect={setAthleteId} />
+        )
       ) : (
-        <GroupTrendChart
+        <TeamMetricsTable
           athletes={athletes}
           tests={tests}
           repMaxes={repMaxes}
@@ -146,6 +150,70 @@ function PerformanceDashboard() {
         />
       )}
     </div>
+  );
+}
+
+function AthleteRoster({
+  athletes, teams, onSelect,
+}: {
+  athletes: Athlete[];
+  teams: { id: string; name: string }[];
+  onSelect: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [teamId, setTeamId] = useState("all");
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return athletes
+      .filter((a) => teamId === "all" || a.team_id === teamId)
+      .filter((a) => !q || athleteDisplayName(a).toLowerCase().includes(q))
+      .sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)));
+  }, [athletes, query, teamId]);
+
+  return (
+    <Card className="border-border/60">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search athletes…"
+            className="h-9 flex-1 min-w-[200px] rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          <select
+            value={teamId}
+            onChange={(e) => setTeamId(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+          >
+            <option value="all">All teams</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+
+        {filtered.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">No athletes match.</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filtered.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => onSelect(a.id)}
+                className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2.5 text-left text-sm hover:border-primary/60 hover:bg-muted/50"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{athleteDisplayName(a)}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {teamById.get(a.team_id ?? "") ?? "No team"}{a.position ? ` · ${a.position}` : ""}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
