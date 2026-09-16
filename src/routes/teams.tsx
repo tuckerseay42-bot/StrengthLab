@@ -4,8 +4,13 @@ import { useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveOrgId } from "@/hooks/use-active-org";
-import { teamsQO, athletesQO, registrationsQO, athleteTeamsQO, type Team, type Registration } from "@/lib/queries";
+import { teamsQO, athletesQO, registrationsQO, athleteTeamsQO, athleteDisplayName, type Team, type Registration, type Athlete } from "@/lib/queries";
 import { SPORTS } from "@/lib/domain";
+import { findDuplicateAthlete } from "@/lib/validation";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -156,7 +161,7 @@ function TeamsPage() {
         })}
       </div>
 
-      <PendingInbox registrations={registrations.filter((r) => visibleTeamIds.has(r.team_id))} teams={visibleTeams} />
+      <PendingInbox registrations={registrations.filter((r) => visibleTeamIds.has(r.team_id))} teams={visibleTeams} athletes={athletes} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -245,10 +250,16 @@ function isLovablePrivatePreview(hostname: string) {
   return /^id-preview--[a-f0-9-]+\.lovable\.app$/.test(hostname) || /^[a-f0-9-]+\.lovableproject\.com$/.test(hostname);
 }
 
-function PendingInbox({ registrations, teams }: { registrations: Registration[]; teams: Team[] }) {
+function PendingInbox({ registrations, teams, athletes }: { registrations: Registration[]; teams: Team[]; athletes: Athlete[] }) {
   const qc = useQueryClient();
   const pending = registrations.filter((r) => r.status === "pending");
   const teamMap = new Map(teams.map((t) => [t.id, t]));
+  // Approving used to insert with no duplicate check at all — if a coach had
+  // already manually added this athlete (or approved them once already), the
+  // second approval silently created a second, separate athlete row with its
+  // own empty history. Athletes and data then look like they "disappeared"
+  // because they're actually split across two records.
+  const [dupConfirm, setDupConfirm] = useState<{ registration: Registration; existing: Athlete } | null>(null);
 
   const approve = useMutation({
     mutationFn: async (r: Registration) => {
@@ -367,12 +378,46 @@ function PendingInbox({ registrations, teams }: { registrations: Registration[];
               )}
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => approve.mutate(r)} disabled={approve.isPending}><Check className="h-4 w-4" /> Approve</Button>
+              <Button
+                size="sm"
+                disabled={approve.isPending}
+                onClick={() => {
+                  const displayName = `${r.first_name} ${r.last_name}`.trim();
+                  const dup = findDuplicateAthlete(athletes, displayName);
+                  if (dup) setDupConfirm({ registration: r, existing: dup });
+                  else approve.mutate(r);
+                }}
+              >
+                <Check className="h-4 w-4" /> Approve
+              </Button>
               <Button size="sm" variant="ghost" onClick={() => reject.mutate(r)}><X className="h-4 w-4" /></Button>
             </div>
           </div>
         ))}
       </CardContent>
+
+      <AlertDialog open={!!dupConfirm} onOpenChange={(v) => !v && setDupConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>An athlete named "{dupConfirm ? athleteDisplayName(dupConfirm.existing) : ""}" already exists</AlertDialogTitle>
+            <AlertDialogDescription>
+              Approving this registration creates a second, separate athlete record — none of the
+              existing athlete's tests, lifts, or attendance carry over, and their sign-in stays
+              linked to whichever record it was set up on. If this is the same person, reject this
+              registration instead. Only continue if these are two different people who share a name.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (dupConfirm) approve.mutate(dupConfirm.registration); setDupConfirm(null); }}
+              disabled={approve.isPending}
+            >
+              Create separate athlete anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
