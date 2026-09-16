@@ -10,14 +10,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  athletesQO, testsQO, testAssignmentsQO, testTypesQO, liftsQO, attendanceQO, repMaxesQO, teamsQO, programsQO, athleteDisplayName, spiderTemplatesQO, type Athlete,
+  athletesQO, testsQO, testAssignmentsQO, testTypesQO, liftsQO, attendanceQO, repMaxesQO, teamsQO, programsQO, athleteDisplayName, spiderTemplatesQO, type Athlete, type Team,
 } from "@/lib/queries";
 import { pickTemplate } from "@/lib/spider";
 import { supabase as sb } from "@/integrations/supabase/client";
-import { LogOut, Trophy, Dumbbell, TrendingUp, ClipboardList, Check, KeyRound } from "lucide-react";
-import { TEST_TYPES, testTypeMeta as baseTestTypeMeta } from "@/lib/domain";
+import { LogOut, Trophy, Dumbbell, TrendingUp, ClipboardList, Check, KeyRound, Download, Mail, ListOrdered } from "lucide-react";
+import { TEST_TYPES, testTypeMeta as baseTestTypeMeta, SPORTS, GENDERS, GENDER_LABELS } from "@/lib/domain";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
+import { buildAthleteResultsPdf } from "@/lib/athlete-results-export";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
@@ -224,10 +225,73 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
       if (!rows.length || !bestByAthlete.has(me.id)) return null;
       rows.sort((a, b) => meta.lowerIsBetter ? a.v - b.v : b.v - a.v);
       const rank = rows.findIndex((r) => r.id === me.id) + 1;
-      return { type: tt.label, unit: tt.unit, rank, of: rows.length, value: bestByAthlete.get(me.id)!, scope: [me.gender, me.sport].filter(Boolean).join(" · ") || "All" };
-    }).filter(Boolean) as { type: string; unit: string; rank: number; of: number; value: number; scope: string }[];
+      const myValue = bestByAthlete.get(me.id)!;
+      // Score = percentile within the same pool used for rank, 0..10 (10 = best).
+      const poolValues = rows.map((r) => r.v);
+      const worseCount = meta.lowerIsBetter
+        ? poolValues.filter((v) => v > myValue).length
+        : poolValues.filter((v) => v < myValue).length;
+      const score = Math.round((worseCount / poolValues.length) * 100) / 10;
+      return {
+        type: tt.label, unit: tt.unit, rank, of: rows.length, value: myValue, score,
+        scope: [me.gender, me.sport].filter(Boolean).join(" · ") || "All",
+      };
+    }).filter(Boolean) as { type: string; unit: string; rank: number; of: number; value: number; score: number; scope: string }[];
 
   }, [tests, athletes, me, allTestTypeDefs, testTypeMeta]);
+
+  // Composite = average score across every test the athlete has a ranked
+  // result for. Mirrors the "6.9/10 · composite (N of M tests)" summary
+  // coaches are used to seeing on a testing report.
+  const composite = useMemo(() => {
+    if (!leaderboardRank.length) return null;
+    const avg = leaderboardRank.reduce((s, r) => s + r.score, 0) / leaderboardRank.length;
+    return { value: Math.round(avg * 10) / 10, count: leaderboardRank.length };
+  }, [leaderboardRank]);
+
+  const buildResultsPdf = () => {
+    if (!me) return null;
+    const team = teams.find((t) => t.id === me.team_id) ?? null;
+    return buildAthleteResultsPdf({
+      athleteName: athleteDisplayName(me),
+      team: team?.name ?? null,
+      composite: composite?.value ?? null,
+      testsUsed: composite?.count ?? 0,
+      rows: leaderboardRank.map((r) => ({
+        test: r.type,
+        result: `${r.value} ${r.unit}`,
+        score: r.score.toFixed(1),
+        rank: `#${r.rank} of ${r.of}`,
+      })),
+    });
+  };
+  const downloadResults = () => {
+    if (!me) return;
+    const doc = buildResultsPdf();
+    if (!doc) return;
+    doc.save(`${athleteDisplayName(me).replace(/\s+/g, "_")}_results.pdf`);
+  };
+  const emailResults = async () => {
+    if (!me) return;
+    const doc = buildResultsPdf();
+    if (!doc) return;
+    const filename = `${athleteDisplayName(me).replace(/\s+/g, "_")}_results.pdf`;
+    const file = new File([doc.output("blob")], filename, { type: "application/pdf" });
+    const nav = navigator as Navigator & {
+      canShare?: (data?: ShareData) => boolean;
+      share?: (data: ShareData) => Promise<void>;
+    };
+    if (nav.share && nav.canShare?.({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: "My Testing Results" });
+      } catch {
+        // User cancelled the share sheet — nothing else to do.
+      }
+      return;
+    }
+    doc.save(filename);
+    toast.info("Downloaded your results — attach the file to your email.");
+  };
 
   if (!me) {
     return (
@@ -268,6 +332,31 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
           <LogOut className="mr-1 h-4 w-4" /> Sign out
         </Button>
       </div>
+
+      {/* Composite testing score — the headline number, up top like a real report */}
+      {composite && (
+        <Card className="overflow-hidden border-border/60">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-display text-4xl font-bold tracking-tight text-primary">{composite.value.toFixed(1)}</span>
+                <span className="text-lg text-muted-foreground">/10</span>
+              </div>
+              <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Composite · {composite.count} of {composite.count} tests
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={downloadResults}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Download My Results
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void emailResults()}>
+                <Mail className="mr-1.5 h-3.5 w-3.5" /> Email Me My Results
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <AthleteHeroCard
         athlete={me}
@@ -406,36 +495,50 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         </CardContent>
       </Card>
 
-      {/* Compact rank */}
+      {/* Test results — Test / Result / Score / Team Rank, like a real testing report */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Where I rank</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><ListOrdered className="h-4 w-4" /> My Results</CardTitle></CardHeader>
+        <CardContent className="p-0">
           {leaderboardRank.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No results ranked yet.</p>
+            <p className="p-4 text-sm text-muted-foreground">No results ranked yet.</p>
           ) : (
-            <ul className="divide-y">
-              {leaderboardRank.map((r) => {
-                const top3 = r.rank <= 3;
-                return (
-                  <li key={r.type} className="flex items-center justify-between py-2 text-sm">
-                    <span className="flex flex-col">
-                      <span className="font-medium">{r.type}</span>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">vs {r.scope}</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground tabular-nums">{r.value} {r.unit}</span>
-                      <Badge variant={top3 ? "default" : "secondary"} className="tabular-nums">
-                        #{r.rank} <span className="ml-1 opacity-70">/ {r.of}</span>
-                      </Badge>
-                    </span>
-                  </li>
-
-                );
-              })}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2 font-semibold">Test</th>
+                    <th className="px-4 py-2 font-semibold">Result</th>
+                    <th className="px-4 py-2 font-semibold">Score</th>
+                    <th className="px-4 py-2 font-semibold">Team Rank</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {leaderboardRank.map((r) => {
+                    const top3 = r.rank <= 3;
+                    return (
+                      <tr key={r.type}>
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium">{r.type}</div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">vs {r.scope}</div>
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.value} {r.unit}</td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">{r.score.toFixed(1)}</td>
+                        <td className="px-4 py-2.5">
+                          <Badge variant={top3 ? "default" : "secondary"} className="tabular-nums">
+                            #{r.rank} <span className="ml-1 opacity-70">of {r.of}</span>
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      <TeamLeaderboardCard me={me} athletes={athletes} teams={teams} tests={tests} allTestTypeDefs={allTestTypeDefs} testTypeMeta={testTypeMeta} />
 
       <PinCard autoFocus={setupPin} />
 
@@ -443,6 +546,139 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         <Link to="/" className="text-xs text-muted-foreground hover:underline">Back to main site</Link>
       </div>
     </div>
+  );
+}
+
+// Filterable, org-wide "who's at the top" board — a browsable counterpart to
+// the personal "My Results" table above, matching the school-wide leaderboard
+// coaches expect on a testing report.
+function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, testTypeMeta }: {
+  me: Athlete;
+  athletes: Athlete[];
+  teams: Team[];
+  tests: { athlete_id: string; test_type: string; value: number }[];
+  allTestTypeDefs: { value: string; label: string; unit: string; lowerIsBetter: boolean }[];
+  testTypeMeta: (v: string) => { label: string; unit: string; lowerIsBetter: boolean };
+}) {
+  const testTypesWithData = useMemo(() => {
+    const withData = new Set(tests.map((t) => t.test_type));
+    const defs = allTestTypeDefs.filter((d) => withData.has(d.value));
+    return defs.length ? defs : allTestTypeDefs;
+  }, [tests, allTestTypeDefs]);
+
+  const [metric, setMetric] = useState<string>("");
+  useEffect(() => {
+    if (!metric && testTypesWithData.length) setMetric(testTypesWithData[0].value);
+  }, [testTypesWithData, metric]);
+  const [topN, setTopN] = useState("10");
+  const [gender, setGender] = useState("all");
+  const [sport, setSport] = useState(me.sport ?? "all");
+  const [position, setPosition] = useState("all");
+
+  const positions = useMemo(() => {
+    const pool = sport === "all" ? athletes : athletes.filter((a) => (a.sport ?? "").toLowerCase() === sport.toLowerCase());
+    return Array.from(new Set(pool.map((a) => a.position).filter((p): p is string => !!p))).sort();
+  }, [athletes, sport]);
+
+  const rows = useMemo(() => {
+    if (!metric) return [];
+    const meta = testTypeMeta(metric);
+    const bestByAthlete = new Map<string, number>();
+    for (const t of tests) {
+      if (t.test_type !== metric) continue;
+      const cur = bestByAthlete.get(t.athlete_id);
+      if (cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur)) bestByAthlete.set(t.athlete_id, t.value);
+    }
+    const pool = athletes.filter((a) => {
+      if (gender !== "all" && (a.gender ?? "").toLowerCase() !== gender) return false;
+      if (sport !== "all" && (a.sport ?? "").toLowerCase() !== sport.toLowerCase()) return false;
+      if (position !== "all" && (a.position ?? "") !== position) return false;
+      return bestByAthlete.has(a.id);
+    });
+    return pool
+      .map((a) => ({ athlete: a, value: bestByAthlete.get(a.id)! }))
+      .sort((a, b) => (meta.lowerIsBetter ? a.value - b.value : b.value - a.value))
+      .slice(0, Number(topN));
+  }, [metric, tests, athletes, gender, sport, position, topN, testTypeMeta]);
+
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const meta = metric ? testTypeMeta(metric) : null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Team Leaderboard</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Select value={metric} onValueChange={setMetric}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Test" /></SelectTrigger>
+            <SelectContent>
+              {testTypesWithData.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={topN} onValueChange={setTopN}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["5", "10", "25"].map((n) => <SelectItem key={n} value={n}>Top {n}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={gender} onValueChange={setGender}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All genders</SelectItem>
+              {GENDERS.map((g) => <SelectItem key={g} value={g}>{GENDER_LABELS[g]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={sport} onValueChange={(v) => { setSport(v); setPosition("all"); }}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sports</SelectItem>
+              {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {positions.length > 0 && (
+          <Select value={position} onValueChange={setPosition}>
+            <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All positions</SelectItem>
+              {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+
+        {rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No results yet for this test.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-2 py-2 font-semibold">Rank</th>
+                  <th className="px-2 py-2 font-semibold">Name</th>
+                  <th className="px-2 py-2 font-semibold">Team</th>
+                  <th className="px-2 py-2 font-semibold">Result</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((r, i) => (
+                  <tr key={r.athlete.id} className={r.athlete.id === me.id ? "bg-primary/5" : undefined}>
+                    <td className="px-2 py-2 font-semibold tabular-nums">{i + 1}</td>
+                    <td className="px-2 py-2">
+                      {athleteDisplayName(r.athlete)}
+                      {r.athlete.id === me.id && <span className="ml-1.5 text-[10px] font-semibold uppercase text-primary">You</span>}
+                    </td>
+                    <td className="px-2 py-2 text-muted-foreground">{teamById.get(r.athlete.team_id ?? "")?.name ?? "—"}</td>
+                    <td className="px-2 py-2 tabular-nums">{r.value} {meta?.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
