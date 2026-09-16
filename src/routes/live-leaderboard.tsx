@@ -16,6 +16,7 @@ import { suggestLoad } from "@/lib/prescription";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -622,10 +623,6 @@ function LiveLeaderboardPage() {
         secondsAgo={secondsAgo}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={setAutoRefresh}
-        secondBoard={showSecondBoard}
-        onSecondBoardChange={(v) => { setShowSecondBoard(v); if (v && !metricIdB) { const alt = metricOptions.find((o) => o.id !== metricId); if (alt) setMetricIdB(alt.id); } }}
-        onToggleFilters={() => setShowFilters((v) => !v)}
-        filtersOpen={showFilters}
       />
 
       {/* ============== KPI STRIP ============== */}
@@ -643,160 +640,205 @@ function LiveLeaderboardPage() {
         ]}
       />
 
-      {/* ============== FILTERS (collapsible) ============== */}
-      {showFilters && (
-        <Card className="card-elevated">
-          <CardContent className="p-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="lg:col-span-2">
-                <Label>Metric</Label>
-                <Select value={metricId} onValueChange={setMetricId}>
-                  <SelectTrigger><SelectValue placeholder="Pick a metric…" /></SelectTrigger>
-                  <SelectContent>
-                    {metricOptions.length === 0
-                      ? <div className="px-2 py-2 text-sm text-muted-foreground">No lifts or tests logged yet</div>
-                      : optionsByGroup.map(([group, opts]) => (
-                          <SelectGroup key={group}>
-                            <SelectLabel>{group}</SelectLabel>
-                            {opts.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
-                          </SelectGroup>
+      {/* ============== TABS ============== */}
+      <Tabs defaultValue="live" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="live"><Activity className="mr-1.5 h-3.5 w-3.5" /> Live Now</TabsTrigger>
+          <TabsTrigger value="leaderboard"><Trophy className="mr-1.5 h-3.5 w-3.5" /> Leaderboard</TabsTrigger>
+          <TabsTrigger value="workout"><Dumbbell className="mr-1.5 h-3.5 w-3.5" /> Today's Workout</TabsTrigger>
+        </TabsList>
+
+        {/* ---------- LIVE NOW ---------- */}
+        <TabsContent value="live" className="space-y-5">
+          <RackGrid cards={rackCards} now={now} />
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-5 xl:col-span-2">
+              <ActivityFeedPanel feed={feed} now={now} />
+            </div>
+            <div className="space-y-5">
+              <CoachAttentionPanel feed={feed} rackCards={rackCards} />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ---------- LEADERBOARD ---------- */}
+        <TabsContent value="leaderboard" className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="eyebrow">Leaderboards</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs">
+                <span className="text-muted-foreground">2nd Board</span>
+                <Switch
+                  checked={showSecondBoard}
+                  onCheckedChange={(v) => { setShowSecondBoard(v); if (v && !metricIdB) { const alt = metricOptions.find((o) => o.id !== metricId); if (alt) setMetricIdB(alt.id); } }}
+                />
+              </label>
+              <Button size="sm" variant={showFilters ? "default" : "outline"} onClick={() => setShowFilters((v) => !v)}>
+                <Filter className="mr-1 h-3.5 w-3.5" /> Filters
+              </Button>
+            </div>
+          </div>
+
+          {showFilters && (
+            <Card className="card-elevated">
+              <CardContent className="p-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="lg:col-span-2">
+                    <Label>Metric</Label>
+                    <Select value={metricId} onValueChange={setMetricId}>
+                      <SelectTrigger><SelectValue placeholder="Pick a metric…" /></SelectTrigger>
+                      <SelectContent>
+                        {metricOptions.length === 0
+                          ? <div className="px-2 py-2 text-sm text-muted-foreground">No lifts or tests logged yet</div>
+                          : optionsByGroup.map(([group, opts]) => (
+                              <SelectGroup key={group}>
+                                <SelectLabel>{group}</SelectLabel>
+                                {opts.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                              </SelectGroup>
+                            ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Team</Label>
+                    <Select value={teamId} onValueChange={setTeamId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Teams</SelectItem>
+                        {teams.map((t: Team) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Sport</Label>
+                    <Select value={sport} onValueChange={setSport}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Sports</SelectItem>
+                        {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Date Range</Label>
+                    <Select value={range} onValueChange={(v) => setRange(v as RangeKind)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(RANGE_LABELS) as RangeKind[]).map((k) => (
+                          <SelectItem key={k} value={k}>{RANGE_LABELS[k]}</SelectItem>
                         ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Team</Label>
-                <Select value={teamId} onValueChange={setTeamId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {teams.map((t: Team) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Sport</Label>
-                <Select value={sport} onValueChange={setSport}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sports</SelectItem>
-                    {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Date Range</Label>
-                <Select value={range} onValueChange={(v) => setRange(v as RangeKind)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(RANGE_LABELS) as RangeKind[]).map((k) => (
-                      <SelectItem key={k} value={k}>{RANGE_LABELS[k]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="lg:col-span-2">
-                <Label>Gender boards</Label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {([
-                    { label: "Male", on: showMale, set: setShowMale },
-                    { label: "Female", on: showFemale, set: setShowFemale },
-                  ]).map((g) => (
-                    <button
-                      key={g.label}
-                      type="button"
-                      onClick={() => g.set(!g.on)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                        g.on ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background text-muted-foreground",
-                      )}
-                    >
-                      <span className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded-[4px] border",
-                        g.on ? "border-primary bg-primary text-primary-foreground" : "border-input",
-                      )}>
-                        {g.on && <CheckCircle2 className="h-3 w-3" />}
-                      </span>
-                      {g.label}
-                    </button>
-                  ))}
-                  <span className="self-center text-xs text-muted-foreground">
-                    {showMale && showFemale ? "Split boards" : showMale || showFemale ? "Single board" : "Combined (all athletes)"}
-                  </span>
-                </div>
-              </div>
-              <div className="lg:col-span-2">
-                <Label>Second metric (optional)</Label>
-                <div className="flex gap-2">
-                  <Select value={metricIdB} onValueChange={(v) => { setMetricIdB(v); setShowSecondBoard(true); }}>
-                    <SelectTrigger><SelectValue placeholder="Pick a second metric…" /></SelectTrigger>
-                    <SelectContent>
-                      {optionsByGroup.map(([group, opts]) => (
-                        <SelectGroup key={group}>
-                          <SelectLabel>{group}</SelectLabel>
-                          {opts.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
-                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <Label>Gender boards</Label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {([
+                        { label: "Male", on: showMale, set: setShowMale },
+                        { label: "Female", on: showFemale, set: setShowFemale },
+                      ]).map((g) => (
+                        <button
+                          key={g.label}
+                          type="button"
+                          onClick={() => g.set(!g.on)}
+                          className={cn(
+                            "flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                            g.on ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background text-muted-foreground",
+                          )}
+                        >
+                          <span className={cn(
+                            "flex h-4 w-4 items-center justify-center rounded-[4px] border",
+                            g.on ? "border-primary bg-primary text-primary-foreground" : "border-input",
+                          )}>
+                            {g.on && <CheckCircle2 className="h-3 w-3" />}
+                          </span>
+                          {g.label}
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
-                  {metricIdB && (
-                    <Button variant="outline" onClick={() => { setMetricIdB(""); setShowSecondBoard(false); }}>Clear</Button>
+                      <span className="self-center text-xs text-muted-foreground">
+                        {showMale && showFemale ? "Split boards" : showMale || showFemale ? "Single board" : "Combined (all athletes)"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-2">
+                    <Label>Second metric (optional)</Label>
+                    <div className="flex gap-2">
+                      <Select value={metricIdB} onValueChange={(v) => { setMetricIdB(v); setShowSecondBoard(true); }}>
+                        <SelectTrigger><SelectValue placeholder="Pick a second metric…" /></SelectTrigger>
+                        <SelectContent>
+                          {optionsByGroup.map(([group, opts]) => (
+                            <SelectGroup key={group}>
+                              <SelectLabel>{group}</SelectLabel>
+                              {opts.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {metricIdB && (
+                        <Button variant="outline" onClick={() => { setMetricIdB(""); setShowSecondBoard(false); }}>Clear</Button>
+                      )}
+                    </div>
+                  </div>
+                  {range === "custom" && (
+                    <>
+                      <div><Label>From</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
+                      <div><Label>To</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
+                    </>
                   )}
                 </div>
-              </div>
-              {range === "custom" && (
-                <>
-                  <div><Label>From</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
-                  <div><Label>To</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          )}
 
-      {/* ============== RACK GRID ============== */}
-      <RackGrid cards={rackCards} now={now} />
-
-      {/* ============== MAIN GRID ============== */}
-      <div className="grid gap-5 xl:grid-cols-3">
-        {/* Leaderboards + Today's Workout — 2/3 */}
-        <div className="space-y-5 xl:col-span-2">
-          {[
-            { metric: currentMetric, show: true },
-            { metric: currentMetricB, show: showSecondBoard },
-          ]
-            .filter((b) => b.show && b.metric)
-            .map((b, i) => (
-              <div
-                key={`board-${i}-${b.metric!.id}`}
-                className={cn("grid gap-4", genderCols.length > 1 && "lg:grid-cols-2")}
-              >
-                {genderCols.map((g) => (
-                  <BoardPanel
-                    key={`${b.metric!.id}-${g.key}`}
-                    title={genderCols.length > 1 ? `${g.label} — ${b.metric!.label}` : b.metric!.label}
-                    icon
-                    rows={buildRowsFor(b.metric!, g.gender)}
-                    unit={b.metric!.unit}
-                    metricLabel={genderCols.length > 1 ? b.metric!.label : g.label}
-                    teamLabel={teamId === "all" ? "All" : teamName(teamId)}
-                    sport={sport}
-                    range={range}
-                  />
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-5 xl:col-span-2">
+              {[
+                { metric: currentMetric, show: true },
+                { metric: currentMetricB, show: showSecondBoard },
+              ]
+                .filter((b) => b.show && b.metric)
+                .map((b, i) => (
+                  <div
+                    key={`board-${i}-${b.metric!.id}`}
+                    className={cn("grid gap-4", genderCols.length > 1 && "lg:grid-cols-2")}
+                  >
+                    {genderCols.map((g) => (
+                      <BoardPanel
+                        key={`${b.metric!.id}-${g.key}`}
+                        title={genderCols.length > 1 ? `${g.label} — ${b.metric!.label}` : b.metric!.label}
+                        icon
+                        rows={buildRowsFor(b.metric!, g.gender)}
+                        unit={b.metric!.unit}
+                        metricLabel={genderCols.length > 1 ? b.metric!.label : g.label}
+                        teamLabel={teamId === "all" ? "All" : teamName(teamId)}
+                        sport={sport}
+                        range={range}
+                      />
+                    ))}
+                  </div>
                 ))}
-              </div>
-            ))}
-          <TodaysWorkoutPanel teamId={teamId} athletes={athletes} teams={teams} />
-        </div>
+            </div>
+            <div className="space-y-5">
+              <PRFeedPanel feed={feed} now={now} />
+            </div>
+          </div>
+        </TabsContent>
 
-        {/* Attention / PR / Activity — 1/3 */}
-        <div className="space-y-5">
-          <CoachAttentionPanel feed={feed} rackCards={rackCards} />
-          <PRFeedPanel feed={feed} now={now} />
-          <ActivityFeedPanel feed={feed} now={now} />
-        </div>
-      </div>
+        {/* ---------- TODAY'S WORKOUT ---------- */}
+        <TabsContent value="workout" className="space-y-5">
+          <div className="max-w-xs">
+            <Label>Team</Label>
+            <Select value={teamId} onValueChange={setTeamId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {teams.map((t: Team) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <TodaysWorkoutPanel teamId={teamId} athletes={athletes} teams={teams} />
+        </TabsContent>
+      </Tabs>
 
       <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <RefreshCw className={cn("h-3 w-3", autoRefresh && "animate-spin")} /> Last updated: {secondsAgo}s ago · Auto-refresh {autoRefresh ? "on" : "paused"}
@@ -810,12 +852,10 @@ function LiveLeaderboardPage() {
 // ---------------------------------------------------------------------------
 
 function CommandHeader({
-  now, secondsAgo, autoRefresh, onAutoRefreshChange, secondBoard, onSecondBoardChange, onToggleFilters, filtersOpen,
+  now, secondsAgo, autoRefresh, onAutoRefreshChange,
 }: {
   now: number; secondsAgo: number;
   autoRefresh: boolean; onAutoRefreshChange: (v: boolean) => void;
-  secondBoard: boolean; onSecondBoardChange: (v: boolean) => void;
-  onToggleFilters: () => void; filtersOpen: boolean;
 }) {
   const d = new Date(now);
   const clock = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -843,13 +883,6 @@ function CommandHeader({
           <div className="font-medium text-foreground">{secondsAgo}s ago</div>
           <div>Last refresh</div>
         </div>
-        <Button size="sm" variant={filtersOpen ? "default" : "outline"} onClick={onToggleFilters}>
-          <Filter className="mr-1 h-3.5 w-3.5" /> Filters
-        </Button>
-        <label className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs">
-          <span className="text-muted-foreground">2nd Board</span>
-          <Switch checked={secondBoard} onCheckedChange={onSecondBoardChange} />
-        </label>
         <label className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs">
           <span className="text-muted-foreground">Auto</span>
           <Switch checked={autoRefresh} onCheckedChange={onAutoRefreshChange} />
