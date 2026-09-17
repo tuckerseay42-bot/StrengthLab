@@ -109,7 +109,13 @@ export function TeamMetricsTable({
         reportSeries(metric, a.id, tests, repMaxes, lifts),
         metric.lowerIsBetter,
       );
-      return { athlete: a, points: flagged };
+      const values = flagged.map((p) => p.value);
+      const best = values.length
+        ? metric.lowerIsBetter
+          ? Math.min(...values)
+          : Math.max(...values)
+        : null;
+      return { athlete: a, points: flagged, best };
     });
   }, [pool, metric, tests, repMaxes, lifts]);
 
@@ -121,18 +127,11 @@ export function TeamMetricsTable({
     return all.length > n ? all.slice(-n) : all;
   }, [rows, dateCount]);
 
-  const { teamAvg, teamBest } = useMemo(() => {
-    if (!metric) return { teamAvg: null as number | null, teamBest: null as number | null };
+  const teamAvg = useMemo(() => {
+    if (!metric) return null;
     const bests = rows.map((r) => average(r.points)).filter((v): v is number => v != null);
-    if (!bests.length) return { teamAvg: null, teamBest: null };
-    const avg = bests.reduce((s, v) => s + v, 0) / bests.length;
-    const allValues = rows.flatMap((r) => r.points.map((p) => p.value));
-    const best = allValues.length
-      ? metric.lowerIsBetter
-        ? Math.min(...allValues)
-        : Math.max(...allValues)
-      : null;
-    return { teamAvg: avg, teamBest: best };
+    if (!bests.length) return null;
+    return bests.reduce((s, v) => s + v, 0) / bests.length;
   }, [rows, metric]);
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
@@ -272,6 +271,9 @@ export function TeamMetricsTable({
                   </th>
                   <th className="whitespace-nowrap px-3 py-2 text-center font-semibold text-muted-foreground">
                     Best
+                    <span className="block text-[9px] font-normal normal-case text-muted-foreground/70">
+                      (athlete's own)
+                    </span>
                   </th>
                   {dates.map((d) => (
                     <th
@@ -295,9 +297,9 @@ export function TeamMetricsTable({
                         : `${teamAvg.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-center tabular-nums font-semibold text-[color:var(--status-pr)]">
-                      {teamBest == null
+                      {r.best == null
                         ? "—"
-                        : `${teamBest.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
+                        : `${r.best.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
                     </td>
                     {dates.map((d) => {
                       const p = r.points.find((pt) => pt.date === d);
