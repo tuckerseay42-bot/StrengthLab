@@ -23,6 +23,7 @@ import {
   type LiftRow,
   type RepMax,
   type CustomTestType,
+  type CustomMetric,
 } from "@/lib/queries";
 import {
   allReportMetrics,
@@ -47,6 +48,7 @@ export function AthleteAnalyticsPanel({
   repMaxes,
   lifts,
   customTypes,
+  customMetrics,
 }: {
   athlete: Athlete;
   peers: Athlete[];
@@ -54,16 +56,17 @@ export function AthleteAnalyticsPanel({
   repMaxes: RepMax[];
   lifts: LiftRow[];
   customTypes: CustomTestType[];
+  customMetrics: CustomMetric[];
 }) {
   const allMetrics = useMemo(
-    () => allReportMetrics(customTypes, repMaxes, lifts),
-    [customTypes, repMaxes, lifts],
+    () => allReportMetrics(customTypes, repMaxes, lifts, customMetrics),
+    [customTypes, repMaxes, lifts, customMetrics],
   );
 
   const trends = useMemo(() => {
     return allMetrics
       .map((m) => {
-        const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts), m.lowerIsBetter);
+        const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight), m.lowerIsBetter);
         return { metric: m, series };
       })
       .filter((t) => t.series.length >= 2)
@@ -71,20 +74,20 @@ export function AthleteAnalyticsPanel({
         b.series[b.series.length - 1].date.localeCompare(a.series[a.series.length - 1].date),
       )
       .slice(0, 6);
-  }, [allMetrics, athlete.id, tests, repMaxes, lifts]);
+  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics]);
 
   const percentiles = useMemo(() => {
     const pool = peers.filter((p) => p.id !== athlete.id);
     return KEY_METRIC_KEYS.map((key) => {
       const metric = allMetrics.find((m) => m.key === key);
       if (!metric) return null;
-      const mine = reportSeries(metric, athlete.id, tests, repMaxes, lifts);
+      const mine = reportSeries(metric, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight);
       if (!mine.length) return null;
       const myBest = metric.lowerIsBetter
         ? Math.min(...mine.map((p) => p.value))
         : Math.max(...mine.map((p) => p.value));
       const poolBests = pool
-        .map((p) => reportSeries(metric, p.id, tests, repMaxes, lifts))
+        .map((p) => reportSeries(metric, p.id, tests, repMaxes, lifts, customMetrics, p.bodyweight))
         .filter((s) => s.length)
         .map((s) =>
           metric.lowerIsBetter
@@ -96,18 +99,18 @@ export function AthleteAnalyticsPanel({
     }).filter(
       (x): x is { metric: (typeof allMetrics)[number]; value: number; pct: number } => x != null,
     );
-  }, [peers, athlete.id, allMetrics, tests, repMaxes, lifts]);
+  }, [peers, athlete.id, athlete.bodyweight, allMetrics, tests, repMaxes, lifts, customMetrics]);
 
   const recentPRs = useMemo(() => {
     const items: { label: string; value: number; unit: string; date: string }[] = [];
     for (const m of allMetrics) {
-      const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts), m.lowerIsBetter);
+      const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight), m.lowerIsBetter);
       const lastPR = [...series].reverse().find((p) => p.isPR);
       if (lastPR)
         items.push({ label: m.label, value: lastPR.value, unit: m.unit, date: lastPR.date });
     }
     return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-  }, [allMetrics, athlete.id, tests, repMaxes, lifts]);
+  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics]);
 
   return (
     <div className="space-y-4">

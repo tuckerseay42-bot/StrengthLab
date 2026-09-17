@@ -21,6 +21,7 @@ import {
   type LiftRow,
   type RepMax,
   type CustomTestType,
+  type CustomMetric,
   type Team,
 } from "@/lib/queries";
 import { SPORTS, GENDERS, GENDER_LABELS, GRADES } from "@/lib/domain";
@@ -47,6 +48,7 @@ export function TeamMetricsTable({
   repMaxes,
   lifts,
   customTypes,
+  customMetrics,
   teams,
 }: {
   athletes: Athlete[];
@@ -54,14 +56,15 @@ export function TeamMetricsTable({
   repMaxes: RepMax[];
   lifts: LiftRow[];
   customTypes: CustomTestType[];
+  customMetrics: CustomMetric[];
   teams: Team[];
 }) {
   const allMetrics = useMemo(
-    () => allReportMetrics(customTypes, repMaxes, lifts),
-    [customTypes, repMaxes, lifts],
+    () => allReportMetrics(customTypes, repMaxes, lifts, customMetrics),
+    [customTypes, repMaxes, lifts, customMetrics],
   );
   const metricGroups = useMemo(() => {
-    const order = ["Speed", "Jumps", "Strength", "Lifts", "PRs (est. 1RM)"];
+    const order = ["Speed", "Jumps", "Strength", "Lifts", "Custom Metrics", "PRs (est. 1RM)"];
     const groups = Array.from(new Set(allMetrics.map((m) => m.group)));
     return groups.sort((a, b) => {
       const ai = order.indexOf(a);
@@ -107,7 +110,7 @@ export function TeamMetricsTable({
     if (!metric) return [];
     return pool.map((a) => {
       const flagged = withPRFlags(
-        reportSeries(metric, a.id, tests, repMaxes, lifts),
+        reportSeries(metric, a.id, tests, repMaxes, lifts, customMetrics, a.bodyweight),
         metric.lowerIsBetter,
       );
       const values = flagged.map((p) => p.value);
@@ -118,7 +121,7 @@ export function TeamMetricsTable({
         : null;
       return { athlete: a, points: flagged, best, avg: average(flagged) };
     });
-  }, [pool, metric, tests, repMaxes, lifts]);
+  }, [pool, metric, tests, repMaxes, lifts, customMetrics]);
 
   const dates = useMemo(() => {
     const set = new Set<string>();

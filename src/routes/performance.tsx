@@ -8,6 +8,7 @@ import {
   liftsQO,
   testTypesQO,
   teamsQO,
+  customMetricsQO,
   athleteDisplayName,
   type Athlete,
 } from "@/lib/queries";
@@ -56,6 +57,7 @@ function PerformanceDashboard() {
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const { data: lifts = [] } = useQuery(liftsQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
+  const { data: customMetrics = [] } = useQuery(customMetricsQO);
   const { data: teams = [] } = useQuery(teamsQO);
 
   const [mode, setMode] = useState<Mode>("athlete");
@@ -138,6 +140,7 @@ function PerformanceDashboard() {
               repMaxes={repMaxes}
               lifts={lifts}
               customTypes={customTypes}
+              customMetrics={customMetrics}
             />
           </div>
         ) : (
@@ -150,6 +153,7 @@ function PerformanceDashboard() {
           repMaxes={repMaxes}
           lifts={lifts}
           customTypes={customTypes}
+          customMetrics={customMetrics}
           teams={teams}
         />
       )}

@@ -3,7 +3,7 @@
 // concept: logged test results (weekly measurements), rep_maxes-derived
 // estimated 1RMs (PR testing), and everyday logged lifts (training loads),
 // so all three can be picked from the same filter UI.
-import type { TestRow, RepMax, CustomTestType, LiftRow } from "@/lib/queries";
+import type { TestRow, RepMax, CustomTestType, LiftRow, CustomMetric } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 
 export type ReportMetric = {
@@ -67,12 +67,41 @@ export function liftReportMetrics(lifts: LiftRow[]): ReportMetric[] {
   }));
 }
 
+/**
+ * Metrics defined on the Custom Metrics page ("define once, use anywhere")
+ * that have a natural per-date value and no equivalent already surfaced by
+ * the catalogs above: Bodyweight (a single current reading) and lift-based
+ * metrics (reusing the same lifts data as `liftReportMetrics`, but with the
+ * metric's own name/unit/direction instead of a guessed "higher is better,
+ * lb" default). Test/ratio/formula/attendance kinds already have an equal
+ * or better path via the other catalogs, so they're left out here.
+ */
+export function customMetricReportMetrics(customMetrics: CustomMetric[]): ReportMetric[] {
+  return customMetrics
+    .filter((m) => m.kind === "bodyweight" || (m.kind === "lift_max" && m.exercise_name))
+    .map((m) => ({
+      key: `custom:${m.id}`,
+      label: m.name,
+      unit: m.unit ?? (m.kind === "bodyweight"
+        ? "lb"
+        : m.measurement === "time" ? "s" : m.measurement === "height" ? "in" : m.measurement === "speed" ? "mph" : "lb"),
+      lowerIsBetter: m.lower_is_better,
+      group: "Custom Metrics",
+    }));
+}
+
 export function allReportMetrics(
   customTypes: CustomTestType[],
   repMaxes: RepMax[],
   lifts: LiftRow[] = [],
+  customMetrics: CustomMetric[] = [],
 ): ReportMetric[] {
-  return [...testReportMetrics(customTypes), ...liftReportMetrics(lifts), ...prReportMetrics(repMaxes)];
+  return [
+    ...testReportMetrics(customTypes),
+    ...liftReportMetrics(lifts),
+    ...prReportMetrics(repMaxes),
+    ...customMetricReportMetrics(customMetrics),
+  ];
 }
 
 function est1RM(load: number, reps: number) {
@@ -86,6 +115,8 @@ export function reportSeries(
   tests: TestRow[],
   repMaxes: RepMax[],
   lifts: LiftRow[] = [],
+  customMetrics: CustomMetric[] = [],
+  bodyweight: number | null = null,
 ): ReportPoint[] {
   const map = new Map<string, number>();
   const consider = (date: string, value: number) => {
@@ -109,6 +140,22 @@ export function reportSeries(
     for (const l of lifts) {
       if (l.athlete_id === athleteId && l.exercise === exerciseName && l.load != null)
         consider(l.lift_date, Number(l.load));
+    }
+  } else if (metric.key.startsWith("custom:")) {
+    const id = metric.key.slice(7);
+    const cm = customMetrics.find((c) => c.id === id);
+    if (cm?.kind === "bodyweight") {
+      if (bodyweight != null) consider(new Date().toISOString().slice(0, 10), Number(bodyweight));
+    } else if (cm?.kind === "lift_max" && cm.exercise_name) {
+      const target = cm.exercise_name.trim().toLowerCase();
+      const measurement = cm.measurement ?? "load";
+      for (const l of lifts) {
+        if (l.athlete_id !== athleteId) continue;
+        if ((l.exercise ?? "").trim().toLowerCase() !== target) continue;
+        const raw = measurement === "time" ? l.time_seconds : measurement === "height" ? l.distance_in : l.load;
+        if (raw == null) continue;
+        consider(l.lift_date, Number(raw));
+      }
     }
   }
   return Array.from(map.entries())
