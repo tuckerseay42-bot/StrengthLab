@@ -49,6 +49,7 @@ function PerformanceDashboard() {
         r === "administrator" ||
         r === "admin" ||
         r === "coach" ||
+        r === "assistant_coach" ||
         r === "sport_coach",
     ) ?? false;
 
