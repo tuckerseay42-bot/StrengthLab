@@ -1,7 +1,8 @@
 // The coach's primary report: every athlete down the rows, filterable by
-// sport/gender/class/team/position, with a Team Avg and Best reference
-// column so each athlete's numbers read against the group, followed by one
-// column per date the metric was tested — a real spreadsheet, not a chart.
+// sport/gender/class/team/position, with an Athlete Average and Best
+// column (each athlete's own numbers) followed by one column per date the
+// metric was tested, and a Team Average footer row per date for group
+// comparison — a real spreadsheet, not a chart.
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -115,7 +116,7 @@ export function TeamMetricsTable({
           ? Math.min(...values)
           : Math.max(...values)
         : null;
-      return { athlete: a, points: flagged, best };
+      return { athlete: a, points: flagged, best, avg: average(flagged) };
     });
   }, [pool, metric, tests, repMaxes, lifts]);
 
@@ -126,13 +127,6 @@ export function TeamMetricsTable({
     const n = Number(dateCount);
     return all.length > n ? all.slice(-n) : all;
   }, [rows, dateCount]);
-
-  const teamAvg = useMemo(() => {
-    if (!metric) return null;
-    const bests = rows.map((r) => average(r.points)).filter((v): v is number => v != null);
-    if (!bests.length) return null;
-    return bests.reduce((s, v) => s + v, 0) / bests.length;
-  }, [rows, metric]);
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
 
@@ -278,7 +272,7 @@ export function TeamMetricsTable({
                     Athlete
                   </th>
                   <th className="whitespace-nowrap px-3 py-2 text-center font-semibold text-muted-foreground">
-                    Team Avg
+                    Athlete Average
                   </th>
                   <th className="whitespace-nowrap px-3 py-2 text-center font-semibold text-muted-foreground">
                     Best
@@ -303,9 +297,9 @@ export function TeamMetricsTable({
                       {athleteDisplayName(r.athlete)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-center tabular-nums text-muted-foreground">
-                      {teamAvg == null
+                      {r.avg == null
                         ? "—"
-                        : `${teamAvg.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
+                        : `${r.avg.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-center tabular-nums font-semibold text-[color:var(--status-pr)]">
                       {r.best == null
@@ -316,7 +310,7 @@ export function TeamMetricsTable({
                       const p = r.points.find((pt) => pt.date === d);
                       const tone = cellTone(
                         p?.value ?? null,
-                        teamAvg,
+                        dateAverages.get(d) ?? null,
                         metric.lowerIsBetter,
                         p?.isPR,
                       );
