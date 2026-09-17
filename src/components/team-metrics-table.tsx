@@ -136,6 +136,17 @@ export function TeamMetricsTable({
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
 
+  const dateAverages = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of dates) {
+      const values = rowsWithData
+        .map((r) => r.points.find((p) => p.date === d)?.value)
+        .filter((v): v is number => v != null);
+      if (values.length) m.set(d, values.reduce((s, v) => s + v, 0) / values.length);
+    }
+    return m;
+  }, [dates, rowsWithData]);
+
   return (
     <Card className="overflow-hidden border-border/60">
       <CardHeader className="pb-2">
@@ -321,6 +332,21 @@ export function TeamMetricsTable({
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border/60 bg-muted/30 font-semibold">
+                  <td className="sticky left-0 z-10 bg-muted/30 px-3 py-2">Team Average</td>
+                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                  <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                  {dates.map((d) => {
+                    const v = dateAverages.get(d);
+                    return (
+                      <td key={d} className="px-2 py-2 text-center tabular-nums">
+                        {v == null ? "—" : v.toFixed(metric.unit === "lb" ? 0 : 2)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

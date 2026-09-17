@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { customMetricsQO, exercisesQO, type CustomMetric, type MetricVariable } from "@/lib/queries";
+import { customMetricsQO, exercisesQO, testTypesQO, type CustomMetric, type MetricVariable } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +67,63 @@ const ATHLETE_FIELDS = [
   { key: "grade", label: "Grade" },
   { key: "graduation_year", label: "Graduation year" },
 ];
+
+type TestTypeOption = { value: string; label: string; group: string };
+const TEST_GROUP_ORDER = ["Speed", "Jumps", "Strength"];
+
+/**
+ * Built-in test types plus the org's own custom ones, grouped for the
+ * picker. Without this, a metric or leaderboard built on a custom test type
+ * (e.g. "Body Weight") has nothing to select in this dropdown — it silently
+ * can't be created or re-linked, which is why some metrics never pull data.
+ */
+function useTestTypeOptions(): { flat: TestTypeOption[]; groups: [string, TestTypeOption[]][] } {
+  const { data: customTypes = [] } = useQuery(testTypesQO);
+  return useMemo(() => {
+    const seen = new Set<string>();
+    const flat: TestTypeOption[] = [];
+    for (const t of TEST_TYPES) {
+      seen.add(t.value);
+      flat.push({ value: t.value, label: t.label, group: t.group });
+    }
+    for (const c of customTypes) {
+      if (seen.has(c.value)) continue;
+      seen.add(c.value);
+      flat.push({ value: c.value, label: c.label, group: c.group_name || "Custom" });
+    }
+    const groupNames = Array.from(new Set(flat.map((o) => o.group))).sort((a, b) => {
+      const ai = TEST_GROUP_ORDER.indexOf(a);
+      const bi = TEST_GROUP_ORDER.indexOf(b);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    const groups = groupNames.map((g): [string, TestTypeOption[]] => [g, flat.filter((o) => o.group === g)]);
+    return { flat, groups };
+  }, [customTypes]);
+}
+
+function TestTypeSelect({
+  value, onValueChange, placeholder = "Choose test…",
+}: {
+  value: string; onValueChange: (v: string) => void; placeholder?: string;
+}) {
+  const { groups } = useTestTypeOptions();
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
+      <SelectContent>
+        {groups.map(([g, opts]) => (
+          <SelectGroup key={g}>
+            <SelectLabel>{g}</SelectLabel>
+            {opts.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 function MetricsPage() {
   const qc = useQueryClient();
@@ -147,8 +204,9 @@ function MetricsPage() {
     setOpen(true);
   };
 
+  const { flat: testTypeFlat } = useTestTypeOptions();
   const describe = (m: CustomMetric) => {
-    const label = (v: string | null) => TEST_TYPES.find((t) => t.value === v)?.label ?? v ?? "?";
+    const label = (v: string | null) => testTypeFlat.find((t) => t.value === v)?.label ?? v ?? "?";
     if (m.kind === "test_value") return `Best ${label(m.test_type)}`;
     if (m.kind === "bw_coefficient") return `${label(m.test_type)} / bodyweight^(2/3)`;
     if (m.kind === "ratio") return `${label(m.numerator_test)} ÷ ${label(m.denominator_test)}`;
@@ -244,12 +302,7 @@ function MetricsPage() {
             {(form.kind === "test_value" || form.kind === "bw_coefficient" || form.kind === "improvement_pct") && (
               <div>
                 <Label>Test</Label>
-                <Select value={form.test_type} onValueChange={(v) => setForm({ ...form, test_type: v })}>
-                  <SelectTrigger><SelectValue placeholder="Choose test…" /></SelectTrigger>
-                  <SelectContent>
-                    {TEST_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <TestTypeSelect value={form.test_type} onValueChange={(v) => setForm({ ...form, test_type: v })} />
               </div>
             )}
 
@@ -257,21 +310,11 @@ function MetricsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Numerator</Label>
-                  <Select value={form.numerator_test} onValueChange={(v) => setForm({ ...form, numerator_test: v })}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      {TEST_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <TestTypeSelect value={form.numerator_test} onValueChange={(v) => setForm({ ...form, numerator_test: v })} placeholder="—" />
                 </div>
                 <div>
                   <Label>Denominator</Label>
-                  <Select value={form.denominator_test} onValueChange={(v) => setForm({ ...form, denominator_test: v })}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      {TEST_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <TestTypeSelect value={form.denominator_test} onValueChange={(v) => setForm({ ...form, denominator_test: v })} placeholder="—" />
                 </div>
               </div>
             )}
@@ -464,12 +507,7 @@ function FormulaBuilder({
                 </SelectContent>
               </Select>
             ) : v.source === "test" ? (
-              <Select value={v.key} onValueChange={(val) => update(i, { key: val })}>
-                <SelectTrigger><SelectValue placeholder="Test" /></SelectTrigger>
-                <SelectContent>
-                  {TEST_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <TestTypeSelect value={v.key} onValueChange={(val) => update(i, { key: val })} placeholder="Test" />
             ) : (
               <Select value={v.key} onValueChange={(val) => update(i, { key: val })}>
                 <SelectTrigger><SelectValue placeholder="Exercise" /></SelectTrigger>

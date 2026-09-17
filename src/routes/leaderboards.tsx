@@ -334,7 +334,7 @@ function BoardCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     if (!metric) return [];
     const filtered = (athletes as any[]).filter((a) => {
       if (board.team_id) {
@@ -352,8 +352,13 @@ function BoardCard({
       return true;
     });
     const w = boardToWindow(board);
-    return computeMetric(metric, filtered, tests, lifts, attendance, w, customTypes).slice(0, board.row_limit);
+    return computeMetric(metric, filtered, tests, lifts, attendance, w, customTypes);
   }, [board, metric, athletes, tests, lifts, attendance, customTypes, teamsByAthlete]);
+  const rows = useMemo(() => allRows.slice(0, board.row_limit), [allRows, board.row_limit]);
+  const teamAverage = useMemo(() => {
+    if (!allRows.length) return null;
+    return allRows.reduce((s, r) => s + r.value, 0) / allRows.length;
+  }, [allRows]);
 
   const filterBadges = [
     boardRangeLabel(board),
@@ -423,6 +428,14 @@ function BoardCard({
               </li>
             ))}
           </ol>
+        )}
+        {teamAverage != null && (
+          <div className="mt-3 flex items-center justify-between border-t border-border/60 px-1 pt-2 text-xs text-muted-foreground">
+            <span>Team average · {allRows.length} qualifying athlete{allRows.length === 1 ? "" : "s"}</span>
+            <span className="font-mono font-semibold text-foreground">
+              {formatLeaderValue(teamAverage, metric?.unit)}{metric?.unit ? ` ${metric.unit}` : ""}
+            </span>
+          </div>
         )}
       </CardContent>
     </Card>
