@@ -105,7 +105,7 @@ export type Exercise = {
   id: string; name: string; category: string | null; equipment: string | null;
   primary_muscles: string[] | null;
   video_url: string | null; image_url: string | null; is_custom: boolean;
-  measurement_type: "load" | "seconds" | "inches" | "reps";
+  measurement_type: "load" | "seconds" | "inches" | "reps" | "mph";
   is_metric: boolean;
   created_at: string; organization_id: string;
 };
@@ -128,7 +128,7 @@ export type CustomMetric = {
   exercise_name: string | null; since_days: number | null;
   formula: string | null;
   variables: MetricVariable[];
-  measurement: "load" | "time" | "height";
+  measurement: "load" | "time" | "height" | "speed";
   created_at: string;
 };
 

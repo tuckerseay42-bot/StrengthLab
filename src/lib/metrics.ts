@@ -40,8 +40,10 @@ export function bestByAthlete(tests: TestRow[], testType: string, lowerIsBetter:
   return map;
 }
 
-type LiftMeasure = "load" | "time" | "height";
+type LiftMeasure = "load" | "time" | "height" | "speed";
 function liftValue(l: LiftRow, m: LiftMeasure): number | null {
+  // "speed" (mph) exercises log their reading in the load field, same as
+  // weight lifts — the measurement kind is what tells them apart.
   const raw = m === "time" ? l.time_seconds : m === "height" ? l.distance_in : l.load;
   return raw == null ? null : Number(raw);
 }
@@ -150,8 +152,8 @@ export function computeMetric(
       });
     }
   } else if (metric.kind === "lift_max" && metric.exercise_name) {
-    const measurement = (metric.measurement ?? "load") as "load" | "time" | "height";
-    const unit = measurement === "time" ? "s" : measurement === "height" ? "in" : "lb";
+    const measurement = (metric.measurement ?? "load") as "load" | "time" | "height" | "speed";
+    const unit = measurement === "time" ? "s" : measurement === "height" ? "in" : measurement === "speed" ? "mph" : "lb";
     const best = bestLiftByAthlete(lifts, metric.exercise_name, window, measurement);
     for (const a of athletes) {
       const b = best.get(a.id); if (!b) continue;

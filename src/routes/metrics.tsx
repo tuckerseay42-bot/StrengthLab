@@ -33,7 +33,7 @@ type FormState = {
   exercise_name: string; since_days: string;
   formula: string; variables: MetricVariable[];
   lower_is_better: boolean; unit: string;
-  measurement: "load" | "time" | "height";
+  measurement: "load" | "time" | "height" | "speed";
 };
 
 const EMPTY: FormState = {
@@ -48,12 +48,13 @@ const EMPTY: FormState = {
 
 const METRIC_CATEGORIES: {
   id: string; label: string; hint: string;
-  kind: CustomMetric["kind"]; measurement?: "load" | "time" | "height";
+  kind: CustomMetric["kind"]; measurement?: "load" | "time" | "height" | "speed";
 }[] = [
   { id: "bodyweight", label: "Bodyweight", hint: "Each athlete's current bodyweight on file — reads directly off their profile, nothing to link or misconfigure.", kind: "bodyweight" },
-  { id: "lift", label: "Lift (weight)", hint: "Best load logged on an exercise — e.g. Back Squat 1RM.", kind: "lift_max", measurement: "load" },
-  { id: "speed", label: "Speed / time", hint: "Fastest time logged on an exercise — lower is better.", kind: "lift_max", measurement: "time" },
-  { id: "jump", label: "Jump / distance", hint: "Best height or distance logged on an exercise.", kind: "lift_max", measurement: "height" },
+  { id: "lift", label: "Lift", hint: "Best load logged on an exercise — e.g. Back Squat 1RM. Links to an exercise.", kind: "lift_max", measurement: "load" },
+  { id: "time", label: "Time", hint: "Fastest time logged on an exercise — lower is better. Links to an exercise.", kind: "lift_max", measurement: "time" },
+  { id: "speed", label: "Speed", hint: "Top speed (mph) logged on an exercise — higher is better. Links to an exercise.", kind: "lift_max", measurement: "speed" },
+  { id: "jump", label: "Jump", hint: "Best height or distance logged on an exercise. Links to an exercise.", kind: "lift_max", measurement: "height" },
   { id: "test", label: "Test result", hint: "Best value from a recorded test type.", kind: "test_value" },
   { id: "bw", label: "Bodyweight-adjusted", hint: "Test value divided by bodyweight^⅔.", kind: "bw_coefficient" },
   { id: "ratio", label: "Ratio of two tests", hint: "One test divided by another.", kind: "ratio" },
@@ -159,7 +160,7 @@ function MetricsPage() {
         formula: form.kind === "formula" ? form.formula.trim() : null,
         variables: form.kind === "formula" ? form.variables : [],
         lower_is_better: form.kind === "lift_max" && form.measurement === "time" ? true : form.lower_is_better,
-        unit: form.unit.trim() || (form.kind === "lift_max" ? (form.measurement === "time" ? "s" : form.measurement === "height" ? "in" : "lb") : form.kind === "bodyweight" ? "lb" : null),
+        unit: form.unit.trim() || (form.kind === "lift_max" ? (form.measurement === "time" ? "s" : form.measurement === "height" ? "in" : form.measurement === "speed" ? "mph" : "lb") : form.kind === "bodyweight" ? "lb" : null),
         measurement: form.kind === "lift_max" ? form.measurement : "load",
       };
 
@@ -199,7 +200,7 @@ function MetricsPage() {
       since_days: m.since_days != null ? String(m.since_days) : "30",
       formula: m.formula ?? "", variables: m.variables ?? [],
       lower_is_better: m.lower_is_better, unit: m.unit ?? "",
-      measurement: (m.measurement ?? "load") as "load" | "time" | "height",
+      measurement: (m.measurement ?? "load") as "load" | "time" | "height" | "speed",
 
     });
     setOpen(true);
@@ -213,7 +214,8 @@ function MetricsPage() {
     if (m.kind === "bw_coefficient") return `${label(m.test_type)} / bodyweight^(2/3)`;
     if (m.kind === "ratio") return `${label(m.numerator_test)} ÷ ${label(m.denominator_test)}`;
     if (m.kind === "lift_max") {
-      const axis = (m.measurement ?? "load") === "time" ? "best time" : (m.measurement ?? "load") === "height" ? "best height" : "best load";
+      const measurement = m.measurement ?? "load";
+      const axis = measurement === "time" ? "best time" : measurement === "height" ? "best height" : measurement === "speed" ? "top speed" : "best load";
       return `${axis}: ${m.exercise_name ?? "?"}`;
     }
 
@@ -359,11 +361,12 @@ function MetricsPage() {
                 </div>
                 <div>
                   <Label>Rank by</Label>
-                  <Select value={form.measurement} onValueChange={(v) => setForm({ ...form, measurement: v as "load" | "time" | "height", lower_is_better: v === "time" })}>
+                  <Select value={form.measurement} onValueChange={(v) => setForm({ ...form, measurement: v as "load" | "time" | "height" | "speed", lower_is_better: v === "time" })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="load">Load (lb)</SelectItem>
                       <SelectItem value="time">Time (s, lower better)</SelectItem>
+                      <SelectItem value="speed">Speed (mph, higher better)</SelectItem>
                       <SelectItem value="height">Height / distance (in)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -426,7 +429,7 @@ function ExercisePicker({
   onChange,
 }: {
   value: string;
-  onChange: (name: string, measurement?: "load" | "time" | "height") => void;
+  onChange: (name: string, measurement?: "load" | "time" | "height" | "speed") => void;
 }) {
   const { data: exercises = [] } = useQuery(exercisesQO);
   const [open, setOpen] = useState(false);
@@ -458,7 +461,7 @@ function ExercisePicker({
                     const mt = e.measurement_type ?? "load";
                     onChange(
                       e.name,
-                      mt === "seconds" ? "time" : mt === "inches" ? "height" : "load",
+                      mt === "seconds" ? "time" : mt === "inches" ? "height" : mt === "mph" ? "speed" : "load",
                     );
                     setOpen(false);
                   }}
