@@ -138,6 +138,15 @@ function MetricsPage() {
   const save = useMutation({
     mutationFn: async () => {
       if (!form.name.trim()) throw new Error("Name is required");
+      if (form.kind === "lift_max" && !form.exercise_name.trim()) {
+        throw new Error("Pick an exercise for this metric — otherwise it will never show any data");
+      }
+      if ((form.kind === "test_value" || form.kind === "bw_coefficient" || form.kind === "improvement_pct") && !form.test_type) {
+        throw new Error("Pick a test for this metric — otherwise it will never show any data");
+      }
+      if (form.kind === "ratio" && (!form.numerator_test || !form.denominator_test)) {
+        throw new Error("Pick both a numerator and denominator test");
+      }
       if (form.kind === "formula") {
         if (!form.formula.trim()) throw new Error("Formula is required");
         const names = new Set<string>();
@@ -196,7 +205,10 @@ function MetricsPage() {
       name: m.name, description: m.description ?? "", kind: m.kind,
       test_type: m.test_type ?? "", numerator_test: m.numerator_test ?? "",
       denominator_test: m.denominator_test ?? "",
-      exercise_name: m.exercise_name ?? "",
+      // Pre-seed the exercise search with the metric's own name when it was
+      // never linked — most coaches name the metric after the exercise, so
+      // this usually surfaces the right match in the picker immediately.
+      exercise_name: m.exercise_name || (m.kind === "lift_max" ? m.name : ""),
       since_days: m.since_days != null ? String(m.since_days) : "30",
       formula: m.formula ?? "", variables: m.variables ?? [],
       lower_is_better: m.lower_is_better, unit: m.unit ?? "",
