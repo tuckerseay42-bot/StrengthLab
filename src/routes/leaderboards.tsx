@@ -17,11 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Trophy, Download, Pencil } from "lucide-react";
+import { Plus, Trash2, Trophy, Download, Pencil, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboards")({
   head: () => ({ meta: [{ title: "Leaderboards — Strength Lab" }] }),
@@ -80,7 +81,7 @@ function formatLeaderValue(v: number, unit: string | null | undefined): string {
 
 function LeaderboardsPage() {
   const qc = useQueryClient();
-  const { data: boards = [] } = useQuery(leaderboardsQO);
+  const { data: boards = [], isLoading: boardsLoading } = useQuery(leaderboardsQO);
   const { data: metrics = [] } = useQuery(customMetricsQO);
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: tests = [] } = useQuery(testsQO);
@@ -184,12 +185,25 @@ function LeaderboardsPage() {
         </CardContent></Card>
       )}
 
-      {boards.length === 0 && metrics.length > 0 && (
+      {boardsLoading ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {[0, 1].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="space-y-2">
+                <div className="h-4 w-1/3 rounded bg-muted" />
+                <div className="h-3 w-1/4 rounded bg-muted" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[0, 1, 2].map((j) => <div key={j} className="h-8 rounded bg-muted/60" />)}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : boards.length === 0 && metrics.length > 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           No leaderboards yet. Create one to rank athletes by any metric with team, sport, grade, or position filters.
         </CardContent></Card>
-      )}
-
+      ) : (
       <div className="grid gap-4 lg:grid-cols-2">
         {boards.map((b) => {
           const metric = metricById.get(b.metric_id);
@@ -206,6 +220,7 @@ function LeaderboardsPage() {
           );
         })}
       </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -380,9 +395,20 @@ function BoardCard({
         ) : (
           <ol className="space-y-1">
             {rows.map((r, i) => (
-              <li key={r.athlete.id} className="flex items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm">
+              <li
+                key={r.athlete.id}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-muted/40",
+                  i === 0 && "border-primary/30 bg-primary/5",
+                )}
+              >
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="w-6 text-right font-mono text-xs text-muted-foreground">{i + 1}</span>
+                  {i === 0 ? (
+                    <Crown className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  ) : (
+                    <span className="w-3.5 shrink-0" />
+                  )}
+                  <span className="w-5 text-right font-mono text-xs text-muted-foreground">{i + 1}</span>
                   <Link to="/athletes/$id" params={{ id: r.athlete.id }} className="truncate font-medium hover:underline">
                     {athleteDisplayName(r.athlete)}
                   </Link>

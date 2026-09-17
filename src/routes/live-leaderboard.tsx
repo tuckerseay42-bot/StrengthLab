@@ -208,15 +208,22 @@ function useTodayRackSetLogs(enabled: boolean) {
 // Main page
 // ---------------------------------------------------------------------------
 
+type CommandCenterTab = "live" | "leaderboard" | "workout";
+
 function LiveLeaderboardPage() {
   const qc = useQueryClient();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const [activeTab, setActiveTab] = useState<CommandCenterTab>("live");
   const now = useNow(5000);
 
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: teams = [] } = useQuery(teamsQO);
-  const refetchInterval = autoRefresh ? 20_000 : false;
+  // Rack floor + KPI strip are visible on every tab, so they always poll.
+  // Lifts/tests only feed the Leaderboard tab's boards — no reason to pull
+  // that data on a 20s cadence while a coach is on Live Now or Today's
+  // Workout instead.
+  const refetchInterval = autoRefresh && activeTab === "leaderboard" ? 20_000 : false;
   const { data: lifts = [] } = useQuery({ ...liftsQO, refetchInterval });
   const { data: liftSets = [] } = useQuery({ ...liftSetsQO, refetchInterval });
   const { data: tests = [] } = useQuery({ ...testsQO, refetchInterval });
@@ -259,6 +266,16 @@ function LiveLeaderboardPage() {
   }, [qc, autoRefresh]);
 
   useEffect(() => { setLastUpdated(Date.now()); }, [lifts, liftSets, tests, setLogs, rackSessions]);
+
+  // Lift/test polling only runs while the Leaderboard tab is active (see
+  // `refetchInterval` above) — catch up immediately on switching to it so
+  // the boards never show stale data from however long the coach was away.
+  useEffect(() => {
+    if (activeTab !== "leaderboard") return;
+    qc.invalidateQueries({ queryKey: ["lifts"] });
+    qc.invalidateQueries({ queryKey: ["lift_sets"] });
+    qc.invalidateQueries({ queryKey: ["tests"] });
+  }, [activeTab, qc]);
 
   // ---------------- Leaderboard scaffolding (preserved) ----------------
   type LiftSetEntry = {
@@ -669,7 +686,7 @@ function LiveLeaderboardPage() {
       />
 
       {/* ============== TABS ============== */}
-      <Tabs defaultValue="live" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as CommandCenterTab)} className="space-y-4">
         <TabsList>
           <TabsTrigger value="live"><Activity className="mr-1.5 h-3.5 w-3.5" /> Live Now</TabsTrigger>
           <TabsTrigger value="leaderboard"><Trophy className="mr-1.5 h-3.5 w-3.5" /> Leaderboard</TabsTrigger>
@@ -1328,7 +1345,7 @@ function BoardPanel({
                   const tone = r.isPR ? "pr" : r.pct >= 95 ? "warn" : "bad";
                   const bg = r.recentPR ? "bg-[color:var(--lb-pr-bg)] animate-pulse-slow" : "";
                   return (
-                    <tr key={r.athlete.id} className={cn("border-b last:border-0 hover:bg-muted/40", bg)}>
+                    <tr key={r.athlete.id} className={cn("border-b last:border-0 transition-colors duration-150 hover:bg-muted/40", bg)}>
                       <td className="px-2 py-3 font-mono">
                         {i === 0 ? (
                           <span className="inline-flex items-center gap-1 text-[color:var(--lb-pr)]">
