@@ -96,12 +96,16 @@ export function allReportMetrics(
   lifts: LiftRow[] = [],
   customMetrics: CustomMetric[] = [],
 ): ReportMetric[] {
-  return [
-    ...testReportMetrics(customTypes),
-    ...liftReportMetrics(lifts),
-    ...prReportMetrics(repMaxes),
-    ...customMetricReportMetrics(customMetrics),
-  ];
+  const base = [...testReportMetrics(customTypes), ...liftReportMetrics(lifts), ...prReportMetrics(repMaxes)];
+  // A Custom Metric can easily share a name with a test type or exercise
+  // that already auto-populates the picker (e.g. a coach names a metric
+  // after the drill it tracks) — without a distinguishing label, the two
+  // are indistinguishable in the dropdown even though only one has data.
+  const baseLabels = new Set(base.map((m) => m.label.trim().toLowerCase()));
+  const custom = customMetricReportMetrics(customMetrics).map((m) =>
+    baseLabels.has(m.label.trim().toLowerCase()) ? { ...m, label: `${m.label} (custom)` } : m,
+  );
+  return [...base, ...custom];
 }
 
 function est1RM(load: number, reps: number) {
