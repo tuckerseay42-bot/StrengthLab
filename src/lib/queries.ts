@@ -121,7 +121,7 @@ export type MetricVariable = {
 };
 export type CustomMetric = {
   id: string; name: string; description: string | null;
-  kind: "test_value" | "bw_coefficient" | "ratio" | "lift_max" | "attendance_pct" | "improvement_pct" | "formula";
+  kind: "test_value" | "bw_coefficient" | "ratio" | "lift_max" | "attendance_pct" | "improvement_pct" | "formula" | "bodyweight";
   test_type: string | null;
   numerator_test: string | null; denominator_test: string | null;
   lower_is_better: boolean; unit: string | null;

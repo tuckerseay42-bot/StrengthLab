@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, X, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,7 @@ const METRIC_CATEGORIES: {
   id: string; label: string; hint: string;
   kind: CustomMetric["kind"]; measurement?: "load" | "time" | "height";
 }[] = [
+  { id: "bodyweight", label: "Bodyweight", hint: "Each athlete's current bodyweight on file — reads directly off their profile, nothing to link or misconfigure.", kind: "bodyweight" },
   { id: "lift", label: "Lift (weight)", hint: "Best load logged on an exercise — e.g. Back Squat 1RM.", kind: "lift_max", measurement: "load" },
   { id: "speed", label: "Speed / time", hint: "Fastest time logged on an exercise — lower is better.", kind: "lift_max", measurement: "time" },
   { id: "jump", label: "Jump / distance", hint: "Best height or distance logged on an exercise.", kind: "lift_max", measurement: "height" },
@@ -158,7 +159,7 @@ function MetricsPage() {
         formula: form.kind === "formula" ? form.formula.trim() : null,
         variables: form.kind === "formula" ? form.variables : [],
         lower_is_better: form.kind === "lift_max" && form.measurement === "time" ? true : form.lower_is_better,
-        unit: form.unit.trim() || (form.kind === "lift_max" ? (form.measurement === "time" ? "s" : form.measurement === "height" ? "in" : "lb") : null),
+        unit: form.unit.trim() || (form.kind === "lift_max" ? (form.measurement === "time" ? "s" : form.measurement === "height" ? "in" : "lb") : form.kind === "bodyweight" ? "lb" : null),
         measurement: form.kind === "lift_max" ? form.measurement : "load",
       };
 
@@ -207,6 +208,7 @@ function MetricsPage() {
   const { flat: testTypeFlat } = useTestTypeOptions();
   const describe = (m: CustomMetric) => {
     const label = (v: string | null) => testTypeFlat.find((t) => t.value === v)?.label ?? v ?? "?";
+    if (m.kind === "bodyweight") return "Current bodyweight — always available, nothing to link";
     if (m.kind === "test_value") return `Best ${label(m.test_type)}`;
     if (m.kind === "bw_coefficient") return `${label(m.test_type)} / bodyweight^(2/3)`;
     if (m.kind === "ratio") return `${label(m.numerator_test)} ÷ ${label(m.denominator_test)}`;
@@ -219,6 +221,15 @@ function MetricsPage() {
     if (m.kind === "improvement_pct") return `% improvement in ${label(m.test_type)}`;
     if (m.kind === "formula") return m.formula ?? "custom formula";
     return "";
+  };
+
+  /** True when a metric is missing the link it needs to ever produce data. */
+  const isUnlinked = (m: CustomMetric) => {
+    if (m.kind === "test_value" || m.kind === "bw_coefficient" || m.kind === "improvement_pct") return !m.test_type;
+    if (m.kind === "ratio") return !m.numerator_test || !m.denominator_test;
+    if (m.kind === "lift_max") return !m.exercise_name;
+    if (m.kind === "formula") return !m.formula || !(m.variables?.length);
+    return false;
   };
 
   return (
@@ -250,7 +261,14 @@ function MetricsPage() {
                       {m.lower_is_better && <Badge variant="outline">lower is better</Badge>}
                       {m.unit && <Badge variant="outline">{m.unit}</Badge>}
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">{describe(m)}</p>
+                    {isUnlinked(m) ? (
+                      <p className="mt-2 flex items-center gap-1 text-xs font-medium text-destructive">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Not linked to a test/exercise yet — this metric will show no data anywhere until you edit it.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">{describe(m)}</p>
+                    )}
                     {m.description && <p className="mt-1 text-xs text-muted-foreground">{m.description}</p>}
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">

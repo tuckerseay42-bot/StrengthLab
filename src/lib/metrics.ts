@@ -115,7 +115,12 @@ export function computeMetric(
   const lower = metric.lower_is_better;
   const today = new Date().toISOString().slice(0, 10);
 
-  if (metric.kind === "test_value" && metric.test_type) {
+  if (metric.kind === "bodyweight") {
+    for (const a of athletes) {
+      if (a.bodyweight == null) continue;
+      rows.push({ athlete: a, value: Number(a.bodyweight), date: today });
+    }
+  } else if (metric.kind === "test_value" && metric.test_type) {
     const meta = testTypeMeta(metric.test_type);
     const best = bestByAthlete(tests, metric.test_type, meta.lowerIsBetter, window);
     for (const a of athletes) {
