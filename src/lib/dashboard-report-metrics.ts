@@ -15,7 +15,9 @@ export type ReportMetric = {
 };
 
 export type ReportPoint = { date: string; value: number };
-export type FlaggedPoint = ReportPoint & { isPR: boolean };
+// delta is the positive improvement magnitude over the prior best, or null
+// for the series' first point (nothing to compare against) or a non-PR.
+export type FlaggedPoint = ReportPoint & { isPR: boolean; delta: number | null };
 
 export function testReportMetrics(customTypes: CustomTestType[]): ReportMetric[] {
   const seen = new Set<string>();
@@ -172,8 +174,9 @@ export function withPRFlags(series: ReportPoint[], lowerIsBetter: boolean): Flag
   let best: number | null = null;
   return series.map((p) => {
     const isPR = best == null || (lowerIsBetter ? p.value < best : p.value > best);
+    const delta = isPR && best != null ? (lowerIsBetter ? best - p.value : p.value - best) : null;
     if (isPR) best = p.value;
-    return { ...p, isPR };
+    return { ...p, isPR, delta };
   });
 }
 

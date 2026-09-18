@@ -4,6 +4,7 @@
 // metric was tested, and a Team Average footer row per date for group
 // comparison — a real spreadsheet, not a chart.
 import { useEffect, useMemo, useState } from "react";
+import { Flame } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -133,6 +134,18 @@ export function TeamMetricsTable({
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
 
+  // PR count + average improvement, scoped to whatever's currently visible
+  // (the selected metric, filters, and date-column window) — not career-wide.
+  const prStats = useMemo(() => {
+    const dateSet = new Set(dates);
+    const prPoints = rowsWithData.flatMap((r) => r.points.filter((p) => p.isPR && dateSet.has(p.date)));
+    const deltas = prPoints.map((p) => p.delta).filter((d): d is number => d != null);
+    return {
+      count: prPoints.length,
+      avgIncrease: deltas.length ? deltas.reduce((s, d) => s + d, 0) / deltas.length : null,
+    };
+  }, [rowsWithData, dates]);
+
   const dateAverages = useMemo(() => {
     const m = new Map<string, number>();
     for (const d of dates) {
@@ -186,6 +199,25 @@ export function TeamMetricsTable({
             </Select>
           </div>
         </div>
+
+        {metric && (
+          <div className="mt-2 flex flex-wrap items-center gap-4 rounded-md border border-[color:var(--status-pr)]/25 bg-[color:var(--status-pr)]/5 px-3 py-2 text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+              <Flame className="h-3.5 w-3.5 text-[color:var(--status-pr)]" /> {metric.label}
+            </span>
+            <span className="text-muted-foreground">
+              <span className="mono-number text-sm font-bold text-foreground">{prStats.count}</span> PR{prStats.count === 1 ? "" : "s"}
+            </span>
+            <span className="text-muted-foreground">
+              Avg increase{" "}
+              <span className="mono-number text-sm font-bold text-[color:var(--status-pr)]">
+                {prStats.avgIncrease == null
+                  ? "—"
+                  : `${metric.lowerIsBetter ? "-" : "+"}${prStats.avgIncrease.toFixed(metric.unit === "lb" ? 0 : 2)} ${metric.unit}`}
+              </span>
+            </span>
+          </div>
+        )}
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Select
