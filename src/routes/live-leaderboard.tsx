@@ -538,7 +538,7 @@ function LiveLeaderboardPage() {
     load: number | null; reps: number | null; velocity: number | null; e1rm: number | null;
     ts: number; status: string; approval: string; validation: string;
     rackNumber: number | null; teamName: string | null;
-    isPR: boolean;
+    isPR: boolean; delta: number | null;
   };
 
   const rackByExId = useMemo(() => new Map(rackSessions.map((r) => [r.id, r])), [rackSessions]);
@@ -553,8 +553,11 @@ function LiveLeaderboardPage() {
       const ts = new Date(log.completed_at || log.created_at).getTime();
       const e1rm = log.estimated_1rm != null ? Number(log.estimated_1rm)
         : (log.load != null && log.reps && log.reps > 0 ? epley(Number(log.load), Number(log.reps)) : null);
-      const prev = preTodayBestByAthEx.get(`${log.athlete_id}::${exerciseName.toLowerCase()}`) ?? 0;
-      const isPR = e1rm != null && e1rm > prev && (log.approval_status !== "rejected");
+      const prevBest = preTodayBestByAthEx.get(`${log.athlete_id}::${exerciseName.toLowerCase()}`);
+      const isPR = e1rm != null && e1rm > (prevBest ?? 0) && (log.approval_status !== "rejected");
+      // Only counts as a measurable "increase" when there was a real prior
+      // best to compare against — a first-ever log isn't an improvement.
+      const delta = isPR && e1rm != null && prevBest != null ? e1rm - prevBest : null;
       const flagged = log.validation_status && log.validation_status !== "ok" && log.validation_status !== "";
       const pending = log.approval_status === "pending" || log.approval_status === "needs_review";
       let kind: FeedItem["kind"] = "set";
@@ -572,7 +575,7 @@ function LiveLeaderboardPage() {
         status: log.status, approval: log.approval_status, validation: log.validation_status,
         rackNumber: rack?.rack_number ?? null,
         teamName: rack?.team_id ? teamById.get(rack.team_id)?.name ?? null : null,
-        isPR,
+        isPR, delta,
       });
     }
     out.sort((a, b) => b.ts - a.ts);
@@ -1138,7 +1141,7 @@ type FeedItem = {
   load: number | null; reps: number | null; velocity: number | null; e1rm: number | null;
   ts: number; status: string; approval: string; validation: string;
   rackNumber: number | null; teamName: string | null;
-  isPR: boolean;
+  isPR: boolean; delta: number | null;
 };
 
 function CoachAttentionPanel({ feed, rackCards }: { feed: FeedItem[]; rackCards: RackCardProps[] }) {
@@ -1191,17 +1194,58 @@ function CoachAttentionPanel({ feed, rackCards }: { feed: FeedItem[]; rackCards:
 // ---------------------------------------------------------------------------
 
 function PRFeedPanel({ feed, now }: { feed: FeedItem[]; now: number }) {
-  const prs = feed.filter((f) => f.isPR).slice(0, 8);
+  const [lift, setLift] = useState("all");
+  const allPRs = useMemo(() => feed.filter((f) => f.isPR), [feed]);
+  const lifts = useMemo(
+    () => Array.from(new Set(allPRs.map((f) => f.exercise))).sort((a, b) => a.localeCompare(b)),
+    [allPRs],
+  );
+  const filtered = useMemo(
+    () => (lift === "all" ? allPRs : allPRs.filter((f) => f.exercise === lift)),
+    [allPRs, lift],
+  );
+  const avgIncrease = useMemo(() => {
+    const deltas = filtered.map((f) => f.delta).filter((d): d is number => d != null);
+    return deltas.length ? deltas.reduce((s, d) => s + d, 0) / deltas.length : null;
+  }, [filtered]);
+  const prs = filtered.slice(0, 8);
+
   return (
     <Card className="card-elevated">
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Flame className="h-4 w-4 text-[color:var(--status-pr)]" /> Live PRs Today
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Flame className="h-4 w-4 text-[color:var(--status-pr)]" /> Live PRs Today
+          </CardTitle>
+          {lifts.length > 0 && (
+            <Select value={lift} onValueChange={setLift}>
+              <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All lifts</SelectItem>
+                {lifts.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        {allPRs.length > 0 && (
+          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              <span className="mono-number font-semibold text-foreground">{filtered.length}</span> PR{filtered.length === 1 ? "" : "s"}
+            </span>
+            <span>
+              Avg increase{" "}
+              <span className="mono-number font-semibold text-[color:var(--status-pr)]">
+                {avgIncrease == null ? "—" : `+${Math.round(avgIncrease)} lb`}
+              </span>
+            </span>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-1.5 pt-0">
         {prs.length === 0 ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">No PRs yet today. Keep watching.</div>
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            {allPRs.length === 0 ? "No PRs yet today. Keep watching." : "No PRs yet today for this lift."}
+          </div>
         ) : prs.map((p) => {
           const fresh = (now - p.ts) < JUST_LOGGED_MS;
           return (
@@ -1217,6 +1261,7 @@ function PRFeedPanel({ feed, now }: { feed: FeedItem[]; now: number }) {
               <div className="text-right">
                 <div className="mono-number text-sm font-bold text-[color:var(--status-pr)]">
                   {p.e1rm ? `${Math.round(p.e1rm)}lb` : `${p.load}×${p.reps}`}
+                  {p.delta != null && <span className="ml-1 text-[10px] font-semibold">+{Math.round(p.delta)}</span>}
                 </div>
                 <div className="text-[10px] text-muted-foreground">{timeAgo(p.ts, now)}</div>
               </div>
