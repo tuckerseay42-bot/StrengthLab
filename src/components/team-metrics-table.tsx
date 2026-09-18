@@ -37,12 +37,25 @@ import {
 } from "@/lib/dashboard-report-metrics";
 
 const DATE_RANGE_OPTIONS = [
+  { value: "today", label: "Today" },
   { value: "7", label: "Week" },
   { value: "30", label: "Month" },
   { value: "90", label: "3 Months" },
   { value: "180", label: "6 Months" },
   { value: "365", label: "Year" },
 ];
+
+/** Filters a sorted list of ISO dates down to a calendar window ending today. */
+function filterDatesByRange(all: string[], range: string): string[] {
+  if (range === "today") {
+    const today = new Date().toISOString().slice(0, 10);
+    return all.filter((d) => d === today);
+  }
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - Number(range));
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+  return all.filter((d) => d >= cutoffISO);
+}
 
 export function TeamMetricsTable({
   athletes,
@@ -90,6 +103,7 @@ export function TeamMetricsTable({
   const [gender, setGender] = useState("all");
   const [grade, setGrade] = useState("all");
   const [dateRange, setDateRange] = useState("30");
+  const [tableDateRange, setTableDateRange] = useState("30");
 
   const positions = useMemo(
     () =>
@@ -125,29 +139,37 @@ export function TeamMetricsTable({
     });
   }, [pool, metric, tests, repMaxes, lifts, customMetrics]);
 
-  const dates = useMemo(() => {
+  const allDatesLogged = useMemo(() => {
     const set = new Set<string>();
     for (const r of rows) for (const p of r.points) set.add(p.date);
-    const all = Array.from(set).sort();
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - Number(dateRange));
-    const cutoffISO = cutoff.toISOString().slice(0, 10);
-    return all.filter((d) => d >= cutoffISO);
-  }, [rows, dateRange]);
+    return Array.from(set).sort();
+  }, [rows]);
+
+  // The PR/Avg increase strip and the table's own date columns are windowed
+  // independently — a coach might want "PRs this week" next to "the whole
+  // season" of data, or vice versa.
+  const prDates = useMemo(
+    () => filterDatesByRange(allDatesLogged, dateRange),
+    [allDatesLogged, dateRange],
+  );
+  const dates = useMemo(
+    () => filterDatesByRange(allDatesLogged, tableDateRange),
+    [allDatesLogged, tableDateRange],
+  );
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
 
-  // PR count + average improvement, scoped to whatever's currently visible
-  // (the selected metric, filters, and date-column window) — not career-wide.
+  // PR count + average improvement, scoped to the selected metric, filters,
+  // and PR window (prDates) — not career-wide.
   const prStats = useMemo(() => {
-    const dateSet = new Set(dates);
+    const dateSet = new Set(prDates);
     const prPoints = rowsWithData.flatMap((r) => r.points.filter((p) => p.isPR && dateSet.has(p.date)));
     const deltas = prPoints.map((p) => p.delta).filter((d): d is number => d != null);
     return {
       count: prPoints.length,
       avgIncrease: deltas.length ? deltas.reduce((s, d) => s + d, 0) / deltas.length : null,
     };
-  }, [rowsWithData, dates]);
+  }, [rowsWithData, prDates]);
 
   const dateAverages = useMemo(() => {
     const m = new Map<string, number>();
@@ -188,18 +210,23 @@ export function TeamMetricsTable({
                 ))}
               </SelectContent>
             </Select>
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="h-8 w-[130px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DATE_RANGE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                PR window
+              </span>
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="h-8 w-[130px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DATE_RANGE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -223,6 +250,23 @@ export function TeamMetricsTable({
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Table window
+            </span>
+            <Select value={tableDateRange} onValueChange={setTableDateRange}>
+              <SelectTrigger className="h-8 w-[130px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DATE_RANGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Select
             value={teamId}
             onValueChange={(v) => {
