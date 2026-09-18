@@ -36,11 +36,12 @@ import {
   type ReportMetric,
 } from "@/lib/dashboard-report-metrics";
 
-const DATE_COUNT_OPTIONS = [
-  { value: "6", label: "Last 6 dates" },
-  { value: "10", label: "Last 10 dates" },
-  { value: "16", label: "Last 16 dates" },
-  { value: "999", label: "All dates" },
+const DATE_RANGE_OPTIONS = [
+  { value: "7", label: "Week" },
+  { value: "30", label: "Month" },
+  { value: "90", label: "3 Months" },
+  { value: "180", label: "6 Months" },
+  { value: "365", label: "Year" },
 ];
 
 export function TeamMetricsTable({
@@ -88,7 +89,7 @@ export function TeamMetricsTable({
   const [sport, setSport] = useState("all");
   const [gender, setGender] = useState("all");
   const [grade, setGrade] = useState("all");
-  const [dateCount, setDateCount] = useState("10");
+  const [dateRange, setDateRange] = useState("30");
 
   const positions = useMemo(
     () =>
@@ -128,9 +129,11 @@ export function TeamMetricsTable({
     const set = new Set<string>();
     for (const r of rows) for (const p of r.points) set.add(p.date);
     const all = Array.from(set).sort();
-    const n = Number(dateCount);
-    return all.length > n ? all.slice(-n) : all;
-  }, [rows, dateCount]);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - Number(dateRange));
+    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    return all.filter((d) => d >= cutoffISO);
+  }, [rows, dateRange]);
 
   const rowsWithData = rows.filter((r) => r.points.length > 0);
 
@@ -185,12 +188,12 @@ export function TeamMetricsTable({
                 ))}
               </SelectContent>
             </Select>
-            <Select value={dateCount} onValueChange={setDateCount}>
+            <Select value={dateRange} onValueChange={setDateRange}>
               <SelectTrigger className="h-8 w-[130px] text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {DATE_COUNT_OPTIONS.map((o) => (
+                {DATE_RANGE_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
