@@ -81,7 +81,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
     queryFn: async () => {
       const today = todayISO();
       const { data, error } = await supabase.from("rack_session_athletes")
-        .select("id, rack_session_id, assigned_workout_id, active_workout_id, rack_sessions!inner(id, session_date, status, workout_id, rack_number, team_id)")
+        .select("id, rack_session_id, assigned_workout_id, active_workout_id, opened_at, rack_sessions!inner(id, session_date, status, workout_id, rack_number, team_id)")
         .eq("athlete_id", athleteId)
         .eq("rack_sessions.session_date", today)
         .maybeSingle();
@@ -224,6 +224,27 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [athleteId, rackSession, qc]);
+
+  // Heartbeat: mark when this athlete opened today's session, then keep
+  // last_seen_at fresh while the tab stays open, so the coach's Command
+  // Center can tell "opened", "still here", and "opened but never logged"
+  // apart in real time.
+  const assignmentId = assignment?.id ?? null;
+  const alreadyOpened = !!assignment?.opened_at;
+  useEffect(() => {
+    if (!assignmentId) return;
+    const ping = (first: boolean) => {
+      const nowISO = new Date().toISOString();
+      const payload: { last_seen_at: string; opened_at?: string } = { last_seen_at: nowISO };
+      if (first && !alreadyOpened) payload.opened_at = nowISO;
+      void supabase.from("rack_session_athletes").update(payload).eq("id", assignmentId);
+    };
+    ping(true);
+    const onVisible = () => { if (document.visibilityState === "visible") ping(false); };
+    const id = window.setInterval(onVisible, 45_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [assignmentId, alreadyOpened]);
 
   // Recent PRs
   const { data: recentPRs = [] } = useQuery({

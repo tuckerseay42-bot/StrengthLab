@@ -204,6 +204,26 @@ function useTodayRackSetLogs(enabled: boolean) {
   });
 }
 
+type RackSessionAthleteRow = {
+  id: string; rack_session_id: string; athlete_id: string;
+  opened_at: string | null; last_seen_at: string | null;
+};
+function useTodayRackSessionAthletes(enabled: boolean) {
+  return useQuery({
+    queryKey: ["cc_rack_session_athletes", localDateKey()],
+    enabled,
+    refetchInterval: enabled ? 20_000 : false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rack_session_athletes")
+        .select("id, rack_session_id, athlete_id, opened_at, last_seen_at, rack_sessions!inner(session_date)")
+        .eq("rack_sessions.session_date", localDateKey());
+      if (error) throw error;
+      return (data ?? []) as unknown as RackSessionAthleteRow[];
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
@@ -230,6 +250,7 @@ function LiveLeaderboardPage() {
   const { data: customTypes = [] } = useQuery(testTypesQO);
   const { data: rackSessions = [] } = useTodayRackSessions(autoRefresh);
   const { data: setLogs = [] } = useTodayRackSetLogs(autoRefresh);
+  const { data: rackSessionAthletes = [] } = useTodayRackSessionAthletes(autoRefresh);
   const { data: workoutExercises = [] } = useQuery(workoutExercisesQO);
   const { data: workouts = [] } = useQuery(workoutsQO);
   const { data: exercises = [] } = useQuery(exercisesQO);
@@ -252,6 +273,7 @@ function LiveLeaderboardPage() {
       qc.invalidateQueries({ queryKey: ["tests"] });
       qc.invalidateQueries({ queryKey: ["cc_rack_set_logs", localDateKey()] });
       qc.invalidateQueries({ queryKey: ["cc_rack_sessions", localDateKey()] });
+      qc.invalidateQueries({ queryKey: ["cc_rack_session_athletes", localDateKey()] });
       setLastUpdated(Date.now());
     };
     const ch = supabase
@@ -261,6 +283,7 @@ function LiveLeaderboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tests" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "rack_set_logs" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "rack_sessions" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "rack_session_athletes" }, invalidate)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [qc, autoRefresh]);
@@ -647,6 +670,36 @@ function LiveLeaderboardPage() {
     });
   }, [rackSessions, setLogs, feed, workoutExercises, athleteById]);
 
+  // Per-athlete session status: opened/still-active/not-logged, for the
+  // Session Status panel. rack_session_athletes carries the open/heartbeat
+  // timestamps; setLogs (already loaded for the feed) tells us who's
+  // actually logged anything today.
+  type AthleteSessionStatus = {
+    athleteId: string; athlete: Athlete | null;
+    rackNumber: number | null; teamName: string | null;
+    openedAt: number | null; lastSeenAt: number | null; setsLogged: number;
+  };
+  const sessionStatuses = useMemo<AthleteSessionStatus[]>(() => {
+    const sessionById = new Map(rackSessions.map((s) => [s.id, s]));
+    const setsByAthleteSession = new Map<string, number>();
+    for (const l of setLogs) {
+      const key = `${l.rack_session_id}:${l.athlete_id}`;
+      setsByAthleteSession.set(key, (setsByAthleteSession.get(key) ?? 0) + 1);
+    }
+    return rackSessionAthletes.map((row) => {
+      const session = sessionById.get(row.rack_session_id);
+      return {
+        athleteId: row.athlete_id,
+        athlete: athleteById.get(row.athlete_id) ?? null,
+        rackNumber: session?.rack_number ?? null,
+        teamName: session?.team_id ? teamById.get(session.team_id)?.name ?? null : null,
+        openedAt: row.opened_at ? new Date(row.opened_at).getTime() : null,
+        lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).getTime() : null,
+        setsLogged: setsByAthleteSession.get(`${row.rack_session_id}:${row.athlete_id}`) ?? 0,
+      };
+    });
+  }, [rackSessionAthletes, rackSessions, setLogs, athleteById, teamById]);
+
   // KPI metrics for the header strip.
   const todayKey = localDateKey();
   const activeAthleteIds = new Set<string>();
@@ -704,6 +757,7 @@ function LiveLeaderboardPage() {
               <ActivityFeedPanel feed={feed} now={now} />
             </div>
             <div className="space-y-5">
+              <SessionStatusPanel statuses={sessionStatuses} now={now} />
               <CoachAttentionPanel feed={feed} rackCards={rackCards} />
             </div>
           </div>
@@ -1143,6 +1197,96 @@ type FeedItem = {
   rackNumber: number | null; teamName: string | null;
   isPR: boolean; delta: number | null;
 };
+
+// ---------------------------------------------------------------------------
+// Session Status — who has opened today's session, who's still active, and
+// who hasn't logged anything (lit up red).
+// ---------------------------------------------------------------------------
+
+const SESSION_LIVE_MS = 90_000; // 2x the athlete-side heartbeat interval
+const SESSION_JUST_OPENED_MS = 30 * 60_000;
+
+function SessionStatusPanel({ statuses, now }: {
+  statuses: { athleteId: string; athlete: Athlete | null; rackNumber: number | null; teamName: string | null; openedAt: number | null; lastSeenAt: number | null; setsLogged: number }[];
+  now: number;
+}) {
+  const rows = useMemo(() => {
+    return statuses
+      .map((s) => ({
+        ...s,
+        liveNow: s.lastSeenAt != null && (now - s.lastSeenAt) < SESSION_LIVE_MS,
+        justOpened: s.openedAt != null && (now - s.openedAt) < SESSION_JUST_OPENED_MS,
+        notLogged: s.setsLogged === 0,
+      }))
+      .sort((a, b) => {
+        if (a.notLogged !== b.notLogged) return a.notLogged ? -1 : 1;
+        if (a.liveNow !== b.liveNow) return a.liveNow ? -1 : 1;
+        const an = a.athlete ? athleteDisplayName(a.athlete) : "";
+        const bn = b.athlete ? athleteDisplayName(b.athlete) : "";
+        return an.localeCompare(bn);
+      });
+  }, [statuses, now]);
+
+  const notLoggedCount = rows.filter((r) => r.notLogged).length;
+  const liveCount = rows.filter((r) => r.liveNow).length;
+  const openedRecentCount = rows.filter((r) => r.justOpened).length;
+
+  return (
+    <Card className="card-elevated">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Timer className="h-4 w-4 text-[color:var(--status-info)]" /> Session Status
+        </CardTitle>
+        {rows.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              <span className="mono-number font-semibold text-[color:var(--status-below)]">{notLoggedCount}</span> not logged
+            </span>
+            <span>
+              <span className="mono-number font-semibold text-[color:var(--status-pr)]">{liveCount}</span> active now
+            </span>
+            <span>
+              <span className="mono-number font-semibold text-foreground">{openedRecentCount}</span> opened &lt;30m
+            </span>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="max-h-72 space-y-1 overflow-y-auto pt-0">
+        {rows.length === 0 ? (
+          <div className="py-6 text-center text-xs text-muted-foreground">No athletes assigned to a rack session today.</div>
+        ) : rows.map((r) => {
+          const name = r.athlete ? athleteDisplayName(r.athlete) : "Unknown";
+          return (
+            <div
+              key={r.athleteId}
+              className={cn(
+                "flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm",
+                r.notLogged ? "border-[color:var(--status-below)]/40 bg-[color:var(--status-below)]/10" : "border-transparent",
+              )}
+            >
+              <Avatar athlete={r.athlete} name={name} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{name}</div>
+                <div className="truncate text-[10px] text-muted-foreground">
+                  {r.rackNumber ? `Rack ${r.rackNumber}` : "—"}
+                  {r.openedAt == null ? " · Not opened" : ` · Opened ${timeAgo(r.openedAt, now)}`}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                {r.liveNow && <Badge tone="pr">Live</Badge>}
+                {r.notLogged ? (
+                  <div className="mt-0.5 text-[10px] font-semibold text-[color:var(--status-below)]">No sets logged</div>
+                ) : (
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">{r.setsLogged} set{r.setsLogged === 1 ? "" : "s"}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
 
 function CoachAttentionPanel({ feed, rackCards }: { feed: FeedItem[]; rackCards: RackCardProps[] }) {
   const flagged = feed.filter((f) => f.kind === "flag");

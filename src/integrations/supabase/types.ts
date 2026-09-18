@@ -1573,7 +1573,9 @@ export type Database = {
           athlete_id: string
           created_at: string
           id: string
+          last_seen_at: string | null
           notes: string | null
+          opened_at: string | null
           override_reason: string
           quadrant: number
           rack_session_id: string
@@ -1586,7 +1588,9 @@ export type Database = {
           athlete_id: string
           created_at?: string
           id?: string
+          last_seen_at?: string | null
           notes?: string | null
+          opened_at?: string | null
           override_reason?: string
           quadrant: number
           rack_session_id: string
@@ -1599,7 +1603,9 @@ export type Database = {
           athlete_id?: string
           created_at?: string
           id?: string
+          last_seen_at?: string | null
           notes?: string | null
+          opened_at?: string | null
           override_reason?: string
           quadrant?: number
           rack_session_id?: string
