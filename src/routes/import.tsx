@@ -16,12 +16,16 @@ import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toast } from "sonner";
 import { Upload, Download, FileText } from "lucide-react";
 
-type EntityKind = "athletes" | "tests" | "lifts" | "attendance";
+type EntityKind = "athletes" | "tests" | "lifts" | "attendance" | "class_period";
 
 const TEMPLATES: Record<EntityKind, { headers: string[]; sample: string[] }> = {
   athletes: {
     headers: ["first_name", "last_name", "grade", "sport", "position", "graduation_year", "bodyweight", "height_in", "athlete_email", "parent_email", "student_id"],
     sample: ["Jane", "Doe", "11", "Track & Field", "Sprinter", "2027", "145", "66", "jane@example.com", "", ""],
+  },
+  class_period: {
+    headers: ["athlete_name", "student_id", "class_period"],
+    sample: ["Jane Doe", "", "3rd Period"],
   },
   tests: {
     headers: ["athlete_name", "test_type", "value", "test_date", "notes"],
@@ -80,7 +84,12 @@ function toRecords(text: string): { headers: string[]; records: Record<string, s
   return { headers, records };
 }
 
-function findAthlete(athletes: Athlete[], name: string): Athlete | undefined {
+function findAthlete(athletes: Athlete[], name: string, studentId?: string): Athlete | undefined {
+  const sid = studentId?.trim();
+  if (sid) {
+    const bySid = athletes.find((a) => (a.student_id ?? "").trim() === sid);
+    if (bySid) return bySid;
+  }
   const key = name.trim().toLowerCase();
   if (!key) return undefined;
   return athletes.find((a) => {
@@ -158,6 +167,28 @@ function ImportPage() {
           else inserted = count ?? rows.length;
         }
         skipped = parsed.records.length - rows.length;
+      }
+
+      else if (kind === "class_period") {
+        const updates: { id: string; class_period: string | null }[] = [];
+        parsed.records.forEach((r, idx) => {
+          const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "", r.student_id);
+          if (!athlete) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name || r.student_id || "?"}" not found in your roster — not creating a new athlete`);
+            skipped++;
+            return;
+          }
+          updates.push({ id: athlete.id, class_period: r.class_period?.trim() || null });
+        });
+        if (updates.length) {
+          const results = await Promise.all(
+            updates.map((u) => supabase.from("athletes").update({ class_period: u.class_period } as never).eq("id", u.id)),
+          );
+          results.forEach((res, i) => {
+            if (res.error) errors.push(`${updates[i].id}: ${res.error.message}`);
+          });
+          inserted = updates.length - results.filter((r) => r.error).length;
+        }
       }
 
       else if (kind === "tests") {
@@ -261,6 +292,7 @@ function ImportPage() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="athletes">Athletes (roster)</SelectItem>
+                <SelectItem value="class_period">Class period (update existing)</SelectItem>
                 <SelectItem value="tests">Tests</SelectItem>
                 <SelectItem value="lifts">Lifts</SelectItem>
                 <SelectItem value="attendance">Attendance</SelectItem>
@@ -269,6 +301,11 @@ function ImportPage() {
           </div>
           <div className="text-sm text-muted-foreground">
             <div className="mb-2"><span className="font-medium text-foreground">Expected columns:</span> {TEMPLATES[kind].headers.join(", ")}</div>
+            {kind === "class_period" && (
+              <p className="mb-2 text-xs">
+                Matches each row to an athlete already in your roster — by <code>student_id</code> when given, otherwise by full name — and sets their class period. Rows that don't match an existing athlete are skipped; nothing new is created.
+              </p>
+            )}
             <Button variant="outline" size="sm" onClick={() => downloadTemplate(kind)}>
               <Download className="mr-2 h-4 w-4" /> Download template
             </Button>
@@ -323,7 +360,7 @@ function ImportPage() {
           {result && (
             <div className="space-y-2 text-sm">
               <div>
-                <span className="font-medium">{result.inserted}</span> inserted
+                <span className="font-medium">{result.inserted}</span> {kind === "class_period" ? "updated" : "inserted"}
                 {result.skipped > 0 && <> · <span className="font-medium">{result.skipped}</span> skipped</>}
               </div>
               {result.errors.length > 0 && (
