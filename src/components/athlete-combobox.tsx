@@ -11,11 +11,13 @@ export function AthleteCombobox({
   value,
   onChange,
   placeholder = "Select athlete",
+  triggerClassName,
 }: {
   athletes: Athlete[];
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [sport, setSport] = useState<string>("all");
@@ -47,7 +49,7 @@ export function AthleteCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn("w-full justify-between font-normal", triggerClassName)}
         >
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected ? athleteDisplayName(selected) : placeholder}

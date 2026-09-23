@@ -162,7 +162,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const kioskMode = pathname.startsWith("/training-view/");
-  const displayMode = pathname.startsWith("/overhead-display");
+  const displayMode = pathname.startsWith("/overhead-display") || pathname.startsWith("/tests/kiosk");
   const athleteMode = kioskMode || pathname.startsWith("/athlete-join") || pathname === "/athlete" || pathname.startsWith("/athlete/");
   const isPublic = isPublicPath(pathname);
 

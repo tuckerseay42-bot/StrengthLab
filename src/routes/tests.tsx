@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { athletesQO, testsQO, testAssignmentsQO, teamsQO, testTypesQO, customMetricsQO, athleteTeamsQO, type CustomMetric, type CustomTestType } from "@/lib/queries";
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Download, Trash2, ArrowDown, ArrowUp, CalendarPlus, CalendarClock, Settings2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Download, Trash2, ArrowDown, ArrowUp, CalendarPlus, CalendarClock, Settings2, ChevronDown, ChevronUp, Monitor } from "lucide-react";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta, downloadCSV, percentImprovement, bwCoefficient, sprintDistanceIn, mphToSeconds, secondsToMph } from "@/lib/domain";
 import { toast } from "sonner";
 import { AthleteCombobox } from "@/components/athlete-combobox";
@@ -248,6 +248,9 @@ function TestsPage() {
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!rows.length}><Download className="h-4 w-4" /> CSV</Button>
           <Button variant="outline" size="sm" onClick={() => setManageOpen(true)}><Settings2 className="h-4 w-4" /> Manage tests</Button>
           <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)} disabled={!athletes.length}><CalendarPlus className="h-4 w-4" /> Schedule</Button>
+          <Button variant="outline" size="sm" asChild disabled={!athletes.length}>
+            <Link to="/tests/kiosk"><Monitor className="h-4 w-4" /> Kiosk</Link>
+          </Button>
           <Button size="sm" onClick={() => setOpen(true)} disabled={!athletes.length}><Plus className="h-4 w-4" /> Log test</Button>
         </div>
       </div>

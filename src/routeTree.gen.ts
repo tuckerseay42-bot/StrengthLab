@@ -59,6 +59,7 @@ import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsGpsReportRouteImport } from './routes/reports.gps-report'
 import { Route as ReportsKpiReportRouteImport } from './routes/reports.kpi-report'
 import { Route as ReportsSpeedPotentialRouteImport } from './routes/reports.speed-potential'
+import { Route as TestsKioskRouteImport } from './routes/tests.kiosk'
 import { Route as TrainingViewAttendanceRouteImport } from './routes/training-view.attendance'
 import { Route as TrainingViewCheckInRouteImport } from './routes/training-view.check-in'
 import { Route as TrainingViewSessionRouteImport } from './routes/training-view.session'
@@ -324,6 +325,11 @@ const ReportsSpeedPotentialRoute = ReportsSpeedPotentialRouteImport.update({
   path: '/speed-potential',
   getParentRoute: () => ReportsRoute,
 } as any)
+const TestsKioskRoute = TestsKioskRouteImport.update({
+  id: '/kiosk',
+  path: '/kiosk',
+  getParentRoute: () => TestsRoute,
+} as any)
 const TrainingViewAttendanceRoute = TrainingViewAttendanceRouteImport.update({
   id: '/training-view/attendance',
   path: '/training-view/attendance',
@@ -433,7 +439,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRoute
+  '/tests': typeof TestsRouteWithChildren
   '/training': typeof TrainingRouteWithChildren
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
@@ -446,6 +452,7 @@ export interface FileRoutesByFullPath {
   '/reports/gps-report': typeof ReportsGpsReportRoute
   '/reports/kpi-report': typeof ReportsKpiReportRoute
   '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
+  '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
   '/training-view/session': typeof TrainingViewSessionRoute
@@ -498,7 +505,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRoute
+  '/tests': typeof TestsRouteWithChildren
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
@@ -510,6 +517,7 @@ export interface FileRoutesByTo {
   '/reports/gps-report': typeof ReportsGpsReportRoute
   '/reports/kpi-report': typeof ReportsKpiReportRoute
   '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
+  '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
   '/training-view/session': typeof TrainingViewSessionRoute
@@ -564,7 +572,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRoute
+  '/tests': typeof TestsRouteWithChildren
   '/training': typeof TrainingRouteWithChildren
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
@@ -577,6 +585,7 @@ export interface FileRoutesById {
   '/reports/gps-report': typeof ReportsGpsReportRoute
   '/reports/kpi-report': typeof ReportsKpiReportRoute
   '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
+  '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
   '/training-view/session': typeof TrainingViewSessionRoute
@@ -645,6 +654,7 @@ export interface FileRouteTypes {
     | '/reports/gps-report'
     | '/reports/kpi-report'
     | '/reports/speed-potential'
+    | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
     | '/training-view/session'
@@ -709,6 +719,7 @@ export interface FileRouteTypes {
     | '/reports/gps-report'
     | '/reports/kpi-report'
     | '/reports/speed-potential'
+    | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
     | '/training-view/session'
@@ -775,6 +786,7 @@ export interface FileRouteTypes {
     | '/reports/gps-report'
     | '/reports/kpi-report'
     | '/reports/speed-potential'
+    | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
     | '/training-view/session'
@@ -829,7 +841,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TeamsRoute: typeof TeamsRoute
-  TestsRoute: typeof TestsRoute
+  TestsRoute: typeof TestsRouteWithChildren
   TrainingRoute: typeof TrainingRouteWithChildren
   WorkoutsRoute: typeof WorkoutsRouteWithChildren
   AthleteJoinTokenRoute: typeof AthleteJoinTokenRoute
@@ -1196,6 +1208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsSpeedPotentialRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/tests/kiosk': {
+      id: '/tests/kiosk'
+      path: '/kiosk'
+      fullPath: '/tests/kiosk'
+      preLoaderRoute: typeof TestsKioskRouteImport
+      parentRoute: typeof TestsRoute
+    }
     '/training-view/attendance': {
       id: '/training-view/attendance'
       path: '/training-view/attendance'
@@ -1349,6 +1368,16 @@ const ReportsRouteChildren: ReportsRouteChildren = {
 const ReportsRouteWithChildren =
   ReportsRoute._addFileChildren(ReportsRouteChildren)
 
+interface TestsRouteChildren {
+  TestsKioskRoute: typeof TestsKioskRoute
+}
+
+const TestsRouteChildren: TestsRouteChildren = {
+  TestsKioskRoute: TestsKioskRoute,
+}
+
+const TestsRouteWithChildren = TestsRoute._addFileChildren(TestsRouteChildren)
+
 interface TrainingRouteChildren {
   TrainingAnalyticsRoute: typeof TrainingAnalyticsRoute
   TrainingAssignedRoute: typeof TrainingAssignedRoute
@@ -1422,7 +1451,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TeamsRoute: TeamsRoute,
-  TestsRoute: TestsRoute,
+  TestsRoute: TestsRouteWithChildren,
   TrainingRoute: TrainingRouteWithChildren,
   WorkoutsRoute: WorkoutsRouteWithChildren,
   AthleteJoinTokenRoute: AthleteJoinTokenRoute,
