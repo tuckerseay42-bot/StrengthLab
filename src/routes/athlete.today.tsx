@@ -6,10 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Dumbbell, Trophy, Timer, CheckCircle2, Flame, Calendar, ArrowLeft, Sparkles,
+  Dumbbell, Trophy, Timer, CheckCircle2, Flame, Calendar, ArrowLeft, Sparkles, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/db-errors";
 import { suggestLoad } from "@/lib/prescription";
 import { DEFAULT_1RM_FORMULA, isOneRmFormula, type OneRmFormula } from "@/lib/one-rm";
@@ -68,6 +70,49 @@ function AthleteToday() {
   }
 
   return <TodayView athleteId={athlete.id} athleteName={athlete.preferred_name || athlete.first_name || athlete.name} programId={athlete.program_id} organizationId={athlete.organization_id} />;
+}
+
+/* ---- Set expansion (pure — reused for every exercise) ---- */
+type Prescription = { id: string; workout_exercise_id: string; position: number; sets: number | null; reps: string | null; load: number | null; percent: number | null; percent_of_exercise_id: string | null; rm_reps: number | null };
+type Log = { id: string; workout_exercise_id: string; set_position: number; load: number | null; reps: number | null; avg_velocity: number | null; rpe: number | null; status: string; completed_at: string | null; estimated_1rm: number | null };
+type ExerciseRow = { id: string; exercise_id: string | null; exercise_name: string; sets: number | null; reps: string | null; load: number | null; percent: number | null; percent_of_exercise_id: string | null; tempo: string | null; notes: string | null; target_velocity_min: number | null; target_velocity_max: number | null };
+type PlannedSet = { position: number; prescribedLoad: number | null; prescribedReps: string | null; percent: number | null };
+
+function buildSetList(
+  exercise: ExerciseRow, prescriptions: Prescription[], athleteId: string,
+  repMaxes: RepMax[], referenceExercises: { id: string; name: string }[], formula: OneRmFormula,
+): PlannedSet[] {
+  if (prescriptions.length > 0) {
+    const sorted = [...prescriptions].sort((a, b) => a.position - b.position);
+    const expanded: PlannedSet[] = [];
+    let pos = 0;
+    for (const p of sorted) {
+      const count = Math.max(1, Number(p.sets ?? 1) || 1);
+      for (let k = 0; k < count; k++) {
+        pos += 1;
+        expanded.push({
+          position: pos,
+          prescribedLoad: suggestLoad({
+            athleteId,
+            exercise: exercise as WorkoutExercise,
+            setRow: p as WorkoutSet,
+            repMaxes,
+            referenceExerciseName: p.percent_of_exercise_id
+              ? referenceExercises.find((e) => e.id === p.percent_of_exercise_id)?.name ?? null
+              : null,
+            formula,
+          })?.load ?? null,
+          prescribedReps: p.reps ?? exercise.reps,
+          percent: p.percent,
+        });
+      }
+    }
+    return expanded;
+  }
+  const n = exercise.sets ?? 1;
+  return Array.from({ length: n }, (_, i) => ({
+    position: i + 1, prescribedLoad: exercise.load, prescribedReps: exercise.reps, percent: exercise.percent,
+  }));
 }
 
 export function TodayView({ athleteId, athleteName, programId, organizationId }: {
@@ -275,16 +320,37 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
     },
   });
 
-  // Progress
-  const totalSets = useMemo(() => {
-    if (setPrescriptions.length > 0) {
-      return setPrescriptions.reduce((n, p) => n + Math.max(1, Number(p.sets ?? 1) || 1), 0);
+  // One row per exercise: its planned sets, its logs, and whether it's done —
+  // the shared basis for the progress bar, the "up now" card, and the lineup.
+  const perExercise = useMemo(() => {
+    return exercises.map((ex) => {
+      const prescriptions = setPrescriptions.filter((s) => s.workout_exercise_id === ex.id);
+      const exLogs = logs.filter((l) => l.workout_exercise_id === ex.id);
+      const setList = buildSetList(ex, prescriptions, athleteId, repMaxData, referenceExercises, formula);
+      const completedCount = exLogs.length;
+      return { exercise: ex, setList, logs: exLogs, completedCount, totalCount: setList.length, isDone: setList.length > 0 && completedCount >= setList.length };
+    });
+  }, [exercises, setPrescriptions, logs, athleteId, repMaxData, referenceExercises, formula]);
+
+  // Which exercise is "up now" — the first one with sets left, unless the
+  // athlete tapped ahead in the lineup to look at something else.
+  const [manualFocusId, setManualFocusId] = useState<string | null>(null);
+  const autoFocus = perExercise.find((pe) => !pe.isDone) ?? perExercise.at(-1) ?? null;
+  const focused = (manualFocusId ? perExercise.find((pe) => pe.exercise.id === manualFocusId) : null) ?? autoFocus;
+  useEffect(() => {
+    // Release a manual look-ahead once that exercise is finished, so focus
+    // returns to whatever's actually next.
+    if (manualFocusId && perExercise.find((pe) => pe.exercise.id === manualFocusId)?.isDone) {
+      setManualFocusId(null);
     }
-    return exercises.reduce((n, e) => n + (e.sets ?? 1), 0);
-  }, [exercises, setPrescriptions]);
-  const completedSets = logs.filter((l) => l.status === "completed").length;
+  }, [perExercise, manualFocusId]);
+
+  // Progress
+  const totalSets = perExercise.reduce((n, pe) => n + pe.totalCount, 0);
+  const completedSets = perExercise.reduce((n, pe) => n + pe.completedCount, 0);
   const pct = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
   const anyPR = logs.some((l) => l.estimated_1rm && l.completed_at && new Date(l.completed_at).toDateString() === new Date().toDateString());
+  const allDone = perExercise.length > 0 && perExercise.every((pe) => pe.isDone);
 
   return (
     <div className="space-y-4">
@@ -318,82 +384,100 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        {/* Main session */}
-        <div className="space-y-3">
-          {!workoutId ? (
-            <Card><CardContent className="space-y-2 p-6 text-center">
-              <div className="text-sm text-muted-foreground">
-                {hiddenUnprogrammed
-                  ? "Today's workout hasn't been added to a program yet, so it isn't available here. Ask your coach."
-                  : "No session assigned for today."}
-              </div>
-              {upcoming[0] && (
-                <div className="text-xs">
-                  Next up: <b>{upcoming[0].name}</b> on {upcoming[0].scheduled_date}
+      {!workoutId ? (
+        <Card><CardContent className="space-y-2 p-6 text-center">
+          <div className="text-sm text-muted-foreground">
+            {hiddenUnprogrammed
+              ? "Today's workout hasn't been added to a program yet, so it isn't available here. Ask your coach."
+              : "No session assigned for today."}
+          </div>
+          {upcoming[0] && (
+            <div className="text-xs">
+              Next up: <b>{upcoming[0].name}</b> on {upcoming[0].scheduled_date}
+            </div>
+          )}
+        </CardContent></Card>
+      ) : (
+        <>
+          {rackSession ? (
+            <Card>
+              <CardContent className="space-y-2 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">{completedSets} of {totalSets || "?"} sets · {pct}%</div>
                 </div>
-              )}
-            </CardContent></Card>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <RestTimer lastCompleted={logs.filter((l) => l.status === "completed").at(-1)?.completed_at ?? null} />
+              </CardContent>
+            </Card>
           ) : (
-            <>
-              {rackSession ? (
-                <Card>
-                  <CardContent className="space-y-2 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">Session progress</div>
-                      <div className="text-xs text-muted-foreground">{completedSets} of {totalSets || "?"} sets · {pct}%</div>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                    <RestTimer lastCompleted={logs.filter((l) => l.status === "completed").at(-1)?.completed_at ?? null} />
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-dashed">
-                  <CardContent className="p-4 text-sm text-muted-foreground">
-                    Today's workout is scheduled for you. Logging turns on once your coach opens the rack session in Training View.
-                  </CardContent>
-                </Card>
-              )}
-
-              {exercises.length === 0 ? (
-                <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">
-                  No exercises loaded yet. Ask your coach if this looks wrong.
-                </CardContent></Card>
-
-              ) : exercises.map((ex) => (
-            <ExerciseBlock
-                  key={ex.id}
-                  athleteId={athleteId}
-                  rackSessionId={rackSession?.id ?? null}
-                  exercise={ex}
-                  prescriptions={setPrescriptions.filter((s) => s.workout_exercise_id === ex.id)}
-                  logs={logs.filter((l) => l.workout_exercise_id === ex.id)}
-              repMaxes={repMaxData}
-              referenceExercises={referenceExercises}
-              formula={formula}
-                  onLogged={() => qc.invalidateQueries({ queryKey: ["today-logs", athleteId, rackSession?.id] })}
-                />
-              ))}
-            </>
+            <Card className="border-dashed">
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                Today's workout is scheduled for you. Logging turns on once your coach opens the rack session in Training View.
+              </CardContent>
+            </Card>
           )}
 
-        </div>
+          {perExercise.length === 0 ? (
+            <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">
+              No exercises loaded yet. Ask your coach if this looks wrong.
+            </CardContent></Card>
+          ) : allDone ? (
+            <Card className="border-emerald-500/40 bg-emerald-500/5">
+              <CardContent className="flex items-center gap-3 p-5">
+                <CheckCircle2 className="h-8 w-8 shrink-0 text-emerald-500" />
+                <div>
+                  <div className="text-lg font-semibold">Workout complete — nice work!</div>
+                  <div className="text-xs text-muted-foreground">Every set for today is logged.</div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : focused ? (
+            <FocusedExerciseCard
+              athleteId={athleteId}
+              rackSessionId={rackSession?.id ?? null}
+              pe={focused}
+              onLogged={() => qc.invalidateQueries({ queryKey: ["today-logs", athleteId, rackSession?.id] })}
+            />
+          ) : null}
 
-        {/* Right rail */}
-        <div className="space-y-3">
+          {perExercise.length > 1 && (
+            <Card>
+              <CardContent className="space-y-1.5 p-3">
+                <div className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Today's lineup
+                </div>
+                {perExercise.map((pe) => (
+                  <LineupRow
+                    key={pe.exercise.id}
+                    pe={pe}
+                    isFocused={focused?.exercise.id === pe.exercise.id}
+                    onSelect={() => setManualFocusId(pe.exercise.id)}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Secondary info — kept small so it never competes with the current set. */}
+      {(recentPRs.length > 0 || upcoming.length > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2">
           <Card>
-            <CardContent className="space-y-2 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold"><Trophy className="h-4 w-4 text-amber-500" /> Recent PRs</div>
+            <CardContent className="space-y-1.5 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Trophy className="h-3.5 w-3.5 text-amber-500" /> Recent PRs
+              </div>
               {recentPRs.length === 0 ? (
-                <div className="rounded border border-dashed p-3 text-center text-xs text-muted-foreground">No PRs yet — go get one.</div>
+                <div className="py-1 text-xs text-muted-foreground">No PRs yet — go get one.</div>
               ) : (
-                <ul className="space-y-1">
-                  {recentPRs.map((r) => (
-                    <li key={r.id} className="flex items-center justify-between text-sm">
+                <ul className="space-y-0.5">
+                  {recentPRs.slice(0, 4).map((r) => (
+                    <li key={r.id} className="flex items-center justify-between text-xs">
                       <span className="min-w-0 truncate">{r.exercise_name}</span>
-                      <span className="text-xs text-muted-foreground">{r.load}×{r.reps}</span>
+                      <span className="text-muted-foreground">{r.load}×{r.reps}</span>
                     </li>
                   ))}
                 </ul>
@@ -402,22 +486,19 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
           </Card>
 
           <Card>
-            <CardContent className="space-y-2 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold"><Calendar className="h-4 w-4" /> Next 7 days</div>
+            <CardContent className="space-y-1.5 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" /> Coming up this week
+              </div>
               {upcoming.length === 0 ? (
-                <div className="rounded border border-dashed p-3 text-center text-xs text-muted-foreground">
-                  {programId ? "Nothing scheduled." : "No program assigned."}
-                </div>
+                <div className="py-1 text-xs text-muted-foreground">Nothing scheduled.</div>
               ) : (
-                <ul className="space-y-1">
-                  {upcoming.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between rounded border px-2 py-1 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{s.name}</div>
-                        <div className="text-[10px] text-muted-foreground">W{s.week}·D{s.day}</div>
-                      </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {new Date(s.scheduled_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                <ul className="space-y-0.5">
+                  {upcoming.slice(0, 4).map((s) => (
+                    <li key={s.id} className="flex items-center justify-between text-xs">
+                      <span className="min-w-0 truncate">{s.name}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {new Date(s.scheduled_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" })}
                       </span>
                     </li>
                   ))}
@@ -426,7 +507,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
             </CardContent>
           </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -451,112 +532,131 @@ function RestTimer({ lastCompleted }: { lastCompleted: string | null }) {
   );
 }
 
-/* ---- Exercise block ---- */
-type Prescription = { id: string; workout_exercise_id: string; position: number; sets: number | null; reps: string | null; load: number | null; percent: number | null; percent_of_exercise_id: string | null; rm_reps: number | null };
-type Log = { id: string; workout_exercise_id: string; set_position: number; load: number | null; reps: number | null; avg_velocity: number | null; rpe: number | null; status: string; completed_at: string | null; estimated_1rm: number | null };
+/* ---- Today's lineup row — one line per exercise, tap to jump ---- */
+type PerExercise = { exercise: ExerciseRow; setList: PlannedSet[]; logs: Log[]; completedCount: number; totalCount: number; isDone: boolean };
 
-function ExerciseBlock({ athleteId, rackSessionId, exercise, prescriptions, logs, repMaxes, referenceExercises, formula, onLogged }: {
-  athleteId: string; rackSessionId: string | null;
-  exercise: { id: string; exercise_id: string | null; exercise_name: string; sets: number | null; reps: string | null; load: number | null; percent: number | null; percent_of_exercise_id: string | null; tempo: string | null; notes: string | null; target_velocity_min: number | null; target_velocity_max: number | null };
-  prescriptions: Prescription[]; logs: Log[]; repMaxes: RepMax[]; referenceExercises: { id: string; name: string }[]; formula: OneRmFormula; onLogged: () => void;
-}) {
-  const setList = useMemo(() => {
-    if (prescriptions.length > 0) {
-      const sorted = [...prescriptions].sort((a, b) => a.position - b.position);
-      // Each workout_sets row is a *scheme* (e.g. "3 sets of 4"). Expand each scheme into individual sets.
-      const expanded: Array<{ position: number; prescribedLoad: number | null; prescribedReps: string | null; percent: number | null }> = [];
-      let pos = 0;
-      for (const p of sorted) {
-        const count = Math.max(1, Number(p.sets ?? 1) || 1);
-        for (let k = 0; k < count; k++) {
-          pos += 1;
-          expanded.push({
-            position: pos,
-            prescribedLoad: suggestLoad({
-              athleteId,
-              exercise: exercise as WorkoutExercise,
-              setRow: p as WorkoutSet,
-              repMaxes,
-              referenceExerciseName: p.percent_of_exercise_id
-                ? referenceExercises.find((e) => e.id === p.percent_of_exercise_id)?.name ?? null
-                : null,
-              formula,
-            })?.load ?? null,
-            prescribedReps: p.reps ?? exercise.reps,
-            percent: p.percent,
-          });
-        }
-      }
-      return expanded;
-    }
-    const n = exercise.sets ?? 1;
-    return Array.from({ length: n }, (_, i) => ({
-      position: i + 1, prescribedLoad: exercise.load, prescribedReps: exercise.reps, percent: exercise.percent,
-    }));
-  }, [prescriptions, exercise, athleteId, repMaxes, referenceExercises, formula]);
-
-  const completed = logs.length;
+function LineupRow({ pe, isFocused, onSelect }: { pe: PerExercise; isFocused: boolean; onSelect: () => void }) {
+  const { exercise, completedCount, totalCount, isDone } = pe;
   return (
-    <Card>
-      <CardContent className="space-y-2 p-3">
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors",
+        isFocused ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/60",
+        isDone && !isFocused && "opacity-60",
+      )}
+    >
+      {isDone ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+      ) : isFocused ? (
+        <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+          <span className="absolute h-4 w-4 animate-ping rounded-full bg-primary/40" />
+          <span className="h-2 w-2 rounded-full bg-primary" />
+        </span>
+      ) : (
+        <span className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/30" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className={cn("truncate text-sm", isFocused ? "font-semibold" : "font-medium")}>{exercise.exercise_name}</div>
+        <div className="text-[11px] text-muted-foreground">{totalCount} × {exercise.reps || "?"}</div>
+      </div>
+      <span className="shrink-0 text-xs text-muted-foreground">{completedCount}/{totalCount}</span>
+    </button>
+  );
+}
+
+/* ---- Up-now card: the one exercise the athlete should be doing ---- */
+function FocusedExerciseCard({ athleteId, rackSessionId, pe, onLogged }: {
+  athleteId: string; rackSessionId: string | null; pe: PerExercise; onLogged: () => void;
+}) {
+  const { exercise, setList, logs } = pe;
+  const firstOpen = setList.find((s) => !logs.some((l) => l.set_position === s.position))?.position ?? setList.at(-1)?.position ?? 1;
+  const [activePos, setActivePos] = useState(firstOpen);
+  useEffect(() => { setActivePos(firstOpen); }, [exercise.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const active = setList.find((s) => s.position === activePos) ?? setList[0];
+  const activeLog = logs.find((l) => l.set_position === activePos);
+
+  return (
+    <Card className="overflow-hidden border-primary/30">
+      <CardContent className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="font-semibold">{exercise.exercise_name}</div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">Up now</div>
+            <div className="truncate text-xl font-bold sm:text-2xl">{exercise.exercise_name}</div>
             <div className="text-xs text-muted-foreground">
               {setList.length} × {exercise.reps || "?"} {exercise.tempo && `· tempo ${exercise.tempo}`}
               {exercise.target_velocity_min && ` · target ${exercise.target_velocity_min}${exercise.target_velocity_max ? `–${exercise.target_velocity_max}` : ""} m/s`}
             </div>
             {exercise.notes && <div className="mt-1 text-xs text-muted-foreground">{exercise.notes}</div>}
           </div>
-          <Badge variant={completed >= setList.length ? "default" : "secondary"}>{completed}/{setList.length}</Badge>
+          <Badge variant={pe.completedCount >= setList.length ? "default" : "secondary"} className="shrink-0">
+            {pe.completedCount}/{setList.length}
+          </Badge>
         </div>
-        <div className="space-y-1">
+
+        {/* Set pills — tap any set to bring it up below */}
+        <div className="flex flex-wrap gap-1.5">
           {setList.map((s) => {
-            const log = logs.find((l) => l.set_position === s.position);
+            const done = logs.some((l) => l.set_position === s.position);
+            const isActive = s.position === activePos;
             return (
-              <SetRow
+              <button
                 key={s.position}
-                athleteId={athleteId}
-                rackSessionId={rackSessionId}
-                exerciseId={exercise.id}
-                position={s.position}
-                prescribedLoad={s.prescribedLoad}
-                prescribedReps={s.prescribedReps}
-                existing={log}
-                targetVMin={exercise.target_velocity_min}
-                targetVMax={exercise.target_velocity_max}
-                onLogged={onLogged}
-              />
+                type="button"
+                onClick={() => setActivePos(s.position)}
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : done
+                      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600"
+                      : "border-muted-foreground/25 text-muted-foreground",
+                )}
+              >
+                {s.position}
+              </button>
             );
           })}
         </div>
+
+        {active && (
+          <SetEntry
+            key={active.position}
+            athleteId={athleteId}
+            rackSessionId={rackSessionId}
+            exerciseId={exercise.id}
+            position={active.position}
+            prescribedLoad={active.prescribedLoad}
+            prescribedReps={active.prescribedReps}
+            existing={activeLog}
+            targetVMin={exercise.target_velocity_min}
+            targetVMax={exercise.target_velocity_max}
+            onLogged={(loggedPos) => {
+              onLogged();
+              const next = setList.find((s) => s.position === loggedPos + 1);
+              if (next) setActivePos(next.position);
+            }}
+          />
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function SetRow({ athleteId, rackSessionId, exerciseId, position, prescribedLoad, prescribedReps, existing, targetVMin, targetVMax, onLogged }: {
+/* ---- Big single-set entry ---- */
+function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLoad, prescribedReps, existing, targetVMin, targetVMax, onLogged }: {
   athleteId: string; rackSessionId: string | null; exerciseId: string; position: number;
   prescribedLoad: number | null; prescribedReps: string | null;
   existing?: Log; targetVMin: number | null; targetVMax: number | null;
-  onLogged: () => void;
+  onLogged: (position: number) => void;
 }) {
   const [load, setLoad] = useState<string>(existing?.load?.toString() ?? prescribedLoad?.toString() ?? "");
   const [reps, setReps] = useState<string>(existing?.reps?.toString() ?? (prescribedReps ?? "").replace(/\D/g, ""));
   const [vel, setVel] = useState<string>(existing?.avg_velocity?.toString() ?? "");
   const [rpe, setRpe] = useState<string>(existing?.rpe?.toString() ?? "");
-
-  // Prescriptions often arrive after the row's first render. Fill an untouched
-  // field when they do, but never replace weight the athlete has typed.
-  useEffect(() => {
-    if (existing?.load != null || prescribedLoad == null) return;
-    setLoad((current) => current === "" ? prescribedLoad.toString() : current);
-  }, [existing?.load, prescribedLoad]);
-  useEffect(() => {
-    if (existing?.reps != null || prescribedReps == null) return;
-    const next = prescribedReps.replace(/\D/g, "");
-    setReps((current) => current === "" ? next : current);
-  }, [existing?.reps, prescribedReps]);
+  const [showMore, setShowMore] = useState(targetVMin != null || !!existing?.avg_velocity || !!existing?.rpe);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -576,7 +676,7 @@ function SetRow({ athleteId, rackSessionId, exerciseId, position, prescribedLoad
         if (error) throw error;
       }
     },
-    onSuccess: () => { toast.success(`Set ${position} logged`); onLogged(); },
+    onSuccess: () => { toast.success(`Set ${position} logged`); onLogged(position); },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
@@ -585,15 +685,58 @@ function SetRow({ athleteId, rackSessionId, exerciseId, position, prescribedLoad
   const velOk = !vel || !targetVMin || (velNum >= targetVMin && (!targetVMax || velNum <= targetVMax));
 
   return (
-    <div className={`flex flex-wrap items-center gap-1.5 rounded border px-2 py-1.5 ${done ? "border-emerald-500/40 bg-emerald-500/5" : ""}`}>
-      <span className="w-6 shrink-0 text-xs font-mono text-muted-foreground">#{position}</span>
-      <Input className="h-8 w-16" placeholder="lb" inputMode="decimal" value={load} onChange={(e) => setLoad(e.target.value)} />
-      <span className="text-xs text-muted-foreground">×</span>
-      <Input className="h-8 w-14" placeholder="reps" inputMode="numeric" value={reps} onChange={(e) => setReps(e.target.value)} />
-      <Input className={`h-8 w-16 ${!velOk ? "border-amber-500" : ""}`} placeholder="m/s" inputMode="decimal" value={vel} onChange={(e) => setVel(e.target.value)} />
-      <Input className="h-8 w-14" placeholder="RPE" inputMode="decimal" value={rpe} onChange={(e) => setRpe(e.target.value)} />
-      <Button size="sm" variant={done ? "outline" : "default"} className="ml-auto h-8" onClick={() => save.mutate()} disabled={save.isPending || !rackSessionId}>
-        {done ? <><Flame className="h-3.5 w-3.5" /> Re-log</> : <><CheckCircle2 className="h-3.5 w-3.5" /> Log</>}
+    <div className={cn("space-y-3 rounded-lg border bg-muted/30 p-3", done && "border-emerald-500/40 bg-emerald-500/5")}>
+      <div className="text-sm font-semibold text-muted-foreground">Set {position}</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-[11px] text-muted-foreground">Weight (lb)</Label>
+          <Input
+            className="h-16 text-center text-3xl font-bold tabular-nums"
+            inputMode="decimal" placeholder="0" value={load} onChange={(e) => setLoad(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground">Reps</Label>
+          <Input
+            className="h-16 text-center text-3xl font-bold tabular-nums"
+            inputMode="numeric" placeholder="0" value={reps} onChange={(e) => setReps(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowMore((v) => !v)}
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
+      >
+        {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        Velocity &amp; RPE
+      </button>
+      {showMore && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Velocity (m/s)</Label>
+            <Input className={cn("h-11", !velOk && "border-amber-500")} inputMode="decimal" placeholder="—" value={vel} onChange={(e) => setVel(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">RPE</Label>
+            <Input className="h-11" inputMode="decimal" placeholder="—" value={rpe} onChange={(e) => setRpe(e.target.value)} />
+          </div>
+        </div>
+      )}
+
+      <Button
+        size="lg"
+        variant={done ? "outline" : "default"}
+        className="h-14 w-full text-lg"
+        onClick={() => save.mutate()}
+        disabled={save.isPending || !rackSessionId}
+      >
+        {save.isPending
+          ? "Saving…"
+          : done
+            ? <><Flame className="h-5 w-5" /> Re-log set {position}</>
+            : <><CheckCircle2 className="h-5 w-5" /> Log set {position}</>}
       </Button>
     </div>
   );
