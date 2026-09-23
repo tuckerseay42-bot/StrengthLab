@@ -1503,32 +1503,29 @@ function AthleteTile(props: {
           )}
         </div>
 
-        <div className="rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2">
-          <div className="text-xl font-black leading-tight tabular-nums">
-            {prescribedLoad != null || prescribedReps != null
-              ? `${prescribedLoad != null ? `${prescribedLoad} lb` : ""}${prescribedLoad != null && prescribedReps != null ? " × " : ""}${prescribedReps != null ? `${prescribedReps} reps` : ""}`
-              : suggested
-                ? `~${suggested.load} lb`
-                : "Coach's call"}
+        {/* Only say the target weight/reps here if the table row above didn't
+            already say it — no need for a third restatement before the
+            input boxes below say it a fourth time. */}
+        {(prescribedLoad == null && prescribedReps == null) || priorSame || pb ? (
+          <div className="mb-2 flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+            {prescribedLoad == null && prescribedReps == null && (
+              <span className="text-base font-bold tabular-nums text-foreground">
+                {suggested ? `~${suggested.load} lb` : "Coach's call"}
+              </span>
+            )}
+            {priorSame && (
+              <span>
+                Last: {priorSame.load ?? "—"}{priorSame.load != null ? " lb" : ""}
+                {priorSame.reps != null ? ` × ${priorSame.reps}` : ""}
+              </span>
+            )}
+            {pb && (
+              <span>
+                Best: {pb.load} lb{pb.reps > 1 ? ` × ${pb.reps}` : ""}
+              </span>
+            )}
           </div>
-          {(priorSame || pb) && (
-            <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
-              {priorSame && (
-                <span>
-                  Last time: {priorSame.load ?? "—"}
-                  {priorSame.load != null ? " lb" : ""}
-                  {priorSame.reps != null ? ` × ${priorSame.reps}` : ""}
-                </span>
-              )}
-              {priorSame && pb && <span> · </span>}
-              {pb && (
-                <span>
-                  Best: {pb.load} lb{pb.reps > 1 ? ` × ${pb.reps}` : ""}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        ) : null}
 
         {/* Inputs — only what's needed to log this set */}
         <div className="mt-2 grid grid-cols-2 gap-2">
