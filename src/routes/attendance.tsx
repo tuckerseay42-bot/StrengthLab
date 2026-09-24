@@ -38,6 +38,7 @@ function AttendancePage() {
   const { data: teams = [] } = useQuery(teamsQO);
   const [qrTeamId, setQrTeamId] = useState<string>("");
   const [showQr, setShowQr] = useState(false);
+  const [view, setView] = useState<"list" | "board">("list");
   const qrTeam = useMemo(
     () => teams.find((t) => t.id === qrTeamId) ?? teams.find((t) => t.id === activeTeamId) ?? teams[0],
     [teams, qrTeamId, activeTeamId],
@@ -80,17 +81,23 @@ function AttendancePage() {
 
   // --- Live check-in feed -------------------------------------------------
   const [liveIds, setLiveIds] = useState<string[]>([]);
+  const [justInAthleteIds, setJustInAthleteIds] = useState<string[]>([]);
   const seen = useRef<Set<string>>(new Set());
   useEffect(() => {
     const channel = supabase
       .channel("attendance-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, (payload) => {
-        const row = (payload.new ?? {}) as { id?: string; session_date?: string };
+        const row = (payload.new ?? {}) as { id?: string; athlete_id?: string; session_date?: string; present?: boolean };
         qc.invalidateQueries({ queryKey: ["attendance"] });
         qc.invalidateQueries({ queryKey: ["athletes"] });
         if (row.id && row.session_date === sessionDate) {
           setLiveIds((prev) => [row.id!, ...prev.filter((x) => x !== row.id)].slice(0, 30));
           window.setTimeout(() => setLiveIds((prev) => prev.filter((x) => x !== row.id)), 20000);
+        }
+        if (row.athlete_id && row.session_date === sessionDate && row.present) {
+          const aid = row.athlete_id;
+          setJustInAthleteIds((prev) => [aid, ...prev.filter((x) => x !== aid)]);
+          window.setTimeout(() => setJustInAthleteIds((prev) => prev.filter((x) => x !== aid)), 4000);
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "bodyweight_logs" }, () => {
@@ -292,17 +299,67 @@ function AttendancePage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base">Session check-in</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">Session check-in</CardTitle>
+              <div className="flex items-center gap-1 rounded-md bg-muted p-0.5 text-xs">
+                <button
+                  type="button"
+                  className={cn("rounded px-2 py-1 font-medium transition-colors", view === "list" ? "bg-background shadow-sm" : "text-muted-foreground")}
+                  onClick={() => setView("list")}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  className={cn("rounded px-2 py-1 font-medium transition-colors", view === "board" ? "bg-background shadow-sm" : "text-muted-foreground")}
+                  onClick={() => setView("board")}
+                >
+                  Board
+                </button>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <Input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} className="w-40" />
-              <Button size="sm" variant="outline" onClick={() => markAll(true)}>All in</Button>
-              <Button size="sm" variant="ghost" onClick={() => markAll(false)}>Clear</Button>
+              {view === "list" && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => markAll(true)}>All in</Button>
+                  <Button size="sm" variant="ghost" onClick={() => markAll(false)}>Clear</Button>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {roster.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">No athletes match your filters.</div>
+          ) : view === "board" ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {roster.map((a) => {
+                const present = todayMap.get(a.id) === true;
+                const bw = todayBwMap.get(a.id);
+                const justIn = justInAthleteIds.includes(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500",
+                      present
+                        ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
+                        : "border-border/50 bg-muted/20",
+                      justIn && "scale-[1.04] ring-2 ring-[color:var(--color-success)]",
+                    )}
+                  >
+                    {present ? (
+                      <Check className="h-5 w-5 text-[color:var(--color-success)]" />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
+                    )}
+                    <div className="w-full truncate text-sm font-semibold">{a.name}</div>
+                    {bw != null && <div className="text-[11px] tabular-nums text-muted-foreground">{bw} lb</div>}
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <ul className="divide-y divide-border">
               {roster.map((a) => {
