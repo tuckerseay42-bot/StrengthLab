@@ -2792,6 +2792,8 @@ export type Database = {
           class_period: string
           display_name: string
           grade: number
+          photo_url: string
+          position: string
         }[]
       }
       get_team_by_qr_token: {
