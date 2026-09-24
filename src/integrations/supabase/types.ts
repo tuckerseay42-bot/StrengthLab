@@ -400,6 +400,51 @@ export type Database = {
           },
         ]
       }
+      bodyweight_logs: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          id: string
+          log_date: string
+          organization_id: string
+          source: string
+          value: number
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          organization_id: string
+          source?: string
+          value: number
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          organization_id?: string
+          source?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bodyweight_logs_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bodyweight_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       badges: {
         Row: {
           archived_at: string | null

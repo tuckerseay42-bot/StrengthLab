@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
-import { athletesQO, attendanceQO, athleteTeamsQO, teamsQO } from "@/lib/queries";
+import { athletesQO, attendanceQO, bodyweightLogsQO, athleteTeamsQO, teamsQO } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { Filters, emptyFilters, filterAthletes, inDateRange } from "@/components/filters";
@@ -30,6 +30,7 @@ function AttendancePage() {
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: attendance = [] } = useQuery(attendanceQO);
+  const { data: bodyweightLogs = [] } = useQuery(bodyweightLogsQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const [activeTeamId] = useActiveTeamId();
   const [filters, setFilters] = useState(emptyFilters);
@@ -66,6 +67,17 @@ function AttendancePage() {
     return m;
   }, [attendance, sessionDate]);
 
+  const bwByAthleteDate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of bodyweightLogs) m.set(`${r.athlete_id}:${r.log_date}`, r.value);
+    return m;
+  }, [bodyweightLogs]);
+  const todayBwMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of bodyweightLogs) if (r.log_date === sessionDate) m.set(r.athlete_id, r.value);
+    return m;
+  }, [bodyweightLogs, sessionDate]);
+
   // --- Live check-in feed -------------------------------------------------
   const [liveIds, setLiveIds] = useState<string[]>([]);
   const seen = useRef<Set<string>>(new Set());
@@ -80,6 +92,9 @@ function AttendancePage() {
           setLiveIds((prev) => [row.id!, ...prev.filter((x) => x !== row.id)].slice(0, 30));
           window.setTimeout(() => setLiveIds((prev) => prev.filter((x) => x !== row.id)), 20000);
         }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "bodyweight_logs" }, () => {
+        qc.invalidateQueries({ queryKey: ["bodyweight_logs"] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
@@ -153,9 +168,11 @@ function AttendancePage() {
 
   const exportCSV = () => downloadCSV("attendance.csv", historyRows.map((r) => {
     const a = byId.get(r.athlete_id);
+    const bw = bwByAthleteDate.get(`${r.athlete_id}:${r.session_date}`);
     return {
       date: r.session_date, athlete: a?.name ?? "", sport: a?.sport ?? "",
       grade: a?.grade ?? "", present: r.present ? "yes" : "no",
+      bodyweight: bw ?? "",
     };
   }));
 
@@ -244,6 +261,7 @@ function AttendancePage() {
               {recentCheckIns.map(({ row, at }) => {
                 const a = byId.get(row.athlete_id);
                 const isNew = liveIds.includes(row.id);
+                const bw = bwByAthleteDate.get(`${row.athlete_id}:${row.session_date}`);
                 return (
                   <li key={row.id} className={cn("flex items-center gap-3 py-2 transition-colors", isNew && "-mx-2 rounded-md bg-[color:var(--color-success)]/10 px-2")}>
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]">
@@ -255,6 +273,9 @@ function AttendancePage() {
                         {[a?.sport, a?.grade && `G${a.grade}`, a?.class_period && `P${a.class_period}`].filter(Boolean).join(" · ")}
                       </div>
                     </div>
+                    {bw != null && (
+                      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">{bw} lb</span>
+                    )}
                     {isNew && <Badge className="bg-[color:var(--color-success)] text-[color:var(--color-success-foreground)]">New</Badge>}
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{timeAgo(at)}</span>
                   </li>
@@ -286,12 +307,16 @@ function AttendancePage() {
             <ul className="divide-y divide-border">
               {roster.map((a) => {
                 const present = todayMap.get(a.id);
+                const bw = todayBwMap.get(a.id);
                 return (
                   <li key={a.id} className="flex items-center gap-3 py-2">
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{a.name}</div>
                       <div className="text-xs text-muted-foreground">{[a.sport, a.grade && `G${a.grade}`, a.position].filter(Boolean).join(" · ")}</div>
                     </div>
+                    {bw != null && (
+                      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">{bw} lb</span>
+                    )}
                     <div className="flex gap-1">
                       <Button
                         size="icon" variant={present === true ? "default" : "outline"}

@@ -46,6 +46,18 @@ export const athleteCheckIn = createServerFn({ method: "POST" })
         .update({ bodyweight: data.bodyweight })
         .eq("id", athlete.id);
       if (bwErr) throw new Error(bwErr.message);
+
+      const { error: logErr } = await supabase.from("bodyweight_logs").upsert(
+        {
+          athlete_id: athlete.id,
+          organization_id: athlete.organization_id,
+          log_date: today,
+          value: data.bodyweight,
+          source: "checkin",
+        },
+        { onConflict: "athlete_id,log_date" },
+      );
+      if (logErr) throw new Error(logErr.message);
     }
 
     return { ok: true, athleteId: athlete.id, date: today };

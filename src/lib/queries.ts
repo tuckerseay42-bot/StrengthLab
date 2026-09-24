@@ -87,6 +87,10 @@ export type AttendanceRow = {
   updated_at?: string | null; created_at?: string | null;
 };
 
+export type BodyweightLog = {
+  id: string; athlete_id: string; log_date: string; value: number; source: string; created_at: string;
+};
+
 export type Team = {
   id: string; name: string; sport: string | null; season: string | null;
   color: string | null; qr_token: string; notes: string | null;
@@ -247,6 +251,15 @@ export const attendanceQO = queryOptions({
     const { data, error } = await scoped(supabase.from("attendance").select("*")).order("session_date", { ascending: false });
     if (error) throw error;
     return (data ?? []) as AttendanceRow[];
+  },
+});
+
+export const bodyweightLogsQO = queryOptions({
+  queryKey: ["bodyweight_logs"],
+  queryFn: async (): Promise<BodyweightLog[]> => {
+    const { data, error } = await scoped(supabase.from("bodyweight_logs").select("*")).order("log_date", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as BodyweightLog[];
   },
 });
 
