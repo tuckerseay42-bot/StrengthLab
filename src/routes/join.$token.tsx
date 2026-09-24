@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SPORTS, GRADES, GENDERS, GENDER_LABELS, gradeToGradYear, gradYearToGrade } from "@/lib/domain";
+import { titleCaseName } from "@/lib/queries";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 import { CheckCircle2 } from "lucide-react";
@@ -38,7 +39,7 @@ function JoinPage() {
   });
 
   const [form, setForm] = useState({
-    first_name: "", last_name: "", preferred_name: "", student_id: "",
+    first_name: "", last_name: "", student_id: "",
     grade: "", sport: "", position: "", graduation_year: "",
     height_in: "", weight_lb: "", parent_email: "", athlete_email: "",
     date_of_birth: "", gender: "", sport_fall: "", sport_winter: "", sport_spring: "",
@@ -53,9 +54,8 @@ function JoinPage() {
       const { error } = await supabase.rpc("submit_registration", {
         _token: token,
         _payload: {
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          preferred_name: form.preferred_name,
+          first_name: titleCaseName(form.first_name.trim()),
+          last_name: titleCaseName(form.last_name.trim()),
           student_id: form.student_id,
           grade: form.grade,
           sport: primarySport,
@@ -103,11 +103,24 @@ function JoinPage() {
         </CardHeader>
         <CardContent className="grid gap-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>First name *</Label><Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></div>
-            <div><Label>Last name *</Label><Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></div>
+            <div>
+              <Label>First name *</Label>
+              <Input
+                value={form.first_name}
+                onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                onBlur={(e) => setForm((f) => ({ ...f, first_name: titleCaseName(e.target.value.trim()) }))}
+              />
+            </div>
+            <div>
+              <Label>Last name *</Label>
+              <Input
+                value={form.last_name}
+                onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                onBlur={(e) => setForm((f) => ({ ...f, last_name: titleCaseName(e.target.value.trim()) }))}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Preferred name</Label><Input value={form.preferred_name} onChange={(e) => setForm({ ...form, preferred_name: e.target.value })} /></div>
             <div>
               <Label>Grade</Label>
               <Select
@@ -121,6 +134,7 @@ function JoinPage() {
                 <SelectContent>{GRADES.map((g) => <SelectItem key={g} value={String(g)}>Grade {g}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

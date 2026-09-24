@@ -520,10 +520,17 @@ export const programVersionsQO = (programId: string) => queryOptions({
 
 
 
-export function athleteDisplayName(a: Pick<Athlete, "name" | "first_name" | "last_name" | "preferred_name">) {
-  if (a.preferred_name && a.last_name) return `${a.preferred_name} ${a.last_name}`;
-  if (a.first_name && a.last_name) return `${a.first_name} ${a.last_name}`;
-  return a.name;
+// Capitalizes the first letter of each space/hyphen-separated word, e.g.
+// "mary-jane o'brien" -> "Mary-Jane O'brien". Applied at display time so
+// names already stored in any casing (old CSV imports, etc.) still render
+// correctly without a data backfill.
+export function titleCaseName(s: string): string {
+  return s.replace(/[^\s-]+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
+export function athleteDisplayName(a: Pick<Athlete, "name" | "first_name" | "last_name">) {
+  if (a.first_name && a.last_name) return titleCaseName(`${a.first_name} ${a.last_name}`);
+  return a.name ? titleCaseName(a.name) : a.name;
 }
 
 // ---------- Configurable dashboards (spider + KPI cards) ----------

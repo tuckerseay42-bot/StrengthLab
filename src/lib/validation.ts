@@ -5,7 +5,6 @@ import { z } from "zod";
 export const athleteInputSchema = z.object({
   first_name: z.string().trim().min(1, "First name is required").max(80),
   last_name: z.string().trim().min(1, "Last name is required").max(80),
-  preferred_name: z.string().trim().max(80).optional().or(z.literal("")),
   grade: z.number().int().min(1).max(12).nullable().optional(),
   bodyweight: z.number().positive().min(40, "Bodyweight looks too low").max(700, "Bodyweight looks too high").nullable().optional(),
   height_in: z.number().positive().min(36, "Height looks too low").max(96, "Height looks too high").nullable().optional(),

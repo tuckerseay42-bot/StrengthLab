@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { titleCaseName } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogOut, Dumbbell, ShieldCheck } from "lucide-react";
@@ -62,7 +63,7 @@ function KioskSessionPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("athletes")
-        .select("id, name, first_name, last_name, preferred_name, team_id, organization_id, program_id")
+        .select("id, name, first_name, last_name, team_id, organization_id, program_id")
         .eq("user_id", userId!)
         .maybeSingle();
       if (error) throw error;
@@ -122,7 +123,7 @@ function KioskSessionPage() {
 
   if (!athlete) return null;
 
-  const displayName = athlete.preferred_name || athlete.first_name || athlete.name;
+  const displayName = titleCaseName(athlete.first_name || athlete.name);
 
   return (
     <div className="min-h-screen bg-background">

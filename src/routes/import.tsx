@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { athletesQO, athleteDisplayName, type Athlete } from "@/lib/queries";
+import { athletesQO, athleteDisplayName, titleCaseName, type Athlete } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { getScopedOrgId } from "@/lib/scoped-insert";
@@ -139,8 +139,8 @@ function ImportPage() {
     try {
       if (kind === "athletes") {
         const rows = parsed.records.map((r, idx) => {
-          const first = r.first_name || r.firstname || "";
-          const last = r.last_name || r.lastname || "";
+          const first = titleCaseName(r.first_name || r.firstname || "");
+          const last = titleCaseName(r.last_name || r.lastname || "");
           if (!first && !last) { errors.push(`Row ${idx + 2}: missing name`); return null; }
           return {
             first_name: first || null,

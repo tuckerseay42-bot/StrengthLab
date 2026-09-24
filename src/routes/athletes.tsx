@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { athletesQO, teamsQO, programsQO, athleteTeamsQO, athleteDisplayName, type Athlete } from "@/lib/queries";
+import { athletesQO, teamsQO, programsQO, athleteTeamsQO, athleteDisplayName, titleCaseName, type Athlete } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { Filters, emptyFilters, filterAthletes } from "@/components/filters";
@@ -41,7 +41,7 @@ export const Route = createFileRoute("/athletes")({
 });
 
 type Form = {
-  first_name: string; last_name: string; preferred_name: string;
+  first_name: string; last_name: string;
   student_id: string; graduation_year: string; height_in: string;
   parent_email: string; athlete_email: string; status: string;
   team_id: string; grade: string; sport: string;
@@ -54,7 +54,7 @@ type Form = {
   training_group: string; tags: string;
 };
 const emptyForm: Form = {
-  first_name: "", last_name: "", preferred_name: "", student_id: "",
+  first_name: "", last_name: "", student_id: "",
   graduation_year: "", height_in: "", parent_email: "", athlete_email: "",
   status: "active", team_id: "", grade: "", sport: "",
   gender: "",
@@ -184,11 +184,9 @@ function AthletesPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const first = form.first_name.trim();
-      const last = form.last_name.trim();
-      const displayName = form.preferred_name.trim()
-        ? `${form.preferred_name.trim()} ${last}`.trim()
-        : `${first} ${last}`.trim();
+      const first = titleCaseName(form.first_name.trim());
+      const last = titleCaseName(form.last_name.trim());
+      const displayName = `${first} ${last}`.trim();
 
       // Convert display-unit inputs to canonical (lb, in)
       const bwDisplay = form.bodyweight ? Number(form.bodyweight) : null;
@@ -200,7 +198,6 @@ function AthletesPage() {
       const parsed = athleteInputSchema.safeParse({
         first_name: first,
         last_name: last,
-        preferred_name: form.preferred_name.trim(),
         grade: form.grade ? Number(form.grade) : null,
         bodyweight: bodyweightLb,
         height_in: heightIn,
@@ -219,7 +216,6 @@ function AthletesPage() {
         name: displayName,
         first_name: first || null,
         last_name: last || null,
-        preferred_name: form.preferred_name.trim() || null,
         student_id: form.student_id.trim() || null,
         graduation_year: form.graduation_year ? Number(form.graduation_year) : null,
         height_in: heightIn,
@@ -349,7 +345,6 @@ function AthletesPage() {
     setForm({
       first_name: a.first_name ?? a.name.split(" ")[0] ?? "",
       last_name: a.last_name ?? a.name.split(" ").slice(1).join(" ") ?? "",
-      preferred_name: a.preferred_name ?? "",
       student_id: a.student_id ?? "",
       graduation_year: a.graduation_year ? String(a.graduation_year) : "",
       height_in: a.height_in != null ? String(+fromIn(a.height_in, prefs.distance).toFixed(2)) : "",
@@ -660,11 +655,24 @@ function AthletesPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit athlete" : "Add athlete"}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>First name *</Label><Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} /></div>
-              <div><Label>Last name *</Label><Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} /></div>
+              <div>
+                <Label>First name *</Label>
+                <Input
+                  value={form.first_name}
+                  onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                  onBlur={(e) => setForm((f) => ({ ...f, first_name: titleCaseName(e.target.value.trim()) }))}
+                />
+              </div>
+              <div>
+                <Label>Last name *</Label>
+                <Input
+                  value={form.last_name}
+                  onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                  onBlur={(e) => setForm((f) => ({ ...f, last_name: titleCaseName(e.target.value.trim()) }))}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Preferred name</Label><Input value={form.preferred_name} onChange={(e) => setForm({ ...form, preferred_name: e.target.value })} /></div>
               <div>
                 <Label>Team</Label>
                 <Select value={form.team_id} onValueChange={(v) => setForm({ ...form, team_id: v })}>
@@ -672,6 +680,7 @@ function AthletesPage() {
                   <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

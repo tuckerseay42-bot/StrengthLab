@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/db-errors";
 import { suggestLoad } from "@/lib/prescription";
 import { DEFAULT_1RM_FORMULA, isOneRmFormula, type OneRmFormula } from "@/lib/one-rm";
+import { titleCaseName } from "@/lib/queries";
 import type { RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 
 export const Route = createFileRoute("/athlete/today")({
@@ -43,7 +44,7 @@ function AthleteToday() {
     enabled: !!userId,
     queryFn: async () => {
       const { data, error } = await supabase.from("athletes")
-        .select("id, name, first_name, last_name, preferred_name, team_id, organization_id, program_id")
+        .select("id, name, first_name, last_name, team_id, organization_id, program_id")
         .eq("user_id", userId!).maybeSingle();
       if (error) throw error;
       return data;
@@ -69,7 +70,7 @@ function AthleteToday() {
     );
   }
 
-  return <TodayView athleteId={athlete.id} athleteName={athlete.preferred_name || athlete.first_name || athlete.name} programId={athlete.program_id} organizationId={athlete.organization_id} />;
+  return <TodayView athleteId={athlete.id} athleteName={titleCaseName(athlete.first_name || athlete.name)} programId={athlete.program_id} organizationId={athlete.organization_id} />;
 }
 
 /* ---- Set expansion (pure — reused for every exercise) ---- */
