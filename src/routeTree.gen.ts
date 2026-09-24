@@ -15,6 +15,7 @@ import { Route as AthleteLoginRouteImport } from './routes/athlete-login'
 import { Route as AthletePinSetupRouteImport } from './routes/athlete-pin-setup'
 import { Route as AthleteQrRouteImport } from './routes/athlete-qr'
 import { Route as AthletesRouteImport } from './routes/athletes'
+import { Route as AthleticismReportRouteImport } from './routes/athleticism-report'
 import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BadgesRouteImport } from './routes/badges'
@@ -103,6 +104,11 @@ const AthleteQrRoute = AthleteQrRouteImport.update({
 const AthletesRoute = AthletesRouteImport.update({
   id: '/athletes',
   path: '/athletes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AthleticismReportRoute = AthleticismReportRouteImport.update({
+  id: '/athleticism-report',
+  path: '/athleticism-report',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AttendanceRoute = AttendanceRouteImport.update({
@@ -409,6 +415,7 @@ export interface FileRoutesByFullPath {
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
   '/athletes': typeof AthletesRouteWithChildren
+  '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/badges': typeof BadgesRoute
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
   '/athletes': typeof AthletesRouteWithChildren
+  '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/badges': typeof BadgesRoute
@@ -542,6 +550,7 @@ export interface FileRoutesById {
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
   '/athletes': typeof AthletesRouteWithChildren
+  '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/badges': typeof BadgesRoute
@@ -611,6 +620,7 @@ export interface FileRouteTypes {
     | '/athlete-pin-setup'
     | '/athlete-qr'
     | '/athletes'
+    | '/athleticism-report'
     | '/attendance'
     | '/auth'
     | '/badges'
@@ -678,6 +688,7 @@ export interface FileRouteTypes {
     | '/athlete-pin-setup'
     | '/athlete-qr'
     | '/athletes'
+    | '/athleticism-report'
     | '/attendance'
     | '/auth'
     | '/badges'
@@ -743,6 +754,7 @@ export interface FileRouteTypes {
     | '/athlete-pin-setup'
     | '/athlete-qr'
     | '/athletes'
+    | '/athleticism-report'
     | '/attendance'
     | '/auth'
     | '/badges'
@@ -811,6 +823,7 @@ export interface RootRouteChildren {
   AthletePinSetupRoute: typeof AthletePinSetupRoute
   AthleteQrRoute: typeof AthleteQrRoute
   AthletesRoute: typeof AthletesRouteWithChildren
+  AthleticismReportRoute: typeof AthleticismReportRoute
   AttendanceRoute: typeof AttendanceRoute
   AuthRoute: typeof AuthRoute
   BadgesRoute: typeof BadgesRoute
@@ -898,6 +911,13 @@ declare module '@tanstack/react-router' {
       path: '/athletes'
       fullPath: '/athletes'
       preLoaderRoute: typeof AthletesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/athleticism-report': {
+      id: '/athleticism-report'
+      path: '/athleticism-report'
+      fullPath: '/athleticism-report'
+      preLoaderRoute: typeof AthleticismReportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/attendance': {
@@ -1421,6 +1441,7 @@ const rootRouteChildren: RootRouteChildren = {
   AthletePinSetupRoute: AthletePinSetupRoute,
   AthleteQrRoute: AthleteQrRoute,
   AthletesRoute: AthletesRouteWithChildren,
+  AthleticismReportRoute: AthleticismReportRoute,
   AttendanceRoute: AttendanceRoute,
   AuthRoute: AuthRoute,
   BadgesRoute: BadgesRoute,

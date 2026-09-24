@@ -20,6 +20,7 @@ import {
   Trophy,
   Tv,
   Award,
+  Radar,
   Building2,
   UserCog,
   ShieldCheck,
@@ -91,6 +92,7 @@ const GROUPS: Group[] = [
       { to: "/leaderboards", label: "Leaderboards", icon: Trophy },
       { to: "/live-leaderboard", label: "Live View", icon: Tv },
       { to: "/badges", label: "Badges", icon: Award },
+      { to: "/athleticism-report", label: "Athleticism Report", icon: Radar },
       { to: "/reports", label: "Reports", icon: FileBarChart2 },
     ],
   },
@@ -112,7 +114,9 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (to: string) =>
-    to === "/performance" ? pathname === "/performance" : pathname === to || pathname.startsWith(to + "/");
+    to === "/performance"
+      ? pathname === "/performance"
+      : pathname === to || pathname.startsWith(to + "/");
 
   return (
     <Sidebar collapsible="icon">
