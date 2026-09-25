@@ -86,6 +86,29 @@ function ProgramDeliveryPage() {
   const { data: phases = [] } = useQuery(programPhasesQO(programId));
   const { data: sessions = [] } = useQuery(programSessionsQO(programId));
 
+  // Once a program is picked, jump straight to a session instead of making
+  // the coach also filter phase/week/session by hand: prefer today's
+  // scheduled session, then the next upcoming one, then the most recent
+  // past one, then just the first session in the program.
+  useEffect(() => {
+    if (!programId || sessionId || sessions.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const dated = sessions.filter((s) => s.scheduled_date);
+    const pick =
+      dated.find((s) => s.scheduled_date === today) ??
+      dated
+        .filter((s) => s.scheduled_date! >= today)
+        .sort((a, b) => a.scheduled_date!.localeCompare(b.scheduled_date!))[0] ??
+      dated.slice().sort((a, b) => b.scheduled_date!.localeCompare(a.scheduled_date!))[0] ??
+      sessions
+        .slice()
+        .sort((a, b) => a.week - b.week || a.day - b.day || a.position - b.position)[0];
+    if (!pick) return;
+    setPhaseId(pick.phase_id);
+    setWeek(String(pick.week));
+    setSessionId(pick.id);
+  }, [programId, sessionId, sessions]);
+
   const phaseSessions = useMemo(
     () => sessions.filter((s) => s.phase_id === phaseId),
     [sessions, phaseId],
