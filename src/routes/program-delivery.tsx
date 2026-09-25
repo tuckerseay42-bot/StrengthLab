@@ -79,10 +79,15 @@ function ProgramDeliveryPage() {
   const [sessionId, setSessionId] = useState<string>("");
   const [tab, setTab] = useState<Tab>("print");
 
-  const teamPrograms = useMemo(
-    () => programs.filter((p) => p.team_id === teamId),
-    [programs, teamId],
+  // Programs aren't required to belong to a team, and a coach may want a
+  // program authored under a different team than the roster they're
+  // printing for — so the picker lists every program, not just ones
+  // scoped to the currently selected team.
+  const sortedPrograms = useMemo(
+    () => programs.slice().sort((a, b) => a.name.localeCompare(b.name)),
+    [programs],
   );
+  const teamNameById = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams]);
   const { data: phases = [] } = useQuery(programPhasesQO(programId));
   const { data: sessions = [] } = useQuery(programSessionsQO(programId));
 
@@ -131,8 +136,8 @@ function ProgramDeliveryPage() {
   );
   const team = useMemo(() => teams.find((t) => t.id === teamId) ?? null, [teams, teamId]);
   const program = useMemo(
-    () => teamPrograms.find((p) => p.id === programId) ?? null,
-    [teamPrograms, programId],
+    () => programs.find((p) => p.id === programId) ?? null,
+    [programs, programId],
   );
   const phase = useMemo(() => phases.find((p) => p.id === phaseId) ?? null, [phases, phaseId]);
 
@@ -297,16 +302,21 @@ function ProgramDeliveryPage() {
                 setPhaseId("");
                 setWeek("");
                 setSessionId("");
+                // A program's own team, if it has one, is the natural roster
+                // for athlete cards/rack sheets — pick it up automatically
+                // instead of making the coach also set Training Group.
+                const picked = programs.find((p) => p.id === v);
+                if (picked?.team_id && picked.team_id !== teamId) setTeamId(picked.team_id);
               }}
-              disabled={!teamId}
             >
-              <SelectTrigger className="h-9 w-[200px]">
+              <SelectTrigger className="h-9 w-[220px]">
                 <SelectValue placeholder="Select program" />
               </SelectTrigger>
               <SelectContent>
-                {teamPrograms.map((p) => (
+                {sortedPrograms.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
+                    {p.team_id ? ` (${teamNameById.get(p.team_id) ?? "team"})` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
