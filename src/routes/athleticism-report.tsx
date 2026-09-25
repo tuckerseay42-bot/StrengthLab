@@ -15,6 +15,7 @@ import {
   liftsQO,
   customMetricsQO,
   testTypesQO,
+  exercisesQO,
   athleteDisplayName,
 } from "@/lib/queries";
 import type { SpiderComparisonGroup, SpiderNormalizationMethod } from "@/lib/queries";
@@ -101,6 +102,7 @@ function AthleticismReportPage() {
   const { data: lifts = [] } = useQuery(liftsQO);
   const { data: customMetrics = [] } = useQuery(customMetricsQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
+  const { data: exercises = [] } = useQuery(exercisesQO);
 
   const [athleteId, setAthleteId] = useState<string>("");
   const [config, setConfig] = useState<ReportConfig>(() => loadConfig());
@@ -120,8 +122,8 @@ function AthleticismReportPage() {
   }, [config]);
 
   const options = useMemo(
-    () => metricOptions(customTypes, customMetrics),
-    [customTypes, customMetrics],
+    () => metricOptions(customTypes, customMetrics, exercises),
+    [customTypes, customMetrics, exercises],
   );
   const athlete = athletes.find((a) => a.id === athleteId) ?? null;
 
@@ -134,9 +136,10 @@ function AthleticismReportPage() {
       lifts,
       customMetrics,
       customTypes,
+      exercises,
       config,
     });
-  }, [athlete, athletes, tests, lifts, customMetrics, customTypes, config]);
+  }, [athlete, athletes, tests, lifts, customMetrics, customTypes, exercises, config]);
 
   const autoNote = report?.autoNote ?? "";
   const noteText = note ?? autoNote;

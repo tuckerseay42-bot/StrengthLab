@@ -10,6 +10,7 @@ import type {
   LiftRow,
   CustomMetric,
   CustomTestType,
+  Exercise,
   SpiderMetric,
   SpiderTemplate,
   SpiderComparisonGroup,
@@ -69,10 +70,19 @@ export function levelFromScore(score: number): number {
 
 export type MetricOption = { key: string; label: string; unit: string; group: string };
 
-/** Every test type (built-in + org custom) and custom metric, in the "test:"/"metric:" key scheme. */
+const EXERCISE_UNIT: Record<Exercise["measurement_type"], string> = {
+  load: "lb",
+  seconds: "s",
+  inches: "in",
+  reps: "reps",
+  mph: "mph",
+};
+
+/** Every test type (built-in + org custom), logged exercise, and custom metric, in the "test:"/"lift:"/"metric:" key scheme. */
 export function metricOptions(
   customTypes: CustomTestType[],
   customMetrics: CustomMetric[],
+  exercises: Exercise[] = [],
 ): MetricOption[] {
   const fromBuiltin = TEST_TYPES.map((t) => ({
     key: `test:${t.value}`,
@@ -86,17 +96,38 @@ export function metricOptions(
     unit: c.unit,
     group: c.group_name || "Custom tests",
   }));
+  const fromExercises = exercises.map((e) => ({
+    key: `lift:${e.name}`,
+    label: e.name,
+    unit: EXERCISE_UNIT[e.measurement_type],
+    group: e.category || "Exercises",
+  }));
   const fromMetrics = customMetrics.map((m) => ({
     key: `metric:${m.id}`,
     label: m.name,
     unit: m.unit ?? "",
     group: "Custom metrics",
   }));
-  return [...fromBuiltin, ...fromCustomTypes, ...fromMetrics];
+  return [...fromBuiltin, ...fromCustomTypes, ...fromExercises, ...fromMetrics];
 }
 
 export function metricLabelFor(key: string, options: MetricOption[]): string {
   return options.find((o) => o.key === key)?.label ?? key.split(":")[1] ?? key;
+}
+
+function exerciseLiftValue(
+  l: LiftRow,
+  measurement: Exercise["measurement_type"] | undefined,
+): number | null {
+  const raw =
+    measurement === "seconds"
+      ? l.time_seconds
+      : measurement === "inches"
+        ? l.distance_in
+        : measurement === "reps"
+          ? l.reps
+          : l.load; // "load" and "mph" (speed) both log through the load field.
+  return raw == null ? null : Number(raw);
 }
 
 export type QualityResult = {
@@ -142,10 +173,11 @@ export function computeAthleticismReport(input: {
   lifts: LiftRow[];
   customMetrics: CustomMetric[];
   customTypes: CustomTestType[];
+  exercises: Exercise[];
   config: ReportConfig;
 }): AthleticismReport {
-  const { athlete, athletes, tests, lifts, customMetrics, customTypes, config } = input;
-  const options = metricOptions(customTypes, customMetrics);
+  const { athlete, athletes, tests, lifts, customMetrics, customTypes, exercises, config } = input;
+  const options = metricOptions(customTypes, customMetrics, exercises);
 
   const template: SpiderTemplate = {
     id: "adhoc-athleticism-report",
@@ -182,6 +214,7 @@ export function computeAthleticismReport(input: {
       lifts,
       customMetrics,
       customTypes,
+      exercises,
     });
     const withStar = rows.map((r) => ({ ...r, starred: config.starred.includes(r.key) }));
     const present = withStar.filter((r) => !r.missing && r.normalized != null);
@@ -219,24 +252,65 @@ export function computeAthleticismReport(input: {
     }
   }
 
-  // Gain board: earliest vs. most recent value per unique "test:" metric in the report.
-  const seenTestKeys = new Set<string>();
+  // Gain board: earliest vs. most recent value per unique test/exercise metric in the report.
+  const seenKeys = new Set<string>();
   const gainBoard: GainRow[] = [];
   for (const q of qualities) {
     for (const m of q.metrics) {
-      if (!m.key.startsWith("test:") || seenTestKeys.has(m.key)) continue;
-      seenTestKeys.add(m.key);
-      const testType = m.key.slice("test:".length);
-      const rows = tests
-        .filter((t) => t.athlete_id === athlete.id && t.test_type === testType)
-        .slice()
-        .sort((a, b) => a.test_date.localeCompare(b.test_date));
-      if (rows.length < 2) continue;
-      const before = Number(rows[0].value);
-      const after = Number(rows[rows.length - 1].value);
-      const delta = after - before;
-      const improved = m.lowerIsBetter ? delta < 0 : delta > 0;
-      gainBoard.push({ key: m.key, label: m.label, unit: m.unit, before, after, delta, improved });
+      if (seenKeys.has(m.key)) continue;
+      if (m.key.startsWith("test:")) {
+        seenKeys.add(m.key);
+        const testType = m.key.slice("test:".length);
+        const rows = tests
+          .filter((t) => t.athlete_id === athlete.id && t.test_type === testType)
+          .slice()
+          .sort((a, b) => a.test_date.localeCompare(b.test_date));
+        if (rows.length < 2) continue;
+        const before = Number(rows[0].value);
+        const after = Number(rows[rows.length - 1].value);
+        const delta = after - before;
+        const improved = m.lowerIsBetter ? delta < 0 : delta > 0;
+        gainBoard.push({
+          key: m.key,
+          label: m.label,
+          unit: m.unit,
+          before,
+          after,
+          delta,
+          improved,
+        });
+      } else if (m.key.startsWith("lift:")) {
+        seenKeys.add(m.key);
+        const exerciseName = m.key.slice("lift:".length);
+        const ex = exercises.find(
+          (e) => e.name.trim().toLowerCase() === exerciseName.trim().toLowerCase(),
+        );
+        const rows = lifts
+          .filter(
+            (l) =>
+              l.athlete_id === athlete.id &&
+              (l.exercise ?? "").trim().toLowerCase() === exerciseName.trim().toLowerCase(),
+          )
+          .slice()
+          .sort((a, b) => a.lift_date.localeCompare(b.lift_date));
+        const values = rows
+          .map((l) => exerciseLiftValue(l, ex?.measurement_type))
+          .filter((v): v is number => v != null);
+        if (values.length < 2) continue;
+        const before = values[0];
+        const after = values[values.length - 1];
+        const delta = after - before;
+        const improved = m.lowerIsBetter ? delta < 0 : delta > 0;
+        gainBoard.push({
+          key: m.key,
+          label: m.label,
+          unit: m.unit,
+          before,
+          after,
+          delta,
+          improved,
+        });
+      }
     }
   }
 
