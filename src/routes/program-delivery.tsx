@@ -141,6 +141,7 @@ function ProgramDeliveryPage() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const buildActivePdf = () => {
     if (tab === "present") return null;
@@ -206,6 +207,13 @@ function ProgramDeliveryPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const printPreview = () => {
+    const win = previewFrameRef.current?.contentWindow;
+    if (!win) return;
+    win.focus();
+    win.print();
+  };
 
   const download = () => {
     const doc = buildActivePdf();
@@ -372,6 +380,14 @@ function ProgramDeliveryPage() {
                   <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", building && "animate-spin")} />{" "}
                   Rebuild preview
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={printPreview}
+                  disabled={!canExport || !previewUrl}
+                >
+                  <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
+                </Button>
                 <Button size="sm" onClick={download} disabled={!canExport}>
                   <Download className="mr-1.5 h-3.5 w-3.5" /> {downloadLabel}
                 </Button>
@@ -389,13 +405,13 @@ function ProgramDeliveryPage() {
           )}
 
           <TabsContent value="print">
-            <PdfPreview url={previewUrl} />
+            <PdfPreview url={previewUrl} frameRef={previewFrameRef} />
           </TabsContent>
           <TabsContent value="athlete">
-            <PdfPreview url={previewUrl} />
+            <PdfPreview url={previewUrl} frameRef={previewFrameRef} />
           </TabsContent>
           <TabsContent value="rack">
-            <PdfPreview url={previewUrl} />
+            <PdfPreview url={previewUrl} frameRef={previewFrameRef} />
           </TabsContent>
           <TabsContent value="present">
             <PresentationView session={sessionInfo} exercises={exercises} sets={sets} />
@@ -417,7 +433,13 @@ function FilterField({ label, children }: { label: string; children: React.React
   );
 }
 
-function PdfPreview({ url }: { url: string | null }) {
+function PdfPreview({
+  url,
+  frameRef,
+}: {
+  url: string | null;
+  frameRef: React.RefObject<HTMLIFrameElement | null>;
+}) {
   if (!url) {
     return (
       <EmptyState
@@ -432,7 +454,7 @@ function PdfPreview({ url }: { url: string | null }) {
       className="overflow-hidden rounded-lg border border-border/60 bg-muted/20"
       style={{ height: "75vh" }}
     >
-      <iframe src={url} title="Program delivery preview" className="h-full w-full" />
+      <iframe ref={frameRef} src={url} title="Program delivery preview" className="h-full w-full" />
     </div>
   );
 }
