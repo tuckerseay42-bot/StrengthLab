@@ -1,8 +1,9 @@
-// Athleticism Report Builder — a coach-configurable, multi-quality athlete
-// report (Size, Flexibility, Upper Body, Lower Body, Reactivity, Agility,
-// Accel, Speed), each backed by 1-3 real test/metric results. Reuses the
-// spider-graph normalization engine (src/lib/spider.ts) so "quality level"
-// scoring stays consistent with the rest of the app's percentile math.
+// Athleticism Report — a coach-configurable, multi-quality athlete report
+// (Size, Upper Body, Lower Body, Power, Agility, Acceleration, Speed), each
+// backed by 1-3 real test/metric results from this org's own roster data.
+// Scoring reuses the spider-graph normalization engine (src/lib/spider.ts)
+// so "quality level" stays consistent with the rest of the app's percentile
+// math instead of introducing a second, parallel scoring system.
 import type {
   Athlete,
   TestRow,
@@ -18,23 +19,15 @@ import { computeSpider, type SpiderRow } from "@/lib/spider";
 import { TEST_TYPES } from "@/lib/domain";
 
 export type QualityKey =
-  | "size"
-  | "flexibility"
-  | "upper_body"
-  | "lower_body"
-  | "reactivity"
-  | "agility"
-  | "accel"
-  | "speed";
+  "size" | "upper_body" | "lower_body" | "power" | "agility" | "acceleration" | "speed";
 
 export const QUALITIES: { key: QualityKey; label: string }[] = [
   { key: "size", label: "Size" },
-  { key: "flexibility", label: "Flexibility" },
   { key: "upper_body", label: "Upper Body" },
   { key: "lower_body", label: "Lower Body" },
-  { key: "reactivity", label: "Reactivity" },
+  { key: "power", label: "Power" },
   { key: "agility", label: "Agility" },
-  { key: "accel", label: "Accel" },
+  { key: "acceleration", label: "Acceleration" },
   { key: "speed", label: "Speed" },
 ];
 export const MAX_METRICS_PER_QUALITY = 3;
@@ -51,12 +44,11 @@ export type ReportConfig = {
 export const DEFAULT_CONFIG: ReportConfig = {
   qualityMetrics: {
     size: [],
-    flexibility: [],
     upper_body: ["test:bench_1rm"],
     lower_body: ["test:squat_1rm", "test:deadlift_1rm"],
-    reactivity: ["test:vertical_jump"],
+    power: ["test:vertical_jump"],
     agility: ["test:pro_agility"],
-    accel: ["test:sprint_10y"],
+    acceleration: ["test:sprint_10y"],
     speed: ["test:sprint_40y"],
   },
   starred: [],
@@ -290,11 +282,10 @@ export function computeAthleticismReport(input: {
 // obvious quality mapping (so the picker can nudge coaches to configure them).
 export const UNMAPPED_QUALITY_HINT: Record<QualityKey, string> = {
   size: "Pick a bodyweight/size metric from Metrics, or a custom test type.",
-  flexibility: "Add a custom test type (Tests → Manage types) to score flexibility.",
   upper_body: "",
   lower_body: "",
-  reactivity: "",
+  power: "",
   agility: "",
-  accel: "",
+  acceleration: "",
   speed: "",
 };
