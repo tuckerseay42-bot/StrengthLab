@@ -374,6 +374,7 @@ function TeamsPage() {
           {assignTeam && (
             <AssignProgramPanel
               team={assignTeam}
+              teams={teams}
               programs={programs}
               rosterCount={rosterForTeam(athletes, athleteTeams, assignTeam.id).length}
               value={assignProgramId}
@@ -445,6 +446,7 @@ function QRPanel({ team, onRegen }: { team: Team; onRegen: () => void }) {
 
 function AssignProgramPanel({
   team,
+  teams,
   programs,
   rosterCount,
   value,
@@ -453,6 +455,7 @@ function AssignProgramPanel({
   pending,
 }: {
   team: Team;
+  teams: Team[];
   programs: Program[];
   rosterCount: number;
   value: string;
@@ -460,7 +463,15 @@ function AssignProgramPanel({
   onConfirm: () => void;
   pending: boolean;
 }) {
-  const teamPrograms = programs.filter((p) => p.team_id === team.id);
+  const teamNameById = new Map(teams.map((t) => [t.id, t.name]));
+  // Own-team programs first, then everything else, so a coach can still
+  // borrow another sport's program without having to leave this dialog.
+  const sorted = programs.slice().sort((a, b) => {
+    const aOwn = a.team_id === team.id;
+    const bOwn = b.team_id === team.id;
+    if (aOwn === bOwn) return 0;
+    return aOwn ? -1 : 1;
+  });
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -469,9 +480,9 @@ function AssignProgramPanel({
         {rosterCount === 1 ? "" : "s"}) to the selected program. To change one athlete's program
         later, edit that athlete under Athletes.
       </p>
-      {teamPrograms.length === 0 ? (
+      {sorted.length === 0 ? (
         <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
-          No programs exist for this team yet — create one on the Programs page first.
+          No programs exist yet — create one on the Programs page first.
         </p>
       ) : (
         <Select value={value} onValueChange={onChange}>
@@ -480,16 +491,19 @@ function AssignProgramPanel({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none">No program (clear)</SelectItem>
-            {teamPrograms.map((p) => (
+            {sorted.map((p) => (
               <SelectItem key={p.id} value={p.id}>
                 {p.name}
+                {p.team_id && p.team_id !== team.id
+                  ? ` (${teamNameById.get(p.team_id) ?? "other team"})`
+                  : ""}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       )}
       <DialogFooter>
-        <Button onClick={onConfirm} disabled={pending || !rosterCount || teamPrograms.length === 0}>
+        <Button onClick={onConfirm} disabled={pending || !rosterCount || sorted.length === 0}>
           {pending
             ? "Assigning…"
             : `Assign to ${rosterCount} athlete${rosterCount === 1 ? "" : "s"}`}
