@@ -7,21 +7,50 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { athletesQO, athleteDisplayName, titleCaseName, type Athlete } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { getScopedOrgId } from "@/lib/scoped-insert";
+import { parseRosterPdf, buildClassPeriodCsv, type RosterPdfRow } from "@/lib/roster-pdf-parse";
 import { toast } from "sonner";
-import { Upload, Download, FileText } from "lucide-react";
+import { Upload, Download, FileText, FileUp } from "lucide-react";
 
 type EntityKind = "athletes" | "tests" | "lifts" | "attendance" | "class_period";
 
 const TEMPLATES: Record<EntityKind, { headers: string[]; sample: string[] }> = {
   athletes: {
-    headers: ["first_name", "last_name", "grade", "sport", "position", "graduation_year", "bodyweight", "height_in", "athlete_email", "parent_email", "student_id"],
-    sample: ["Jane", "Doe", "11", "Track & Field", "Sprinter", "2027", "145", "66", "jane@example.com", "", ""],
+    headers: [
+      "first_name",
+      "last_name",
+      "grade",
+      "sport",
+      "position",
+      "graduation_year",
+      "bodyweight",
+      "height_in",
+      "athlete_email",
+      "parent_email",
+      "student_id",
+    ],
+    sample: [
+      "Jane",
+      "Doe",
+      "11",
+      "Track & Field",
+      "Sprinter",
+      "2027",
+      "145",
+      "66",
+      "jane@example.com",
+      "",
+      "",
+    ],
   },
   class_period: {
     headers: ["athlete_name", "student_id", "class_period"],
@@ -57,18 +86,49 @@ function parseCSV(text: string): string[][] {
     const c = text[i];
     if (inQuotes) {
       if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
-        inQuotes = false; i++; continue;
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
       }
-      field += c; i++; continue;
+      field += c;
+      i++;
+      continue;
     }
-    if (c === '"') { inQuotes = true; i++; continue; }
-    if (c === ",") { row.push(field); field = ""; i++; continue; }
-    if (c === "\r") { i++; continue; }
-    if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
-    field += c; i++;
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (c === ",") {
+      row.push(field);
+      field = "";
+      i++;
+      continue;
+    }
+    if (c === "\r") {
+      i++;
+      continue;
+    }
+    if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+      continue;
+    }
+    field += c;
+    i++;
   }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
   return rows.filter((r) => r.some((v) => v.trim().length));
 }
 
@@ -115,22 +175,68 @@ function ImportPage() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ inserted: number; skipped: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    inserted: number;
+    skipped: number;
+    errors: string[];
+  } | null>(null);
   const [activeTeamId] = useActiveTeamId();
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
+
+  // PDF roster path for class_period: the file is parsed into rows once,
+  // then re-rendered into the same CSV text the manual-upload path uses —
+  // so everything downstream (preview table, matching, import) is shared.
+  const [pdfRows, setPdfRows] = useState<RosterPdfRow[] | null>(null);
+  const [periodLabel, setPeriodLabel] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfFileName, setPdfFileName] = useState<string | null>(null);
 
   const parsed = useMemo(() => (text ? toRecords(text) : { headers: [], records: [] }), [text]);
 
   const onFile = async (f: File | null) => {
     if (!f) return;
+    setPdfRows(null);
+    setPdfFileName(null);
     setFileName(f.name);
     setResult(null);
     setText(await f.text());
   };
 
+  const onPdfFile = async (f: File | null) => {
+    if (!f) return;
+    setPdfBusy(true);
+    setResult(null);
+    try {
+      const { rows, periodGuess } = await parseRosterPdf(f);
+      if (!rows.length) {
+        toast.error("Couldn't find any student rows in that PDF — try the CSV format instead");
+        return;
+      }
+      setPdfRows(rows);
+      setPdfFileName(f.name);
+      setFileName(null);
+      const label = periodGuess ?? periodLabel;
+      setPeriodLabel(label);
+      setText(buildClassPeriodCsv(rows, label));
+      toast.success(`Found ${rows.length} student${rows.length === 1 ? "" : "s"} in that roster`);
+    } catch {
+      toast.error("Couldn't read that PDF — try the CSV format instead");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const onPeriodLabelChange = (v: string) => {
+    setPeriodLabel(v);
+    if (pdfRows) setText(buildClassPeriodCsv(pdfRows, v));
+  };
+
   const runImport = async () => {
-    if (!parsed.records.length) { toast.error("No rows to import"); return; }
+    if (!parsed.records.length) {
+      toast.error("No rows to import");
+      return;
+    }
     setBusy(true);
     const errors: string[] = [];
     let inserted = 0;
@@ -138,43 +244,50 @@ function ImportPage() {
 
     try {
       if (kind === "athletes") {
-        const rows = parsed.records.map((r, idx) => {
-          const first = titleCaseName(r.first_name || r.firstname || "");
-          const last = titleCaseName(r.last_name || r.lastname || "");
-          if (!first && !last) { errors.push(`Row ${idx + 2}: missing name`); return null; }
-          return {
-            first_name: first || null,
-            last_name: last || null,
-            name: `${first} ${last}`.trim(),
-            grade: r.grade ? Number(r.grade) : null,
-            sport: r.sport || null,
-            position: r.position || null,
-            graduation_year: r.graduation_year ? Number(r.graduation_year) : null,
-            bodyweight: r.bodyweight ? Number(r.bodyweight) : null,
-            height_in: r.height_in ? Number(r.height_in) : null,
-            athlete_email: r.athlete_email || null,
-            parent_email: r.parent_email || null,
-            student_id: r.student_id || null,
-            team_id: activeTeamId,
-            status: "active",
-          };
-        }).filter(Boolean) as Record<string, unknown>[];
+        const rows = parsed.records
+          .map((r, idx) => {
+            const first = titleCaseName(r.first_name || r.firstname || "");
+            const last = titleCaseName(r.last_name || r.lastname || "");
+            if (!first && !last) {
+              errors.push(`Row ${idx + 2}: missing name`);
+              return null;
+            }
+            return {
+              first_name: first || null,
+              last_name: last || null,
+              name: `${first} ${last}`.trim(),
+              grade: r.grade ? Number(r.grade) : null,
+              sport: r.sport || null,
+              position: r.position || null,
+              graduation_year: r.graduation_year ? Number(r.graduation_year) : null,
+              bodyweight: r.bodyweight ? Number(r.bodyweight) : null,
+              height_in: r.height_in ? Number(r.height_in) : null,
+              athlete_email: r.athlete_email || null,
+              parent_email: r.parent_email || null,
+              student_id: r.student_id || null,
+              team_id: activeTeamId,
+              status: "active",
+            };
+          })
+          .filter(Boolean) as Record<string, unknown>[];
         if (rows.length) {
           const organization_id = await getScopedOrgId();
           const scopedRows = rows.map((r) => ({ ...r, organization_id }));
-          const { error, count } = await supabase.from("athletes").insert(scopedRows as never, { count: "exact" });
+          const { error, count } = await supabase
+            .from("athletes")
+            .insert(scopedRows as never, { count: "exact" });
           if (error) errors.push(error.message);
           else inserted = count ?? rows.length;
         }
         skipped = parsed.records.length - rows.length;
-      }
-
-      else if (kind === "class_period") {
+      } else if (kind === "class_period") {
         const updates: { id: string; class_period: string | null }[] = [];
         parsed.records.forEach((r, idx) => {
           const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "", r.student_id);
           if (!athlete) {
-            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name || r.student_id || "?"}" not found in your roster — not creating a new athlete`);
+            errors.push(
+              `Row ${idx + 2}: athlete "${r.athlete_name || r.student_id || "?"}" not found in your roster — not creating a new athlete`,
+            );
             skipped++;
             return;
           }
@@ -182,24 +295,39 @@ function ImportPage() {
         });
         if (updates.length) {
           const results = await Promise.all(
-            updates.map((u) => supabase.from("athletes").update({ class_period: u.class_period } as never).eq("id", u.id)),
+            updates.map((u) =>
+              supabase
+                .from("athletes")
+                .update({ class_period: u.class_period } as never)
+                .eq("id", u.id),
+            ),
           );
           results.forEach((res, i) => {
             if (res.error) errors.push(`${updates[i].id}: ${res.error.message}`);
           });
           inserted = updates.length - results.filter((r) => r.error).length;
         }
-      }
-
-      else if (kind === "tests") {
+      } else if (kind === "tests") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
           const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) { errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`); skipped++; return; }
+          if (!athlete) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+            skipped++;
+            return;
+          }
           const tt = TEST_TYPES.find((t) => t.value === r.test_type);
-          if (!tt) { errors.push(`Row ${idx + 2}: unknown test_type "${r.test_type}"`); skipped++; return; }
+          if (!tt) {
+            errors.push(`Row ${idx + 2}: unknown test_type "${r.test_type}"`);
+            skipped++;
+            return;
+          }
           const val = Number(r.value);
-          if (!isFinite(val)) { errors.push(`Row ${idx + 2}: invalid value`); skipped++; return; }
+          if (!isFinite(val)) {
+            errors.push(`Row ${idx + 2}: invalid value`);
+            skipped++;
+            return;
+          }
           rows.push({
             athlete_id: athlete.id,
             test_type: r.test_type,
@@ -210,18 +338,26 @@ function ImportPage() {
           });
         });
         if (rows.length) {
-          const { error, count } = await supabase.from("tests").insert(rows as never, { count: "exact" });
+          const { error, count } = await supabase
+            .from("tests")
+            .insert(rows as never, { count: "exact" });
           if (error) errors.push(error.message);
           else inserted = count ?? rows.length;
         }
-      }
-
-      else if (kind === "lifts") {
+      } else if (kind === "lifts") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
           const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) { errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`); skipped++; return; }
-          if (!r.exercise) { errors.push(`Row ${idx + 2}: missing exercise`); skipped++; return; }
+          if (!athlete) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+            skipped++;
+            return;
+          }
+          if (!r.exercise) {
+            errors.push(`Row ${idx + 2}: missing exercise`);
+            skipped++;
+            return;
+          }
           rows.push({
             athlete_id: athlete.id,
             exercise: r.exercise,
@@ -233,18 +369,26 @@ function ImportPage() {
           });
         });
         if (rows.length) {
-          const { error, count } = await supabase.from("lifts").insert(rows as never, { count: "exact" });
+          const { error, count } = await supabase
+            .from("lifts")
+            .insert(rows as never, { count: "exact" });
           if (error) errors.push(error.message);
           else inserted = count ?? rows.length;
         }
-      }
-
-      else if (kind === "attendance") {
+      } else if (kind === "attendance") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
           const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) { errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`); skipped++; return; }
-          if (!r.session_date) { errors.push(`Row ${idx + 2}: missing session_date`); skipped++; return; }
+          if (!athlete) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+            skipped++;
+            return;
+          }
+          if (!r.session_date) {
+            errors.push(`Row ${idx + 2}: missing session_date`);
+            skipped++;
+            return;
+          }
           const present = /^(1|true|yes|y|present|p)$/i.test((r.present || "").trim());
           rows.push({
             athlete_id: athlete.id,
@@ -254,7 +398,9 @@ function ImportPage() {
           });
         });
         if (rows.length) {
-          const { error, count } = await supabase.from("attendance").insert(rows as never, { count: "exact" });
+          const { error, count } = await supabase
+            .from("attendance")
+            .insert(rows as never, { count: "exact" });
           if (error) errors.push(error.message);
           else inserted = count ?? rows.length;
         }
@@ -278,7 +424,9 @@ function ImportPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold sm:text-3xl">CSV Import</h1>
-        <p className="text-sm text-muted-foreground">Bulk-load athletes, tests, lifts, or attendance from a CSV file.</p>
+        <p className="text-sm text-muted-foreground">
+          Bulk-load athletes, tests, lifts, or attendance from a CSV file.
+        </p>
       </div>
 
       <Card>
@@ -288,8 +436,16 @@ function ImportPage() {
         <CardContent className="grid gap-4 sm:grid-cols-[220px_1fr] items-end">
           <div>
             <Label>Data type</Label>
-            <Select value={kind} onValueChange={(v) => { setKind(v as EntityKind); setResult(null); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={kind}
+              onValueChange={(v) => {
+                setKind(v as EntityKind);
+                setResult(null);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="athletes">Athletes (roster)</SelectItem>
                 <SelectItem value="class_period">Class period (update existing)</SelectItem>
@@ -300,10 +456,15 @@ function ImportPage() {
             </Select>
           </div>
           <div className="text-sm text-muted-foreground">
-            <div className="mb-2"><span className="font-medium text-foreground">Expected columns:</span> {TEMPLATES[kind].headers.join(", ")}</div>
+            <div className="mb-2">
+              <span className="font-medium text-foreground">Expected columns:</span>{" "}
+              {TEMPLATES[kind].headers.join(", ")}
+            </div>
             {kind === "class_period" && (
               <p className="mb-2 text-xs">
-                Matches each row to an athlete already in your roster — by <code>student_id</code> when given, otherwise by full name — and sets their class period. Rows that don't match an existing athlete are skipped; nothing new is created.
+                Matches each row to an athlete already in your roster — by <code>student_id</code>{" "}
+                when given, otherwise by full name — and sets their class period. Rows that don't
+                match an existing athlete are skipped; nothing new is created.
               </p>
             )}
             <Button variant="outline" size="sm" onClick={() => downloadTemplate(kind)}>
@@ -315,34 +476,85 @@ function ImportPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">2. Upload CSV</CardTitle>
+          <CardTitle className="text-base">
+            2. Upload {kind === "class_period" ? "a roster" : "CSV"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+          {kind === "class_period" && (
+            <>
+              <div>
+                <Label>Upload a roster PDF (e.g. a school SIS section roster)</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  disabled={pdfBusy}
+                  onChange={(e) => onPdfFile(e.target.files?.[0] ?? null)}
+                />
+                {pdfFileName && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    <FileUp className="h-4 w-4" /> {pdfFileName} — {pdfRows?.length ?? 0} student
+                    {(pdfRows?.length ?? 0) === 1 ? "" : "s"} found
+                  </div>
+                )}
+              </div>
+              {pdfRows && (
+                <div className="max-w-xs">
+                  <Label>Class period label</Label>
+                  <Input
+                    value={periodLabel}
+                    onChange={(e) => onPeriodLabelChange(e.target.value)}
+                    placeholder="e.g. 2nd Period"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">Or paste/upload a CSV instead:</p>
+            </>
+          )}
+          <Input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+          />
           {fileName && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileText className="h-4 w-4" /> {fileName} — {parsed.records.length} row{parsed.records.length === 1 ? "" : "s"} detected
+              <FileText className="h-4 w-4" /> {fileName} — {parsed.records.length} row
+              {parsed.records.length === 1 ? "" : "s"} detected
             </div>
           )}
           {kind === "athletes" && !activeTeamId && (
-            <p className="text-xs text-destructive">Tip: pick an active team in the header so imported athletes are assigned to it.</p>
+            <p className="text-xs text-destructive">
+              Tip: pick an active team in the header so imported athletes are assigned to it.
+            </p>
           )}
           {parsed.records.length > 0 && (
             <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50">
-                  <tr>{parsed.headers.map((h) => <th key={h} className="px-2 py-1 text-left font-medium">{h}</th>)}</tr>
+                  <tr>
+                    {parsed.headers.map((h) => (
+                      <th key={h} className="px-2 py-1 text-left font-medium">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody>
                   {parsed.records.slice(0, 5).map((r, i) => (
                     <tr key={i} className="border-t">
-                      {parsed.headers.map((h) => <td key={h} className="px-2 py-1">{r[h]}</td>)}
+                      {parsed.headers.map((h) => (
+                        <td key={h} className="px-2 py-1">
+                          {r[h]}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
               {parsed.records.length > 5 && (
-                <div className="border-t px-2 py-1 text-xs text-muted-foreground">…and {parsed.records.length - 5} more</div>
+                <div className="border-t px-2 py-1 text-xs text-muted-foreground">
+                  …and {parsed.records.length - 5} more
+                </div>
               )}
             </div>
           )}
@@ -355,19 +567,32 @@ function ImportPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Button onClick={runImport} disabled={busy || !parsed.records.length}>
-            <Upload className="mr-2 h-4 w-4" /> {busy ? "Importing…" : `Import ${parsed.records.length} row${parsed.records.length === 1 ? "" : "s"}`}
+            <Upload className="mr-2 h-4 w-4" />{" "}
+            {busy
+              ? "Importing…"
+              : `Import ${parsed.records.length} row${parsed.records.length === 1 ? "" : "s"}`}
           </Button>
           {result && (
             <div className="space-y-2 text-sm">
               <div>
-                <span className="font-medium">{result.inserted}</span> {kind === "class_period" ? "updated" : "inserted"}
-                {result.skipped > 0 && <> · <span className="font-medium">{result.skipped}</span> skipped</>}
+                <span className="font-medium">{result.inserted}</span>{" "}
+                {kind === "class_period" ? "updated" : "inserted"}
+                {result.skipped > 0 && (
+                  <>
+                    {" "}
+                    · <span className="font-medium">{result.skipped}</span> skipped
+                  </>
+                )}
               </div>
               {result.errors.length > 0 && (
                 <details className="rounded-md border p-3">
-                  <summary className="cursor-pointer text-destructive">{result.errors.length} error{result.errors.length === 1 ? "" : "s"}</summary>
+                  <summary className="cursor-pointer text-destructive">
+                    {result.errors.length} error{result.errors.length === 1 ? "" : "s"}
+                  </summary>
                   <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
-                    {result.errors.slice(0, 50).map((e, i) => <li key={i}>{e}</li>)}
+                    {result.errors.slice(0, 50).map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
                   </ul>
                 </details>
               )}
