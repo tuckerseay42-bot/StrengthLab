@@ -17,7 +17,12 @@ import { athletesQO, athleteDisplayName, titleCaseName, type Athlete } from "@/l
 import { TEST_TYPES } from "@/lib/domain";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { getScopedOrgId } from "@/lib/scoped-insert";
-import { parseRosterPdf, buildClassPeriodCsv, type RosterPdfRow } from "@/lib/roster-pdf-parse";
+import {
+  parseRosterPdf,
+  buildClassPeriodCsv,
+  buildAthleteRosterCsv,
+  type RosterPdfRow,
+} from "@/lib/roster-pdf-parse";
 import { toast } from "sonner";
 import { Upload, Download, FileText, FileUp } from "lucide-react";
 
@@ -37,6 +42,7 @@ const TEMPLATES: Record<EntityKind, { headers: string[]; sample: string[] }> = {
       "athlete_email",
       "parent_email",
       "student_id",
+      "class_period",
     ],
     sample: [
       "Jane",
@@ -50,6 +56,7 @@ const TEMPLATES: Record<EntityKind, { headers: string[]; sample: string[] }> = {
       "jane@example.com",
       "",
       "",
+      "3rd Period",
     ],
   },
   class_period: {
@@ -184,15 +191,22 @@ function ImportPage() {
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
 
-  // PDF roster path for class_period: the file is parsed into rows once,
-  // then re-rendered into the same CSV text the manual-upload path uses —
-  // so everything downstream (preview table, matching, import) is shared.
+  // PDF roster path (athletes + class_period): the file is parsed into rows
+  // once, then re-rendered into the same CSV text the manual-upload path
+  // uses — so everything downstream (preview table, matching, import) is
+  // shared with the hand-built-CSV flow.
   const [pdfRows, setPdfRows] = useState<RosterPdfRow[] | null>(null);
   const [periodLabel, setPeriodLabel] = useState("");
+  const [sportLabel, setSportLabel] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
 
   const parsed = useMemo(() => (text ? toRecords(text) : { headers: [], records: [] }), [text]);
+
+  const buildCsvForKind = (rows: RosterPdfRow[], period: string, sport: string) =>
+    kind === "athletes"
+      ? buildAthleteRosterCsv(rows, { sport, classPeriod: period })
+      : buildClassPeriodCsv(rows, period);
 
   const onFile = async (f: File | null) => {
     if (!f) return;
@@ -218,7 +232,7 @@ function ImportPage() {
       setFileName(null);
       const label = periodGuess ?? periodLabel;
       setPeriodLabel(label);
-      setText(buildClassPeriodCsv(rows, label));
+      setText(buildCsvForKind(rows, label, sportLabel));
       toast.success(`Found ${rows.length} student${rows.length === 1 ? "" : "s"} in that roster`);
     } catch {
       toast.error("Couldn't read that PDF — try the CSV format instead");
@@ -229,7 +243,12 @@ function ImportPage() {
 
   const onPeriodLabelChange = (v: string) => {
     setPeriodLabel(v);
-    if (pdfRows) setText(buildClassPeriodCsv(pdfRows, v));
+    if (pdfRows) setText(buildCsvForKind(pdfRows, v, sportLabel));
+  };
+
+  const onSportLabelChange = (v: string) => {
+    setSportLabel(v);
+    if (pdfRows) setText(buildCsvForKind(pdfRows, periodLabel, v));
   };
 
   const runImport = async () => {
@@ -265,6 +284,7 @@ function ImportPage() {
               athlete_email: r.athlete_email || null,
               parent_email: r.parent_email || null,
               student_id: r.student_id || null,
+              class_period: r.class_period?.trim() || null,
               team_id: activeTeamId,
               status: "active",
             };
@@ -441,6 +461,10 @@ function ImportPage() {
               onValueChange={(v) => {
                 setKind(v as EntityKind);
                 setResult(null);
+                setPdfRows(null);
+                setPdfFileName(null);
+                setFileName(null);
+                setText("");
               }}
             >
               <SelectTrigger>
@@ -477,11 +501,11 @@ function ImportPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">
-            2. Upload {kind === "class_period" ? "a roster" : "CSV"}
+            2. Upload {kind === "class_period" || kind === "athletes" ? "a roster" : "CSV"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {kind === "class_period" && (
+          {(kind === "class_period" || kind === "athletes") && (
             <>
               <div>
                 <Label>Upload a roster PDF (e.g. a school SIS section roster)</Label>
@@ -499,13 +523,25 @@ function ImportPage() {
                 )}
               </div>
               {pdfRows && (
-                <div className="max-w-xs">
-                  <Label>Class period label</Label>
-                  <Input
-                    value={periodLabel}
-                    onChange={(e) => onPeriodLabelChange(e.target.value)}
-                    placeholder="e.g. 2nd Period"
-                  />
+                <div className="flex flex-wrap gap-3">
+                  <div className="max-w-xs">
+                    <Label>Class period label</Label>
+                    <Input
+                      value={periodLabel}
+                      onChange={(e) => onPeriodLabelChange(e.target.value)}
+                      placeholder="e.g. 2nd Period"
+                    />
+                  </div>
+                  {kind === "athletes" && (
+                    <div className="max-w-xs">
+                      <Label>Sport</Label>
+                      <Input
+                        value={sportLabel}
+                        onChange={(e) => onSportLabelChange(e.target.value)}
+                        placeholder="e.g. Football"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">Or paste/upload a CSV instead:</p>

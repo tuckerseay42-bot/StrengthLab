@@ -4,11 +4,17 @@
 // so pdfjs (a DOM-dependent library) never loads during SSR.
 import { titleCaseName } from "@/lib/queries";
 
-export type RosterPdfRow = { firstName: string; lastName: string; studentId: string };
+export type RosterPdfRow = {
+  firstName: string;
+  lastName: string;
+  studentId: string;
+  grade: number | null;
+  gender: "male" | "female" | null;
+};
 export type RosterPdfResult = { periodGuess: string | null; rows: RosterPdfRow[] };
 
 // "LAST[ LAST2], FIRST[ MIDDLE...] 12345 M 11 [08/10/2026 -]"
-const ROW_RE = /^([A-Z][A-Z'.\- ]*?),\s+([A-Z][A-Z'.\- ]+?)\s+(\d{3,8})\s+[MF]\s+\d{1,2}\b/;
+const ROW_RE = /^([A-Z][A-Z'.\- ]*?),\s+([A-Z][A-Z'.\- ]+?)\s+(\d{3,8})\s+([MF])\s+(\d{1,2})\b/;
 const PERIOD_RE = /Period:\s*0*(\d{1,2})\b/i;
 
 export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
@@ -57,7 +63,15 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
         const lastName = m[1].trim();
         const firstName = m[2].trim().split(/\s+/)[0];
         const studentId = m[3];
-        rows.push({ firstName, lastName, studentId });
+        const gender = m[4] === "M" ? "male" : m[4] === "F" ? "female" : null;
+        const grade = Number(m[5]);
+        rows.push({
+          firstName,
+          lastName,
+          studentId,
+          grade: Number.isFinite(grade) ? grade : null,
+          gender,
+        });
       }
     }
   }
@@ -65,13 +79,47 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
   return { periodGuess, rows };
 }
 
+function csvCell(s: string): string {
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 /** Turns parsed roster rows into the same CSV shape the class-period importer already expects. */
 export function buildClassPeriodCsv(rows: RosterPdfRow[], classPeriod: string): string {
-  const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = ["athlete_name,student_id,class_period"];
   for (const r of rows) {
     const name = titleCaseName(`${r.firstName} ${r.lastName}`);
-    lines.push([esc(name), r.studentId, esc(classPeriod)].join(","));
+    lines.push([csvCell(name), r.studentId, csvCell(classPeriod)].join(","));
+  }
+  return lines.join("\n");
+}
+
+/** Turns parsed roster rows into the same CSV shape the "Athletes (roster)" importer expects, for creating brand-new athletes straight from a roster PDF. */
+export function buildAthleteRosterCsv(
+  rows: RosterPdfRow[],
+  opts: { sport: string; classPeriod: string },
+): string {
+  const lines = [
+    "first_name,last_name,grade,sport,position,graduation_year,bodyweight,height_in,athlete_email,parent_email,student_id,class_period",
+  ];
+  for (const r of rows) {
+    const first = titleCaseName(r.firstName);
+    const last = titleCaseName(r.lastName);
+    lines.push(
+      [
+        csvCell(first),
+        csvCell(last),
+        r.grade ?? "",
+        csvCell(opts.sport),
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        r.studentId,
+        csvCell(opts.classPeriod),
+      ].join(","),
+    );
   }
   return lines.join("\n");
 }
