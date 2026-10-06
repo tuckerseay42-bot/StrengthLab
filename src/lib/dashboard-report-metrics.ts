@@ -59,7 +59,9 @@ export function prReportMetrics(repMaxes: RepMax[]): ReportMetric[] {
 
 /** One metric per exercise actually logged in training (the `lifts` table) — distinct from PR testing. */
 export function liftReportMetrics(lifts: LiftRow[]): ReportMetric[] {
-  const names = Array.from(new Set(lifts.filter((l) => l.load != null).map((l) => l.exercise))).sort();
+  const names = Array.from(
+    new Set(lifts.filter((l) => l.load != null).map((l) => l.exercise)),
+  ).sort();
   return names.map((n) => ({
     key: `lift:${n}`,
     label: n,
@@ -84,9 +86,17 @@ export function customMetricReportMetrics(customMetrics: CustomMetric[]): Report
     .map((m) => ({
       key: `custom:${m.id}`,
       label: m.name,
-      unit: m.unit ?? (m.kind === "bodyweight"
-        ? "lb"
-        : m.measurement === "time" ? "s" : m.measurement === "height" ? "in" : m.measurement === "speed" ? "mph" : "lb"),
+      unit:
+        m.unit ??
+        (m.kind === "bodyweight"
+          ? "lb"
+          : m.measurement === "time"
+            ? "s"
+            : m.measurement === "height"
+              ? "in"
+              : m.measurement === "speed"
+                ? "mph"
+                : "lb"),
       lowerIsBetter: m.lower_is_better,
       group: "Custom Metrics",
     }));
@@ -98,7 +108,11 @@ export function allReportMetrics(
   lifts: LiftRow[] = [],
   customMetrics: CustomMetric[] = [],
 ): ReportMetric[] {
-  const base = [...testReportMetrics(customTypes), ...liftReportMetrics(lifts), ...prReportMetrics(repMaxes)];
+  const base = [
+    ...testReportMetrics(customTypes),
+    ...liftReportMetrics(lifts),
+    ...prReportMetrics(repMaxes),
+  ];
   // A Custom Metric can easily share a name with a test type or exercise
   // that already auto-populates the picker (e.g. a coach names a metric
   // after the drill it tracks) — without a distinguishing label, the two
@@ -158,7 +172,12 @@ export function reportSeries(
       for (const l of lifts) {
         if (l.athlete_id !== athleteId) continue;
         if ((l.exercise ?? "").trim().toLowerCase() !== target) continue;
-        const raw = measurement === "time" ? l.time_seconds : measurement === "height" ? l.distance_in : l.load;
+        const raw =
+          measurement === "time"
+            ? l.time_seconds
+            : measurement === "height"
+              ? l.distance_in
+              : l.load;
         if (raw == null) continue;
         consider(l.lift_date, Number(raw));
       }
@@ -226,6 +245,32 @@ export const CELL_TONE_CLASS: Record<CellTone, string> = {
   flat: "bg-muted/40 text-foreground",
   empty: "text-muted-foreground/30",
 };
+
+// Shared report-wide ordering so every dashboard surface (Team Metrics
+// Table, Athlete panel's percentile/trend lists, …) groups the same catalog
+// of metrics the same way, instead of each view inventing its own order —
+// or worse, its own hardcoded subset of metrics to show at all.
+export const REPORT_GROUP_ORDER = [
+  "Speed",
+  "Jumps",
+  "Strength",
+  "Lifts",
+  "Custom Metrics",
+  "PRs (est. 1RM)",
+];
+
+export function sortReportMetrics(metrics: ReportMetric[]): ReportMetric[] {
+  return metrics.slice().sort((a, b) => {
+    const ai = REPORT_GROUP_ORDER.indexOf(a.group);
+    const bi = REPORT_GROUP_ORDER.indexOf(b.group);
+    if (ai !== bi) {
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    }
+    return a.label.localeCompare(b.label);
+  });
+}
 
 /** Percentile of `value` within `pool` (0-100, higher = better position). */
 export function percentileRank(

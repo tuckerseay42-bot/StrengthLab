@@ -30,16 +30,10 @@ import {
   reportSeries,
   withPRFlags,
   percentileRank,
+  sortReportMetrics,
   type FlaggedPoint,
 } from "@/lib/dashboard-report-metrics";
 import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
-
-const KEY_METRIC_KEYS = [
-  "test:sprint_40y",
-  "test:vertical_jump",
-  "test:broad_jump",
-  "test:pro_agility",
-];
 
 export function AthleteAnalyticsPanel({
   athlete,
@@ -66,7 +60,10 @@ export function AthleteAnalyticsPanel({
   const trends = useMemo(() => {
     return allMetrics
       .map((m) => {
-        const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight), m.lowerIsBetter);
+        const series = withPRFlags(
+          reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight),
+          m.lowerIsBetter,
+        );
         return { metric: m, series };
       })
       .filter((t) => t.series.length >= 2)
@@ -78,33 +75,46 @@ export function AthleteAnalyticsPanel({
 
   const percentiles = useMemo(() => {
     const pool = peers.filter((p) => p.id !== athlete.id);
-    return KEY_METRIC_KEYS.map((key) => {
-      const metric = allMetrics.find((m) => m.key === key);
-      if (!metric) return null;
-      const mine = reportSeries(metric, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight);
-      if (!mine.length) return null;
-      const myBest = metric.lowerIsBetter
-        ? Math.min(...mine.map((p) => p.value))
-        : Math.max(...mine.map((p) => p.value));
-      const poolBests = pool
-        .map((p) => reportSeries(metric, p.id, tests, repMaxes, lifts, customMetrics, p.bodyweight))
-        .filter((s) => s.length)
-        .map((s) =>
-          metric.lowerIsBetter
-            ? Math.min(...s.map((p) => p.value))
-            : Math.max(...s.map((p) => p.value)),
+    return sortReportMetrics(allMetrics)
+      .map((metric) => {
+        const mine = reportSeries(
+          metric,
+          athlete.id,
+          tests,
+          repMaxes,
+          lifts,
+          customMetrics,
+          athlete.bodyweight,
         );
-      const pct = percentileRank(poolBests, myBest, metric.lowerIsBetter);
-      return pct == null ? null : { metric, value: myBest, pct };
-    }).filter(
-      (x): x is { metric: (typeof allMetrics)[number]; value: number; pct: number } => x != null,
-    );
+        if (!mine.length) return null;
+        const myBest = metric.lowerIsBetter
+          ? Math.min(...mine.map((p) => p.value))
+          : Math.max(...mine.map((p) => p.value));
+        const poolBests = pool
+          .map((p) =>
+            reportSeries(metric, p.id, tests, repMaxes, lifts, customMetrics, p.bodyweight),
+          )
+          .filter((s) => s.length)
+          .map((s) =>
+            metric.lowerIsBetter
+              ? Math.min(...s.map((p) => p.value))
+              : Math.max(...s.map((p) => p.value)),
+          );
+        const pct = percentileRank(poolBests, myBest, metric.lowerIsBetter);
+        return pct == null ? null : { metric, value: myBest, pct };
+      })
+      .filter(
+        (x): x is { metric: (typeof allMetrics)[number]; value: number; pct: number } => x != null,
+      );
   }, [peers, athlete.id, athlete.bodyweight, allMetrics, tests, repMaxes, lifts, customMetrics]);
 
   const recentPRs = useMemo(() => {
     const items: { label: string; value: number; unit: string; date: string }[] = [];
     for (const m of allMetrics) {
-      const series = withPRFlags(reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight), m.lowerIsBetter);
+      const series = withPRFlags(
+        reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight),
+        m.lowerIsBetter,
+      );
       const lastPR = [...series].reverse().find((p) => p.isPR);
       if (lastPR)
         items.push({ label: m.label, value: lastPR.value, unit: m.unit, date: lastPR.date });
