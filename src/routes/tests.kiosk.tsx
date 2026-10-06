@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   athletesQO,
+  testsQO,
   testTypesQO,
   customMetricsQO,
   athleteDisplayName,
@@ -38,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Gauge, Search } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Gauge, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tests/kiosk")({
@@ -68,6 +69,7 @@ function readStoredFilter(key: string): string {
 function TestKioskPage() {
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
+  const { data: tests = [] } = useQuery(testsQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
   const { data: customMetrics = [] } = useQuery(customMetricsQO);
 
@@ -174,6 +176,20 @@ function TestKioskPage() {
     }
     return list.slice().sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)));
   }, [athletes, classPeriodFilter, sportFilter, search]);
+
+  // Who's already logged today's metric — lights the roster grid up green
+  // as kids go, same at-a-glance read as a wall-mounted attendance board.
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const loggedToday = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of tests)
+      if (t.test_type === testType && t.test_date === today) s.add(t.athlete_id);
+    return s;
+  }, [tests, testType, today]);
+  const loggedCount = useMemo(
+    () => roster.filter((a) => loggedToday.has(a.id)).length,
+    [roster, loggedToday],
+  );
 
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
@@ -339,7 +355,7 @@ function TestKioskPage() {
           <Card className="flex flex-1 flex-col">
             <CardHeader className="gap-3 pb-3">
               <CardTitle className="text-sm text-muted-foreground">
-                Tap your name — {roster.length} athlete{roster.length === 1 ? "" : "s"}
+                Tap your name — {loggedCount} of {roster.length} logged
               </CardTitle>
               <div className="flex flex-wrap gap-2">
                 <Select value={classPeriodFilter} onValueChange={setClassPeriodFilter}>
@@ -387,7 +403,12 @@ function TestKioskPage() {
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                   {roster.map((a) => (
-                    <NameTile key={a.id} athlete={a} onClick={() => setAthleteId(a.id)} />
+                    <NameTile
+                      key={a.id}
+                      athlete={a}
+                      logged={loggedToday.has(a.id)}
+                      onClick={() => setAthleteId(a.id)}
+                    />
                   ))}
                 </div>
               )}
@@ -419,14 +440,37 @@ function TestKioskPage() {
   );
 }
 
-function NameTile({ athlete, onClick }: { athlete: Athlete; onClick: () => void }) {
+function NameTile({
+  athlete,
+  logged,
+  onClick,
+}: {
+  athlete: Athlete;
+  logged: boolean;
+  onClick: () => void;
+}) {
   const meta = [athlete.sport, athlete.class_period].filter(Boolean).join(" · ");
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex h-20 flex-col items-center justify-center gap-0.5 rounded-xl border border-border/60 bg-card px-2 text-center transition active:scale-[0.97] hover:border-primary hover:bg-primary/5"
+      className={cn(
+        "relative flex h-20 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-center transition active:scale-[0.97]",
+        logged
+          ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/10"
+          : "border-border/60 bg-card hover:border-primary hover:bg-primary/5",
+      )}
     >
+      <span
+        className={cn(
+          "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full",
+          logged
+            ? "bg-[color:var(--color-success)] text-[color:var(--color-success-foreground)]"
+            : "border border-border/60",
+        )}
+      >
+        {logged && <Check className="h-2.5 w-2.5" />}
+      </span>
       <span className="text-sm font-semibold leading-tight">{athleteDisplayName(athlete)}</span>
       {meta && <span className="truncate text-[10px] text-muted-foreground">{meta}</span>}
     </button>
