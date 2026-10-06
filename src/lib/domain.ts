@@ -1,25 +1,44 @@
 export const SPORTS = [
   "Football",
-  "Boys Basketball", "Girls Basketball",
-  "Baseball", "Softball",
-  "Boys Soccer", "Girls Soccer",
-  "Boys Lacrosse", "Girls Lacrosse",
-  "Boys Track & Field", "Girls Track & Field",
-  "Boys Cross Country", "Girls Cross Country",
-  "Boys Swimming", "Girls Swimming",
-  "Boys Tennis", "Girls Tennis",
-  "Boys Golf", "Girls Golf",
-  "Boys Volleyball", "Girls Volleyball",
+  "Boys Basketball",
+  "Girls Basketball",
+  "Baseball",
+  "Softball",
+  "Boys Soccer",
+  "Girls Soccer",
+  "Boys Lacrosse",
+  "Girls Lacrosse",
+  "Boys Track & Field",
+  "Girls Track & Field",
+  "Boys Cross Country",
+  "Girls Cross Country",
+  "Boys Swimming",
+  "Girls Swimming",
+  "Boys Tennis",
+  "Girls Tennis",
+  "Boys Golf",
+  "Girls Golf",
+  "Boys Volleyball",
+  "Girls Volleyball",
   "Wrestling",
-  "Cheer", "Dance",
-  "Field Hockey", "Gymnastics", "Ice Hockey",
-  "Water Polo", "Rugby", "Bowling",
+  "Cheer",
+  "Dance",
+  "Field Hockey",
+  "Gymnastics",
+  "Ice Hockey",
+  "Water Polo",
+  "Rugby",
+  "Bowling",
   "Other",
 ] as const;
 
 export const GENDERS = ["male", "female", "other"] as const;
 export type Gender = (typeof GENDERS)[number];
-export const GENDER_LABELS: Record<Gender, string> = { male: "Male", female: "Female", other: "Other / prefer not to say" };
+export const GENDER_LABELS: Record<Gender, string> = {
+  male: "Male",
+  female: "Female",
+  other: "Other / prefer not to say",
+};
 
 export const GRADES = [6, 7, 8, 9, 10, 11, 12] as const;
 
@@ -44,30 +63,96 @@ export function gradYearToGrade(year: number | null | undefined): number | null 
 export const TEST_TYPES = [
   { value: "sprint_10y", label: "10-Yard Sprint", unit: "s", lowerIsBetter: true, group: "Speed" },
   { value: "sprint_40y", label: "40-Yard Sprint", unit: "s", lowerIsBetter: true, group: "Speed" },
-  { value: "pro_agility", label: "Pro Agility (5-10-5)", unit: "s", lowerIsBetter: true, group: "Speed" },
-  { value: "vertical_jump", label: "Vertical Jump", unit: "in", lowerIsBetter: false, group: "Jumps" },
+  {
+    value: "pro_agility",
+    label: "Pro Agility (5-10-5)",
+    unit: "s",
+    lowerIsBetter: true,
+    group: "Speed",
+  },
+  {
+    value: "vertical_jump",
+    label: "Vertical Jump",
+    unit: "in",
+    lowerIsBetter: false,
+    group: "Jumps",
+  },
   { value: "broad_jump", label: "Broad Jump", unit: "in", lowerIsBetter: false, group: "Jumps" },
-  { value: "bench_1rm", label: "Bench Press 1RM", unit: "lb", lowerIsBetter: false, group: "Strength" },
-  { value: "squat_1rm", label: "Back Squat 1RM", unit: "lb", lowerIsBetter: false, group: "Strength" },
-  { value: "deadlift_1rm", label: "Deadlift 1RM", unit: "lb", lowerIsBetter: false, group: "Strength" },
-  { value: "power_clean_1rm", label: "Power Clean 1RM", unit: "lb", lowerIsBetter: false, group: "Strength" },
+  {
+    value: "bench_1rm",
+    label: "Bench Press 1RM",
+    unit: "lb",
+    lowerIsBetter: false,
+    group: "Strength",
+  },
+  {
+    value: "squat_1rm",
+    label: "Back Squat 1RM",
+    unit: "lb",
+    lowerIsBetter: false,
+    group: "Strength",
+  },
+  {
+    value: "deadlift_1rm",
+    label: "Deadlift 1RM",
+    unit: "lb",
+    lowerIsBetter: false,
+    group: "Strength",
+  },
+  {
+    value: "power_clean_1rm",
+    label: "Power Clean 1RM",
+    unit: "lb",
+    lowerIsBetter: false,
+    group: "Strength",
+  },
 ] as const;
 
 export type TestTypeValue = (typeof TEST_TYPES)[number]["value"];
 
 export function testTypeMeta(v: string) {
-  return TEST_TYPES.find((t) => t.value === v) ?? { value: v, label: v, unit: "", lowerIsBetter: false, group: "Other" };
+  return (
+    TEST_TYPES.find((t) => t.value === v) ?? {
+      value: v,
+      label: v,
+      unit: "",
+      lowerIsBetter: false,
+      group: "Other",
+    }
+  );
+}
+
+/** Same fallback slug used everywhere a Custom Metric needs a test_type to log under. */
+export function slugifyMetricName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+/**
+ * The exact test_type a Custom Metric is (or would be) logged under when a
+ * coach picks it from the "Metrics" group on the Tests page or Test Kiosk —
+ * the metric's own test_type if it was given one, otherwise the same slug
+ * those pickers fall back to. Every place that builds that picker, and
+ * every place that needs to find test rows logged through it (like the
+ * dashboard's metric catalog), must agree on this value or logged data
+ * silently stops showing up anywhere.
+ */
+export function customMetricTestTypeValue(m: { test_type: string | null; name: string }): string {
+  return m.test_type || slugifyMetricName(m.name);
 }
 
 // Known sprint distances in inches, keyed by test_type. Used to convert between
 // seconds and mph so coaches can enter either.
 const SPRINT_DISTANCE_IN: Record<string, number> = {
-  sprint_10y: 360,   // 10 yd
-  sprint_20y: 720,   // 20 yd
-  sprint_40y: 1440,  // 40 yd
-  sprint_60y: 2160,  // 60 yd
+  sprint_10y: 360, // 10 yd
+  sprint_20y: 720, // 20 yd
+  sprint_40y: 1440, // 40 yd
+  sprint_60y: 2160, // 60 yd
   sprint_100m: 3937.0079, // 100 m
-  pro_agility: 720,  // 5-10-5 = 20 yd total
+  pro_agility: 720, // 5-10-5 = 20 yd total
 };
 
 export function sprintDistanceIn(testType: string): number | null {
@@ -91,7 +176,10 @@ export function mphToSeconds(mph: number, distanceIn: number): number {
 
 // Bodyweight coefficient using Wilks-lite proxy: value / bodyweight ^ (2/3)
 // Good relative-strength metric that scales fairly across weight classes.
-export function bwCoefficient(value: number | null | undefined, bodyweight: number | null | undefined) {
+export function bwCoefficient(
+  value: number | null | undefined,
+  bodyweight: number | null | undefined,
+) {
   if (!value || !bodyweight || bodyweight <= 0) return null;
   return value / Math.pow(bodyweight, 2 / 3);
 }
@@ -120,12 +208,18 @@ export function estimateMax(
     // target = ratio * source  →  source known, compute target
     if (r.from_exercise_id === targetExerciseId) {
       const src = actualByExerciseId.get(r.to_exercise_id);
-      if (src != null) { derived = src * r.ratio; sourceId = r.to_exercise_id; }
+      if (src != null) {
+        derived = src * r.ratio;
+        sourceId = r.to_exercise_id;
+      }
     }
     // source = target * (1/ratio)  →  if source known and target unknown, target = source / ratio
     if (r.to_exercise_id === targetExerciseId) {
       const src = actualByExerciseId.get(r.from_exercise_id);
-      if (src != null && r.ratio > 0) { derived = src / r.ratio; sourceId = r.from_exercise_id; }
+      if (src != null && r.ratio > 0) {
+        derived = src / r.ratio;
+        sourceId = r.from_exercise_id;
+      }
     }
     if (derived != null && sourceId && (!best || derived > best.value)) {
       best = { value: derived, sourceExerciseId: sourceId, ratio: r.ratio };
@@ -136,13 +230,20 @@ export function estimateMax(
 
 export function toCSV(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
-  const headers = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>()));
+  const headers = Array.from(
+    rows.reduce((s, r) => {
+      Object.keys(r).forEach((k) => s.add(k));
+      return s;
+    }, new Set<string>()),
+  );
   const esc = (v: unknown) => {
     if (v == null) return "";
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+  return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join(
+    "\n",
+  );
 }
 
 export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
@@ -150,6 +251,8 @@ export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
+  a.href = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 }

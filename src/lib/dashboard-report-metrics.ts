@@ -4,7 +4,7 @@
 // estimated 1RMs (PR testing), and everyday logged lifts (training loads),
 // so all three can be picked from the same filter UI.
 import type { TestRow, RepMax, CustomTestType, LiftRow, CustomMetric } from "@/lib/queries";
-import { TEST_TYPES } from "@/lib/domain";
+import { TEST_TYPES, customMetricTestTypeValue } from "@/lib/domain";
 
 export type ReportMetric = {
   key: string; // "test:<test_type>" | "pr:<exercise_name>"
@@ -71,6 +71,38 @@ export function liftReportMetrics(lifts: LiftRow[]): ReportMetric[] {
   }));
 }
 
+function customMetricUnit(m: CustomMetric): string {
+  return (
+    m.unit ||
+    (m.measurement === "time"
+      ? "s"
+      : m.measurement === "height"
+        ? "in"
+        : m.measurement === "speed"
+          ? "mph"
+          : "lb")
+  );
+}
+
+/**
+ * Every Custom Metric is also selectable straight from the Tests page and
+ * Test Kiosk's "Metrics" group — logging a value there writes a real row
+ * into `tests` under `customMetricTestTypeValue(m)`, exactly like logging
+ * any built-in or org-defined test type. Without this catalog entry, that
+ * logged data has nowhere on the dashboard to be found: it doesn't match
+ * `testReportMetrics` (which only knows the `test_types` table) and isn't a
+ * `bodyweight`/`lift_max` kind, so `customMetricReportMetrics` skips it too.
+ */
+export function customMetricTestEntries(customMetrics: CustomMetric[]): ReportMetric[] {
+  return customMetrics.map((m) => ({
+    key: `test:${customMetricTestTypeValue(m)}`,
+    label: m.name,
+    unit: customMetricUnit(m),
+    lowerIsBetter: m.lower_is_better,
+    group: "Metrics",
+  }));
+}
+
 /**
  * Metrics defined on the Custom Metrics page ("define once, use anywhere")
  * that have a natural per-date value and no equivalent already surfaced by
@@ -108,11 +140,21 @@ export function allReportMetrics(
   lifts: LiftRow[] = [],
   customMetrics: CustomMetric[] = [],
 ): ReportMetric[] {
-  const base = [
+  const base: ReportMetric[] = [];
+  const baseKeys = new Set<string>();
+  for (const m of [
     ...testReportMetrics(customTypes),
+    ...customMetricTestEntries(customMetrics),
     ...liftReportMetrics(lifts),
     ...prReportMetrics(repMaxes),
-  ];
+  ]) {
+    // A Custom Metric's test_type can collide with an already-cataloged test
+    // type (its own, or coincidentally another org's default) — keep
+    // whichever definition was seen first rather than listing it twice.
+    if (baseKeys.has(m.key)) continue;
+    baseKeys.add(m.key);
+    base.push(m);
+  }
   // A Custom Metric can easily share a name with a test type or exercise
   // that already auto-populates the picker (e.g. a coach names a metric
   // after the drill it tracks) — without a distinguishing label, the two

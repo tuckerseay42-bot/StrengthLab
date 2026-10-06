@@ -24,6 +24,7 @@ import {
   testTypeMeta as baseTestTypeMeta,
   sprintDistanceIn,
   mphToSeconds,
+  customMetricTestTypeValue,
 } from "@/lib/domain";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,15 +92,16 @@ function TestKioskPage() {
       group: c.group_name,
     }));
     const metricUnit = (m: CustomMetric) =>
-      m.unit || (m.measurement === "time" ? "s" : m.measurement === "height" ? "in" : "lb");
+      m.unit ||
+      (m.measurement === "time"
+        ? "s"
+        : m.measurement === "height"
+          ? "in"
+          : m.measurement === "speed"
+            ? "mph"
+            : "lb");
     const fromMetrics: TypeOpt[] = customMetrics.map((m: CustomMetric) => ({
-      value:
-        m.test_type ||
-        m.name
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_|_$/g, ""),
+      value: customMetricTestTypeValue(m),
       label: m.name,
       unit: metricUnit(m),
       lowerIsBetter: m.lower_is_better,
