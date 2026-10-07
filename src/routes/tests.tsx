@@ -9,6 +9,7 @@ import {
   testTypesQO,
   customMetricsQO,
   athleteTeamsQO,
+  athleteDisplayName,
   type CustomMetric,
   type CustomTestType,
 } from "@/lib/queries";
@@ -48,6 +49,7 @@ import {
   ChevronDown,
   ChevronUp,
   Monitor,
+  Crown,
 } from "lucide-react";
 import {
   TEST_TYPES,
@@ -339,6 +341,21 @@ function TestsPage() {
     [filtered, tests, byId],
   );
 
+  // Once a coach narrows to one test type, "best first" (a leaderboard for
+  // that test) is far more useful than "most recently logged" — especially
+  // right after a kiosk session dumps a dozen same-day rows in random order.
+  // Mixed types under "All test types" have no shared notion of "better", so
+  // that view keeps the plain most-recent-first order instead.
+  const sortedRows = useMemo(() => {
+    if (testTypeFilter === "all") return rows;
+    const lowerIsBetter = rows[0]?.meta.lowerIsBetter ?? false;
+    return rows.slice().sort((a, b) => {
+      if (a.t.value !== b.t.value)
+        return lowerIsBetter ? a.t.value - b.t.value : b.t.value - a.t.value;
+      return b.t.test_date.localeCompare(a.t.test_date);
+    });
+  }, [rows, testTypeFilter]);
+
   const exportCSV = () =>
     downloadCSV(
       "tests.csv",
@@ -566,58 +583,92 @@ function TestsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {rows.map(({ t, meta, pct, coef, athlete }) => (
-            <Card key={t.id}>
-              <CardContent className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{athlete?.name ?? "—"}</span>
-                    <Badge variant="secondary">{meta.label}</Badge>
-                    <span className="text-xs text-muted-foreground">{t.test_date}</span>
-                  </div>
-                  {t.notes && (
-                    <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{t.notes}</div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className="stat-number text-xl tabular-nums">
-                    {t.value}
-                    <span className="ml-1 text-sm text-muted-foreground">{meta.unit}</span>
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-end gap-2 text-xs">
-                    {coef != null && (
-                      <span className="text-muted-foreground">BW coef {coef.toFixed(2)}</span>
-                    )}
-                    {pct != null && pct !== 0 && (
-                      <span
-                        className={
-                          pct > 0
-                            ? "inline-flex items-center gap-0.5 text-[color:var(--color-success)]"
-                            : "inline-flex items-center gap-0.5 text-destructive"
-                        }
-                      >
-                        {pct > 0 ? (
-                          <ArrowUp className="h-3 w-3" />
+        <div className="overflow-hidden rounded-md border border-border/60">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {testTypeFilter !== "all" && <th className="w-10 px-2 py-2 text-center">#</th>}
+                  <th className="px-3 py-2">Athlete</th>
+                  {testTypeFilter === "all" && <th className="px-3 py-2">Test</th>}
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2 text-right">Value</th>
+                  <th className="px-3 py-2 text-right">Change</th>
+                  <th className="w-10 px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {sortedRows.map(({ t, meta, pct, coef, athlete }, i) => (
+                  <tr key={t.id} className="hover:bg-muted/30">
+                    {testTypeFilter !== "all" && (
+                      <td className="px-2 py-2 text-center">
+                        {i === 0 ? (
+                          <Crown className="mx-auto h-3.5 w-3.5 text-primary" />
                         ) : (
-                          <ArrowDown className="h-3 w-3" />
+                          <span className="font-mono text-xs text-muted-foreground">{i + 1}</span>
                         )}
-                        {Math.abs(pct).toFixed(1)}%
-                      </span>
+                      </td>
                     )}
-                  </div>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => del.mutate(t.id)}
-                  aria-label="Delete"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                    <td className="min-w-0 px-3 py-2">
+                      <div className="truncate font-medium">
+                        {athlete ? athleteDisplayName(athlete) : "—"}
+                      </div>
+                      {t.notes && (
+                        <div className="line-clamp-1 text-[11px] text-muted-foreground">
+                          {t.notes}
+                        </div>
+                      )}
+                    </td>
+                    {testTypeFilter === "all" && (
+                      <td className="px-3 py-2">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {meta.label}
+                        </Badge>
+                      </td>
+                    )}
+                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
+                      {t.test_date}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                      <span className="font-semibold">{t.value}</span>{" "}
+                      <span className="text-xs text-muted-foreground">{meta.unit}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                      {coef != null && (
+                        <div className="text-muted-foreground">BW {coef.toFixed(2)}</div>
+                      )}
+                      {pct != null && pct !== 0 && (
+                        <span
+                          className={
+                            pct > 0
+                              ? "inline-flex items-center gap-0.5 text-[color:var(--color-success)]"
+                              : "inline-flex items-center gap-0.5 text-destructive"
+                          }
+                        >
+                          {pct > 0 ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          )}
+                          {Math.abs(pct).toFixed(1)}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => del.mutate(t.id)}
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
