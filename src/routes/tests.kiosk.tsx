@@ -1,11 +1,11 @@
-// A walk-up station for max-testing days: a coach picks which metric is
-// being tested once, then hands the device to athletes. Each athlete taps
-// their own name off a big tile grid (filterable by class period/sport so a
-// single class's roster shows up, not the whole org) and enters their
-// number — no per-athlete sign-in needed, since the coach's own session is
-// what's authenticated here.
+// A walk-up station for max-testing days. A coach first locks the station to
+// one metric — that's all it can log until someone exits back to setup — then
+// hands the device to athletes. Each athlete just types their name into one
+// centered search box, taps the match, and enters their number. No roster
+// grid, no per-athlete sign-in: the coach's own session is what's
+// authenticated here.
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -26,7 +26,7 @@ import {
   mphToSeconds,
   customMetricTestTypeValue,
 } from "@/lib/domain";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,8 +51,6 @@ export const Route = createFileRoute("/tests/kiosk")({
 });
 
 const KIOSK_METRIC_KEY = "sl.testKiosk.metric";
-const KIOSK_CLASS_PERIOD_KEY = "sl.testKiosk.classPeriod";
-const KIOSK_SPORT_KEY = "sl.testKiosk.sport";
 
 type TypeOpt = {
   value: string;
@@ -61,11 +59,6 @@ type TypeOpt = {
   lowerIsBetter: boolean;
   group: string;
 };
-
-function readStoredFilter(key: string): string {
-  if (typeof window === "undefined") return "all";
-  return window.localStorage.getItem(key) ?? "all";
-}
 
 function TestKioskPage() {
   const qc = useQueryClient();
@@ -122,77 +115,19 @@ function TestKioskPage() {
     [allTestTypes],
   );
 
-  // Which metric this station is logging — sticky across reloads so the
-  // coach only has to set it once per testing station.
-  const [testType, setTestType] = useState("");
-  useEffect(() => {
-    if (testType || !allTestTypes.length) return;
-    const saved =
-      typeof window !== "undefined" ? window.localStorage.getItem(KIOSK_METRIC_KEY) : null;
-    setTestType(
-      saved && allTestTypes.some((t) => t.value === saved) ? saved : allTestTypes[0].value,
-    );
-  }, [allTestTypes, testType]);
-  useEffect(() => {
-    if (testType && typeof window !== "undefined")
-      window.localStorage.setItem(KIOSK_METRIC_KEY, testType);
-  }, [testType]);
+  // A kiosk "session" is locked to one metric for its whole life — the coach
+  // picks it once on this setup screen, and the only way to change it is to
+  // exit the session and come back through setup again.
+  const [stage, setStage] = useState<"setup" | "active">("setup");
+  const [testType, setTestType] = useState(
+    () =>
+      (typeof window !== "undefined" ? window.localStorage.getItem(KIOSK_METRIC_KEY) : null) ?? "",
+  );
 
   const meta = allTestTypes.find((t) => t.value === testType) ?? baseTestTypeMeta(testType);
   const dist = sprintDistanceIn(testType);
 
-  // Roster scoping — sticky per station, same reasoning as the metric:
-  // a coach running 2nd period shouldn't have to re-filter every reload.
-  const [classPeriodFilter, setClassPeriodFilter] = useState(() =>
-    readStoredFilter(KIOSK_CLASS_PERIOD_KEY),
-  );
-  const [sportFilter, setSportFilter] = useState(() => readStoredFilter(KIOSK_SPORT_KEY));
   const [search, setSearch] = useState("");
-  useEffect(() => {
-    if (typeof window !== "undefined")
-      window.localStorage.setItem(KIOSK_CLASS_PERIOD_KEY, classPeriodFilter);
-  }, [classPeriodFilter]);
-  useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem(KIOSK_SPORT_KEY, sportFilter);
-  }, [sportFilter]);
-
-  const classPeriods = useMemo(() => {
-    const s = new Set<string>();
-    for (const a of athletes) if (a.class_period?.trim()) s.add(a.class_period.trim());
-    return Array.from(s).sort();
-  }, [athletes]);
-  const sports = useMemo(() => {
-    const s = new Set<string>();
-    for (const a of athletes) if (a.sport?.trim()) s.add(a.sport.trim());
-    return Array.from(s).sort();
-  }, [athletes]);
-
-  const roster = useMemo(() => {
-    let list = athletes;
-    if (classPeriodFilter !== "all")
-      list = list.filter((a) => a.class_period === classPeriodFilter);
-    if (sportFilter !== "all") list = list.filter((a) => a.sport === sportFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((a) => athleteDisplayName(a).toLowerCase().includes(q));
-    }
-    return list.slice().sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)));
-  }, [athletes, classPeriodFilter, sportFilter, search]);
-
-  // Who's already logged today's metric — lights the roster grid up green
-  // as kids go, same at-a-glance read as a wall-mounted attendance board.
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const loggedToday = useMemo(() => {
-    const s = new Set<string>();
-    for (const t of tests)
-      if (t.test_type === testType && t.test_date === today) s.add(t.athlete_id);
-    return s;
-  }, [tests, testType, today]);
-  const loggedCount = useMemo(
-    () => roster.filter((a) => loggedToday.has(a.id)).length,
-    [roster, loggedToday],
-  );
-
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
   const [inputAs, setInputAs] = useState<"native" | "mph">("native");
@@ -200,6 +135,23 @@ function TestKioskPage() {
 
   const athlete = athletes.find((a) => a.id === athleteId);
   const step = meta.unit === "s" ? "0.01" : meta.unit === "in" ? "0.1" : "1";
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const loggedToday = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of tests)
+      if (t.test_type === testType && t.test_date === today) s.add(t.athlete_id);
+    return s;
+  }, [tests, testType, today]);
+
+  const matches = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return athletes
+      .filter((a) => athleteDisplayName(a).toLowerCase().includes(q))
+      .sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b)))
+      .slice(0, 8);
+  }, [athletes, search]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -231,38 +183,56 @@ function TestKioskPage() {
       );
       setAthleteId("");
       setValue("");
+      setSearch("");
+      setInputAs("native");
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
-  return (
-    <div className="flex min-h-[100dvh] flex-col bg-background">
-      <header className="flex items-center justify-between border-b px-4 py-3">
+  const startKiosk = () => {
+    if (!testType) return;
+    if (typeof window !== "undefined") window.localStorage.setItem(KIOSK_METRIC_KEY, testType);
+    setSessionLog([]);
+    setSearch("");
+    setAthleteId("");
+    setValue("");
+    setStage("active");
+  };
+
+  const exitToSetup = () => {
+    setStage("setup");
+    setSearch("");
+    setAthleteId("");
+    setValue("");
+  };
+
+  const pickMatch = (a: Athlete) => {
+    setAthleteId(a.id);
+    setSearch("");
+  };
+
+  if (stage === "setup") {
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background p-4">
         <Link
           to="/tests"
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          className="absolute left-4 top-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Exit kiosk
         </Link>
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Gauge className="h-4 w-4 text-primary" /> Test Kiosk
-        </div>
-      </header>
-
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6">
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-3 py-3">
-            <Label className="shrink-0 text-xs text-muted-foreground">Now logging</Label>
-            <Select
-              value={testType}
-              onValueChange={(v) => {
-                setTestType(v);
-                setAthleteId("");
-                setValue("");
-                setInputAs("native");
-              }}
-            >
-              <SelectTrigger className="h-11 min-w-[220px] flex-1 text-base font-semibold">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5">
+              <Gauge className="h-4 w-4 text-primary" /> Start Test Kiosk
+            </CardTitle>
+            <CardDescription>
+              Pick the one metric this station will log. Athletes can only log that metric until you
+              exit this kiosk.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Select value={testType} onValueChange={setTestType}>
+              <SelectTrigger className="h-11 text-base font-semibold">
                 <SelectValue placeholder="Choose a metric" />
               </SelectTrigger>
               <SelectContent>
@@ -280,143 +250,150 @@ function TestKioskPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button className="h-12 w-full text-base" disabled={!testType} onClick={startKiosk}>
+              Start Kiosk
+            </Button>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
 
-        {athlete ? (
-          <Card className="flex-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-muted-foreground">Logging for</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-3xl font-bold tracking-tight">{athleteDisplayName(athlete)}</div>
+  return (
+    <div className="flex min-h-[100dvh] flex-col bg-background">
+      <header className="flex items-center justify-between border-b px-4 py-3">
+        <button
+          type="button"
+          onClick={exitToSetup}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Change metric
+        </button>
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          <Gauge className="h-4 w-4 text-primary" /> {meta.label}
+        </div>
+      </header>
+
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-4 py-6">
+        <Card>
+          <CardContent className="p-6">
+            {!athlete ? (
               <div>
-                <Label className="text-xs text-muted-foreground">
-                  {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
-                </Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step={step}
-                  autoFocus
-                  className="h-16 text-center text-3xl font-bold"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="0"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && value.trim() && !save.isPending) save.mutate();
-                  }}
-                />
-              </div>
-              {dist && meta.unit === "s" && (
-                <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
-                  <button
-                    type="button"
-                    className={cn(
-                      "h-9 rounded font-medium transition",
-                      inputAs === "native" ? "bg-background shadow-sm" : "text-muted-foreground",
-                    )}
-                    onClick={() => setInputAs("native")}
-                  >
-                    Seconds
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "h-9 rounded font-medium transition",
-                      inputAs === "mph" ? "bg-background shadow-sm" : "text-muted-foreground",
-                    )}
-                    onClick={() => setInputAs("mph")}
-                  >
-                    MPH
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="h-14"
-                  onClick={() => {
-                    setAthleteId("");
-                    setValue("");
-                  }}
-                >
-                  ← Back
-                </Button>
-                <Button
-                  className="h-14 flex-1 text-lg"
-                  disabled={save.isPending || !value.trim()}
-                  onClick={() => save.mutate()}
-                >
-                  {save.isPending ? "Saving…" : "Save & Next"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="flex flex-1 flex-col">
-            <CardHeader className="gap-3 pb-3">
-              <CardTitle className="text-sm text-muted-foreground">
-                Tap your name — {loggedCount} of {roster.length} logged
-              </CardTitle>
-              <div className="flex flex-wrap gap-2">
-                <Select value={classPeriodFilter} onValueChange={setClassPeriodFilter}>
-                  <SelectTrigger className="h-9 w-[160px] text-xs">
-                    <SelectValue placeholder="Class period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All class periods</SelectItem>
-                    {classPeriods.map((cp) => (
-                      <SelectItem key={cp} value={cp}>
-                        {cp}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={sportFilter} onValueChange={setSportFilter}>
-                  <SelectTrigger className="h-9 w-[150px] text-xs">
-                    <SelectValue placeholder="Sport" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All sports</SelectItem>
-                    {sports.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="relative min-w-[160px] flex-1">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Label className="text-xs text-muted-foreground">Search athlete name</Label>
+                <div className="relative mt-1.5">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    autoFocus
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search…"
-                    className="h-9 pl-8 text-xs"
+                    placeholder="Type a name…"
+                    className="h-12 pl-9 text-base"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && matches.length === 1) pickMatch(matches[0]);
+                    }}
                   />
                 </div>
+                {matches.length > 0 && (
+                  <div className="mt-2 divide-y overflow-hidden rounded-md border">
+                    {matches.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => pickMatch(a)}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted/60 active:bg-muted"
+                      >
+                        <span className="font-medium">{athleteDisplayName(a)}</span>
+                        {loggedToday.has(a.id) && (
+                          <span className="flex items-center gap-1 text-[11px] text-[color:var(--color-success)]">
+                            <Check className="h-3 w-3" /> Logged
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {search.trim() && matches.length === 0 && (
+                  <p className="mt-3 text-center text-sm text-muted-foreground">No matches.</p>
+                )}
               </div>
-            </CardHeader>
-            <CardContent className="flex-1">
-              {roster.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No athletes match these filters.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                  {roster.map((a) => (
-                    <NameTile
-                      key={a.id}
-                      athlete={a}
-                      logged={loggedToday.has(a.id)}
-                      onClick={() => setAthleteId(a.id)}
-                    />
-                  ))}
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Logging for</div>
+                  <div className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+                    {athleteDisplayName(athlete)}
+                    {loggedToday.has(athlete.id) && (
+                      <span className="flex items-center gap-1 text-xs font-normal text-[color:var(--color-success)]">
+                        <Check className="h-3.5 w-3.5" /> already logged today
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
+                  </Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step={step}
+                    autoFocus
+                    className="h-16 text-center text-3xl font-bold"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder="0"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && value.trim() && !save.isPending) save.mutate();
+                    }}
+                  />
+                </div>
+                {dist && meta.unit === "s" && (
+                  <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
+                    <button
+                      type="button"
+                      className={cn(
+                        "h-9 rounded font-medium transition",
+                        inputAs === "native" ? "bg-background shadow-sm" : "text-muted-foreground",
+                      )}
+                      onClick={() => setInputAs("native")}
+                    >
+                      Seconds
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "h-9 rounded font-medium transition",
+                        inputAs === "mph" ? "bg-background shadow-sm" : "text-muted-foreground",
+                      )}
+                      onClick={() => setInputAs("mph")}
+                    >
+                      MPH
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-14"
+                    onClick={() => {
+                      setAthleteId("");
+                      setValue("");
+                    }}
+                  >
+                    ← Back
+                  </Button>
+                  <Button
+                    className="h-14 flex-1 text-lg"
+                    disabled={save.isPending || !value.trim()}
+                    onClick={() => save.mutate()}
+                  >
+                    {save.isPending ? "Saving…" : "Save & Next"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {sessionLog.length > 0 && (
           <Card>
@@ -439,42 +416,5 @@ function TestKioskPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function NameTile({
-  athlete,
-  logged,
-  onClick,
-}: {
-  athlete: Athlete;
-  logged: boolean;
-  onClick: () => void;
-}) {
-  const meta = [athlete.sport, athlete.class_period].filter(Boolean).join(" · ");
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative flex h-20 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 text-center transition active:scale-[0.97]",
-        logged
-          ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/10"
-          : "border-border/60 bg-card hover:border-primary hover:bg-primary/5",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full",
-          logged
-            ? "bg-[color:var(--color-success)] text-[color:var(--color-success-foreground)]"
-            : "border border-border/60",
-        )}
-      >
-        {logged && <Check className="h-2.5 w-2.5" />}
-      </span>
-      <span className="text-sm font-semibold leading-tight">{athleteDisplayName(athlete)}</span>
-      {meta && <span className="truncate text-[10px] text-muted-foreground">{meta}</span>}
-    </button>
   );
 }
