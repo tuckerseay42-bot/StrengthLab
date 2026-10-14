@@ -1,8 +1,10 @@
-// Parses a school SIS "Section Roster"-style PDF (one row per student: name,
-// student #, gender, grade) into rows usable for the class-period bulk
-// import — entirely client-side via pdfjs-dist. Always dynamically imported
-// so pdfjs (a DOM-dependent library) never loads during SSR.
+// Parses a school SIS "Section Roster" export — PDF or CSV — (one row per
+// student: name, student #, gender, grade) into rows usable for the
+// class-period bulk import. PDF parsing is entirely client-side via
+// pdfjs-dist, always dynamically imported so pdfjs (a DOM-dependent
+// library) never loads during SSR.
 import { titleCaseName } from "@/lib/queries";
+import { toRecords } from "@/lib/csv-parse";
 
 export type RosterPdfRow = {
   firstName: string;
@@ -108,6 +110,46 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
           gender,
         });
       }
+    }
+  }
+
+  return { periodGuess, rows };
+}
+
+/**
+ * Parses an Infinite Campus "Section Roster" CSV export — the same report
+ * as parseRosterPdf, just downloaded as CSV instead of printed to PDF.
+ * Columns: Staff Number, Course, Room, Term(s), Period, Last Name,
+ * First Name, Middle Name, Suffix, Alias, Gender, Grade, Start Date,
+ * End Date, Student Number, IEP.
+ */
+export async function parseRosterCsv(file: File): Promise<RosterPdfResult> {
+  const text = await file.text();
+  const { records } = toRecords(text);
+
+  const rows: RosterPdfRow[] = [];
+  let periodGuess: string | null = null;
+
+  for (const r of records) {
+    const lastName = r["last name"] || "";
+    const firstName = (r["first name"] || "").trim().split(/\s+/)[0] || "";
+    if (!lastName || !firstName) continue;
+
+    const suffix = (r["suffix"] || "").trim();
+    const genderRaw = (r["gender"] || "").trim().toUpperCase();
+    const grade = Number(r["grade"]);
+
+    rows.push({
+      firstName,
+      lastName: suffix ? `${lastName} ${suffix}` : lastName,
+      studentId: r["student number"] || "",
+      grade: Number.isFinite(grade) ? grade : null,
+      gender: genderRaw === "M" ? "male" : genderRaw === "F" ? "female" : null,
+    });
+
+    if (!periodGuess) {
+      const pm = (r["period"] || "").match(/^0*(\d{1,2})\b/);
+      if (pm) periodGuess = `Period ${Number(pm[1])}`;
     }
   }
 

@@ -1,13 +1,13 @@
-// Settings widget: upload a school SIS "Section Roster" PDF (Infinite Campus
-// and similar), match its students against existing athletes by name, and
-// bulk-set class_period for whichever ones matched. Only updates athletes
-// already in the roster — never creates new ones, since a coach's class
-// period usually only covers some of their athletes.
+// Settings widget: upload a school SIS "Section Roster" export — PDF or CSV
+// (Infinite Campus and similar) — match its students against existing
+// athletes by name, and bulk-set class_period for whichever ones matched.
+// Only updates athletes already in the roster — never creates new ones,
+// since a coach's class period usually only covers some of their athletes.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { athletesQO, titleCaseName, type Athlete } from "@/lib/queries";
-import { parseRosterPdf, type RosterPdfRow } from "@/lib/roster-pdf-parse";
+import { parseRosterPdf, parseRosterCsv, type RosterPdfRow } from "@/lib/roster-pdf-parse";
 import { matchCandidates, type MatchConfidence } from "@/lib/name-match";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,9 +59,12 @@ export function ClassPeriodRosterImport() {
   const onFile = async (file: File) => {
     setBusy(true);
     try {
-      const { periodGuess, rows: parsed } = await parseRosterPdf(file);
+      const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+      const { periodGuess, rows: parsed } = isCsv
+        ? await parseRosterCsv(file)
+        : await parseRosterPdf(file);
       if (!parsed.length) {
-        toast.error("Couldn't find any student rows in that PDF.");
+        toast.error(`Couldn't find any student rows in that ${isCsv ? "CSV" : "PDF"}.`);
         return;
       }
       setFileName(file.name);
@@ -134,10 +137,10 @@ export function ClassPeriodRosterImport() {
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Update class periods from a roster</CardTitle>
         <CardDescription>
-          Upload a Section Roster PDF (Infinite Campus or similar) for one class period. Students
-          are matched to your existing athletes by name — the roster uses legal names, which often
-          differ from what's entered here, so review each match before applying. Athletes not on the
-          roster are left untouched.
+          Upload a Section Roster export (Infinite Campus or similar — PDF or CSV) for one class
+          period. Students are matched to your existing athletes by name — the roster uses legal
+          names, which often differ from what's entered here, so review each match before applying.
+          Athletes not on the roster are left untouched.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -151,13 +154,13 @@ export function ClassPeriodRosterImport() {
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Roster PDF</Label>
+            <Label className="text-xs text-muted-foreground">Roster PDF or CSV</Label>
             <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed text-sm text-muted-foreground transition hover:bg-muted/50">
               <FileUp className="h-4 w-4" />
-              <span className="truncate">{busy ? "Reading…" : fileName || "Choose a PDF…"}</span>
+              <span className="truncate">{busy ? "Reading…" : fileName || "Choose a file…"}</span>
               <input
                 type="file"
-                accept="application/pdf"
+                accept="application/pdf,.pdf,.csv,text/csv"
                 className="hidden"
                 disabled={busy}
                 onChange={(e) => {
