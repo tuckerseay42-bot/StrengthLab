@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle2, Gauge, Search } from "lucide-react";
+import { ArrowLeft, Check, Gauge, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tests/kiosk")({
@@ -131,7 +131,6 @@ function TestKioskPage() {
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
   const [inputAs, setInputAs] = useState<"native" | "mph">("native");
-  const [sessionLog, setSessionLog] = useState<{ id: string; name: string; display: string }[]>([]);
 
   const athlete = athletes.find((a) => a.id === athleteId);
   const step = meta.unit === "s" ? "0.01" : meta.unit === "in" ? "0.1" : "1";
@@ -175,12 +174,6 @@ function TestKioskPage() {
       qc.invalidateQueries({ queryKey: ["tests"] });
       const name = athlete ? athleteDisplayName(athlete) : "Athlete";
       toast.success(`Saved — ${name}: ${val} ${meta.unit}`);
-      setSessionLog((prev) =>
-        [
-          { id: `${Date.now()}-${Math.random()}`, name, display: `${val} ${meta.unit}` },
-          ...prev,
-        ].slice(0, 8),
-      );
       setAthleteId("");
       setValue("");
       setSearch("");
@@ -192,7 +185,6 @@ function TestKioskPage() {
   const startKiosk = () => {
     if (!testType) return;
     if (typeof window !== "undefined") window.localStorage.setItem(KIOSK_METRIC_KEY, testType);
-    setSessionLog([]);
     setSearch("");
     setAthleteId("");
     setValue("");
@@ -259,162 +251,138 @@ function TestKioskPage() {
     );
   }
 
+  // Just the one box: a name search that swaps in place to a value entry
+  // once an athlete is picked — no outer header, no extra cards around it.
+  // The only other thing on screen is a small, unobtrusive way back to
+  // setup, matching the "Exit kiosk" link on the setup screen itself.
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-background">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <button
-          type="button"
-          onClick={exitToSetup}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Change metric
-        </button>
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <Gauge className="h-4 w-4 text-primary" /> {meta.label}
-        </div>
-      </header>
+    <div className="relative flex min-h-[100dvh] items-center justify-center bg-background p-4">
+      <button
+        type="button"
+        onClick={exitToSetup}
+        className="absolute left-4 top-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Change metric
+      </button>
 
-      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-4 py-6">
-        <Card>
-          <CardContent className="p-6">
-            {!athlete ? (
+      <Card className="w-full max-w-sm">
+        <CardContent className="p-6">
+          {!athlete ? (
+            <div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`Search athlete — logging ${meta.label}`}
+                  className="h-12 pl-9 text-base"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && matches.length === 1) pickMatch(matches[0]);
+                  }}
+                />
+              </div>
+              {matches.length > 0 && (
+                <div className="mt-2 divide-y">
+                  {matches.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => pickMatch(a)}
+                      className="flex w-full items-center justify-between gap-2 px-1 py-2.5 text-left text-sm hover:bg-muted/60 active:bg-muted"
+                    >
+                      <span className="font-medium">{athleteDisplayName(a)}</span>
+                      {loggedToday.has(a.id) && (
+                        <span className="flex items-center gap-1 text-[11px] text-[color:var(--color-success)]">
+                          <Check className="h-3 w-3" /> Logged
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {search.trim() && matches.length === 0 && (
+                <p className="mt-3 text-center text-sm text-muted-foreground">No matches.</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
               <div>
-                <Label className="text-xs text-muted-foreground">Search athlete name</Label>
-                <div className="relative mt-1.5">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    autoFocus
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Type a name…"
-                    className="h-12 pl-9 text-base"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && matches.length === 1) pickMatch(matches[0]);
-                    }}
-                  />
+                <div className="text-xs text-muted-foreground">Logging for</div>
+                <div className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+                  {athleteDisplayName(athlete)}
+                  {loggedToday.has(athlete.id) && (
+                    <span className="flex items-center gap-1 text-xs font-normal text-[color:var(--color-success)]">
+                      <Check className="h-3.5 w-3.5" /> already logged today
+                    </span>
+                  )}
                 </div>
-                {matches.length > 0 && (
-                  <div className="mt-2 divide-y overflow-hidden rounded-md border">
-                    {matches.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => pickMatch(a)}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted/60 active:bg-muted"
-                      >
-                        <span className="font-medium">{athleteDisplayName(a)}</span>
-                        {loggedToday.has(a.id) && (
-                          <span className="flex items-center gap-1 text-[11px] text-[color:var(--color-success)]">
-                            <Check className="h-3 w-3" /> Logged
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {search.trim() && matches.length === 0 && (
-                  <p className="mt-3 text-center text-sm text-muted-foreground">No matches.</p>
-                )}
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <div className="text-xs text-muted-foreground">Logging for</div>
-                  <div className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-                    {athleteDisplayName(athlete)}
-                    {loggedToday.has(athlete.id) && (
-                      <span className="flex items-center gap-1 text-xs font-normal text-[color:var(--color-success)]">
-                        <Check className="h-3.5 w-3.5" /> already logged today
-                      </span>
+              <div>
+                <Label className="text-xs text-muted-foreground">
+                  {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
+                </Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step={step}
+                  autoFocus
+                  className="h-16 text-center text-3xl font-bold"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder="0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && value.trim() && !save.isPending) save.mutate();
+                  }}
+                />
+              </div>
+              {dist && meta.unit === "s" && (
+                <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
+                  <button
+                    type="button"
+                    className={cn(
+                      "h-9 rounded font-medium transition",
+                      inputAs === "native" ? "bg-background shadow-sm" : "text-muted-foreground",
                     )}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">
-                    {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
-                  </Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step={step}
-                    autoFocus
-                    className="h-16 text-center text-3xl font-bold"
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    placeholder="0"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && value.trim() && !save.isPending) save.mutate();
-                    }}
-                  />
-                </div>
-                {dist && meta.unit === "s" && (
-                  <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
-                    <button
-                      type="button"
-                      className={cn(
-                        "h-9 rounded font-medium transition",
-                        inputAs === "native" ? "bg-background shadow-sm" : "text-muted-foreground",
-                      )}
-                      onClick={() => setInputAs("native")}
-                    >
-                      Seconds
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(
-                        "h-9 rounded font-medium transition",
-                        inputAs === "mph" ? "bg-background shadow-sm" : "text-muted-foreground",
-                      )}
-                      onClick={() => setInputAs("mph")}
-                    >
-                      MPH
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-14"
-                    onClick={() => {
-                      setAthleteId("");
-                      setValue("");
-                    }}
+                    onClick={() => setInputAs("native")}
                   >
-                    ← Back
-                  </Button>
-                  <Button
-                    className="h-14 flex-1 text-lg"
-                    disabled={save.isPending || !value.trim()}
-                    onClick={() => save.mutate()}
+                    Seconds
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "h-9 rounded font-medium transition",
+                      inputAs === "mph" ? "bg-background shadow-sm" : "text-muted-foreground",
+                    )}
+                    onClick={() => setInputAs("mph")}
                   >
-                    {save.isPending ? "Saving…" : "Save & Next"}
-                  </Button>
+                    MPH
+                  </button>
                 </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="h-14"
+                  onClick={() => {
+                    setAthleteId("");
+                    setValue("");
+                  }}
+                >
+                  ← Back
+                </Button>
+                <Button
+                  className="h-14 flex-1 text-lg"
+                  disabled={save.isPending || !value.trim()}
+                  onClick={() => save.mutate()}
+                >
+                  {save.isPending ? "Saving…" : "Save & Next"}
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {sessionLog.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">
-                Logged this session · {sessionLog.length}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {sessionLog.map((s) => (
-                <div key={s.id} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> {s.name}
-                  </span>
-                  <span className="mono-number font-medium">{s.display}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
