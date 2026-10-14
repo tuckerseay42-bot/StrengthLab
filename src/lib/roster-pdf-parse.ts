@@ -13,8 +13,17 @@ export type RosterPdfRow = {
 };
 export type RosterPdfResult = { periodGuess: string | null; rows: RosterPdfRow[] };
 
+// Format A — one line per student, ID inline:
 // "LAST[ LAST2], FIRST[ MIDDLE...] 12345 M 11 [08/10/2026 -]"
 const ROW_RE = /^([A-Z][A-Z'.\- ]*?),\s+([A-Z][A-Z'.\- ]+?)\s+(\d{3,8})\s+([MF])\s+(\d{1,2})\b/;
+
+// Format B — grade leads, ID on its own line right after (a different
+// Infinite Campus "Section Roster" export layout than Format A):
+// "11 LAST[ Jr./III], FIRST[ MIDDLE...] M [08/10/2026]" then "#12345"
+const NAME_ROW_RE =
+  /^(\d{2})\s+([A-Za-z][A-Za-z'.-]*(?:\s+[A-Za-z][A-Za-z'.-]*)?),\s+([A-Za-z][A-Za-z'.\- ]+?)\s+([MF])(?:\s+\d{2}\/\d{2}\/\d{4})?\s*$/;
+const ID_LINE_RE = /^#\s*(\d{3,8})\s*$/;
+
 const PERIOD_RE = /Period:\s*0*(\d{1,2})\b/i;
 
 export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
@@ -58,6 +67,16 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
         const pm = line.match(PERIOD_RE);
         if (pm) periodGuess = `Period ${Number(pm[1])}`;
       }
+
+      // A standalone "#12345" line is Format B's student ID, attached to
+      // whichever row was just pushed (it has no ID of its own yet).
+      const idMatch = line.match(ID_LINE_RE);
+      const lastRow = rows[rows.length - 1];
+      if (idMatch && lastRow && !lastRow.studentId) {
+        lastRow.studentId = idMatch[1];
+        continue;
+      }
+
       const m = line.match(ROW_RE);
       if (m) {
         const lastName = m[1].trim();
@@ -69,6 +88,22 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
           firstName,
           lastName,
           studentId,
+          grade: Number.isFinite(grade) ? grade : null,
+          gender,
+        });
+        continue;
+      }
+
+      const nm = line.match(NAME_ROW_RE);
+      if (nm) {
+        const grade = Number(nm[1]);
+        const lastName = nm[2].trim();
+        const firstName = nm[3].trim().split(/\s+/)[0];
+        const gender = nm[4] === "M" ? "male" : nm[4] === "F" ? "female" : null;
+        rows.push({
+          firstName,
+          lastName,
+          studentId: "",
           grade: Number.isFinite(grade) ? grade : null,
           gender,
         });

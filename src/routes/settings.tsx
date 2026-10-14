@@ -1,7 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useUnitPrefs } from "@/hooks/use-units";
 import type { DistanceUnit, SpeedUnit, WeightUnit } from "@/lib/units";
@@ -17,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toUserMessage } from "@/lib/db-errors";
 import { useOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { ONE_RM_FORMULAS, ONE_RM_META, type OneRmFormula } from "@/lib/one-rm";
+import { ClassPeriodRosterImport } from "@/components/class-period-roster-import";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — Strength Lab" }] }),
@@ -28,12 +35,17 @@ function SettingsPage() {
   const { data: perms } = useMyPermissions();
   const orgId = useCurrentOrgId();
   const navigate = useNavigate();
-  const canEditDashboard = perms?.roles.some((r) =>
-    r === "owner" || r === "administrator" || r === "admin" || r === "coach" || r === "sport_coach",
-  ) ?? false;
-  const canOnboard = perms?.roles.some((r) =>
-    r === "owner" || r === "administrator" || r === "admin",
-  ) ?? false;
+  const canEditDashboard =
+    perms?.roles.some(
+      (r) =>
+        r === "owner" ||
+        r === "administrator" ||
+        r === "admin" ||
+        r === "coach" ||
+        r === "sport_coach",
+    ) ?? false;
+  const canOnboard =
+    perms?.roles.some((r) => r === "owner" || r === "administrator" || r === "admin") ?? false;
 
   const set = (patch: Parameters<typeof update>[0]) => {
     update(patch);
@@ -49,12 +61,16 @@ function SettingsPage() {
       />
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Measurement units</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Measurement units</CardTitle>
+        </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label>Weight</Label>
             <Select value={prefs.weight} onValueChange={(v) => set({ weight: v as WeightUnit })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="lb">Pounds (lb)</SelectItem>
                 <SelectItem value="kg">Kilograms (kg)</SelectItem>
@@ -64,8 +80,13 @@ function SettingsPage() {
 
           <div>
             <Label>Distance / Height</Label>
-            <Select value={prefs.distance} onValueChange={(v) => set({ distance: v as DistanceUnit })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={prefs.distance}
+              onValueChange={(v) => set({ distance: v as DistanceUnit })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="in">Inches (in)</SelectItem>
                 <SelectItem value="ft">Feet (ft)</SelectItem>
@@ -79,7 +100,9 @@ function SettingsPage() {
           <div>
             <Label>Sprint speed display</Label>
             <Select value={prefs.speed} onValueChange={(v) => set({ speed: v as SpeedUnit })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="s">Seconds (s)</SelectItem>
                 <SelectItem value="mph">Miles per hour (mph)</SelectItem>
@@ -91,7 +114,9 @@ function SettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Data validation</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Data validation</CardTitle>
+        </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-1">
           <p>The app automatically checks new entries for common errors before saving:</p>
           <ul className="list-disc pl-5">
@@ -106,7 +131,9 @@ function SettingsPage() {
 
       {canEditDashboard && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Athlete preview</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Athlete preview</CardTitle>
+          </CardHeader>
           <CardContent>
             <Link
               to="/dashboard-settings"
@@ -122,16 +149,22 @@ function SettingsPage() {
         </Card>
       )}
 
+      {canEditDashboard && <ClassPeriodRosterImport />}
+
       {canOnboard && <OneRmFormulaCard orgId={orgId} />}
 
       {canOnboard && (
-
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Onboarding</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Onboarding</CardTitle>
+          </CardHeader>
           <CardContent>
             <Button
               variant="outline"
-              onClick={() => { resetSetupDismissed(orgId); navigate({ to: "/setup" }); }}
+              onClick={() => {
+                resetSetupDismissed(orgId);
+                navigate({ to: "/setup" });
+              }}
               className="gap-2"
             >
               <Rocket className="h-4 w-4" /> Restart setup wizard
@@ -168,7 +201,9 @@ function OneRmFormulaCard({ orgId }: { orgId: string | null }) {
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">Estimated 1RM formula</CardTitle></CardHeader>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Estimated 1RM formula</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-2">
         <Label>Formula used across programming, reports, and logged sets</Label>
         <Select
@@ -176,7 +211,9 @@ function OneRmFormulaCard({ orgId }: { orgId: string | null }) {
           onValueChange={(v) => save.mutate(v as OneRmFormula)}
           disabled={!orgId || save.isPending}
         >
-          <SelectTrigger className="sm:w-80"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="sm:w-80">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             {ONE_RM_FORMULAS.map((f) => (
               <SelectItem key={f} value={f}>
