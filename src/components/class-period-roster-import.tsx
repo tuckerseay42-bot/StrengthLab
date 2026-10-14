@@ -32,7 +32,7 @@ const CONFIDENCE_LABEL: Record<RowConfidence, string> = {
   id: "Matched by student ID",
   exact: "Exact name match",
   fuzzy: "Likely match — review",
-  weak: "Low confidence — review",
+  weak: "Last-name match only — please review",
   manual: "Confirmed",
   none: "No match found",
 };
@@ -44,7 +44,7 @@ const CONFIDENCE_CLASS: Record<RowConfidence, string> = {
   manual:
     "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
   fuzzy: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  weak: "border-border bg-muted text-muted-foreground",
+  weak: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
   none: "border-border bg-muted text-muted-foreground",
 };
 
@@ -69,19 +69,34 @@ export function ClassPeriodRosterImport() {
       }
       setFileName(file.name);
       setClassPeriod((prev) => prev || periodGuess || "");
-      setRows(
-        parsed.map((pdfRow, i) => {
-          const candidates = matchCandidates(pdfRow, athletes);
-          const top = candidates[0];
-          const confidence: RowConfidence = top?.confidence ?? "none";
-          return {
-            id: `${i}-${pdfRow.studentId || pdfRow.lastName}-${pdfRow.firstName}`,
-            pdfRow,
-            matchId: top && confidence !== "weak" ? top.athlete.id : "",
-            confidence,
-          };
-        }),
-      );
+      const built = parsed.map((pdfRow, i) => {
+        // Even a "weak" candidate (last name close, first name nothing alike)
+        // is worth surfacing — that's exactly the shape of a legal name vs.
+        // the nickname an athlete actually goes by. Pre-filling it lets the
+        // coach approve with one glance instead of having to re-search a
+        // name that was already found.
+        const candidates = matchCandidates(pdfRow, athletes);
+        const top = candidates[0];
+        const confidence: RowConfidence = top?.confidence ?? "none";
+        return {
+          id: `${i}-${pdfRow.studentId || pdfRow.lastName}-${pdfRow.firstName}`,
+          pdfRow,
+          matchId: top ? top.athlete.id : "",
+          confidence,
+        };
+      });
+      // Rows that need a closer look float to the top so the coach reviews
+      // those first instead of hunting for them in a 40-row list.
+      const reviewOrder: Record<RowConfidence, number> = {
+        none: 0,
+        weak: 1,
+        fuzzy: 2,
+        manual: 3,
+        exact: 4,
+        id: 5,
+      };
+      built.sort((a, b) => reviewOrder[a.confidence] - reviewOrder[b.confidence]);
+      setRows(built);
     } catch (e) {
       toast.error(toUserMessage(e as Error));
     } finally {
