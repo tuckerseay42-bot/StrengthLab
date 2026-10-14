@@ -14,16 +14,28 @@ export type FilterState = {
   grade: string;
   position: string;
   gender: string;
+  classPeriod: string;
   from: string;
   to: string;
 };
 
-export const emptyFilters: FilterState = { sport: "all", grade: "all", position: "all", gender: "all", from: "", to: "" };
+export const emptyFilters: FilterState = {
+  sport: "all",
+  grade: "all",
+  position: "all",
+  gender: "all",
+  classPeriod: "all",
+  from: "",
+  to: "",
+};
 
 /** Parse a filter field into a list of selected values ([] = no filter). */
 export function selectedValues(field: string | undefined): string[] {
   if (!field || field === "all") return [];
-  return field.split(",").map((s) => s.trim()).filter(Boolean);
+  return field
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function toField(values: string[]) {
@@ -37,7 +49,12 @@ function matchesField(field: string | undefined, value: string | null | undefine
 }
 
 function MultiSelect({
-  label, allLabel, options, value, onChange, width,
+  label,
+  allLabel,
+  options,
+  value,
+  onChange,
+  width,
 }: {
   label: string;
   allLabel: string;
@@ -87,7 +104,9 @@ function MultiSelect({
         </button>
         <div className="my-1 border-t border-border/60" />
         <div className="max-h-64 overflow-y-auto">
-          {options.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">No options</div>}
+          {options.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">No options</div>
+          )}
           {options.map((o) => (
             <button
               key={o.value}
@@ -110,7 +129,11 @@ function MultiSelect({
  * wrap gracefully on mobile. Each picker supports selecting multiple values.
  */
 export function Filters({
-  value, onChange, athletes, showDates = true, className,
+  value,
+  onChange,
+  athletes,
+  showDates = true,
+  className,
 }: {
   value: FilterState;
   onChange: (v: FilterState) => void;
@@ -120,7 +143,17 @@ export function Filters({
 }) {
   const positions = useMemo(() => {
     const s = new Set<string>();
-    athletes.forEach((a) => { if (a.position) s.add(a.position); });
+    athletes.forEach((a) => {
+      if (a.position) s.add(a.position);
+    });
+    return Array.from(s).sort();
+  }, [athletes]);
+
+  const classPeriods = useMemo(() => {
+    const s = new Set<string>();
+    athletes.forEach((a) => {
+      if (a.class_period) s.add(a.class_period);
+    });
     return Array.from(s).sort();
   }, [athletes]);
 
@@ -157,6 +190,14 @@ export function Filters({
         options={GENDERS.map((g) => ({ value: g, label: GENDER_LABELS[g] }))}
         value={value.gender ?? "all"}
         onChange={(v) => onChange({ ...value, gender: v })}
+      />
+      <MultiSelect
+        label="Class periods"
+        allLabel="All class periods"
+        width="w-[150px]"
+        options={classPeriods.map((cp) => ({ value: cp, label: cp }))}
+        value={value.classPeriod ?? "all"}
+        onChange={(v) => onChange({ ...value, classPeriod: v })}
       />
       {showDates && (
         <>
@@ -196,10 +237,10 @@ export function filterAthletes(
     if (!matchesField(f.grade, a.grade == null ? null : String(a.grade))) return false;
     if (!matchesField(f.position, a.position)) return false;
     if (!matchesField(f.gender, (a as unknown as { gender: string | null }).gender)) return false;
+    if (!matchesField(f.classPeriod, a.class_period)) return false;
     return true;
   });
 }
-
 
 export function inDateRange(date: string, f: FilterState) {
   if (f.from && date < f.from) return false;
