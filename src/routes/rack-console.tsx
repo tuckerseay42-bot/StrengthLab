@@ -1023,6 +1023,7 @@ function TrainingView() {
         key={a.id + (focused ? ":focus" : "")}
         focused={focused}
         onToggleFocus={() => setFocusId((p) => (p === a.id ? null : a.id))}
+        selfService={focused && viewMode === "list"}
         athlete={a}
 
         team={team}
@@ -1571,6 +1572,11 @@ function AthleteTile(props: {
   compact: boolean;
   focused?: boolean;
   onToggleFocus?: () => void;
+  // True when an athlete opened this tile themselves from the shared-tablet
+  // "Who's up" list — strips out everything that's really a coach's tool
+  // (swap exercise, mark injured, the full multi-exercise sheet) and makes
+  // logging a prescribed set a single tap instead of re-typing it.
+  selfService?: boolean;
   quadrant: number;
 
   todayLeaderByExercise: Map<string, { athleteId: string; load: number }>;
@@ -1603,6 +1609,7 @@ function AthleteTile(props: {
     compact,
     focused = false,
     onToggleFocus,
+    selfService = false,
 
     todayLeaderByExercise,
     overrides,
@@ -1647,6 +1654,10 @@ function AthleteTile(props: {
   // everything else collapses to a one-line "done / up next" summary. A
   // coach who wants the whole printed sheet can still expand it.
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  // Self-service: a prescribed set shows as a plain readout the athlete can
+  // confirm in one tap; "Edit" reveals the input boxes only when the number
+  // actually needs to change.
+  const [editingValues, setEditingValues] = useState(false);
 
   const cursor =
     cursorOverride ?? (autoCursor >= 0 ? autoCursor : Math.max(0, prescribed.length - 1));
@@ -1729,6 +1740,7 @@ function AthleteTile(props: {
       rpe: "",
       notes: "",
     }));
+    setEditingValues(false);
   }, [formKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Late-arriving prescription data fills a still-empty field, nothing more.
   useEffect(() => {
@@ -1945,23 +1957,40 @@ function AthleteTile(props: {
           </div>
         ) : null}
 
-        {/* Inputs — only what's needed to log this set */}
+        {/* Inputs — only what's needed to log this set. Self-service shows a
+            plain readout of the prescribed weight/reps with one "Edit" link
+            instead of two input boxes already pre-filled with the same
+            numbers — one tap to confirm, not a retype. */}
         <div className="mt-2 grid grid-cols-2 gap-2">
-          {currentMeasurement === "load" && (
-            <>
-              <NumInput
-                label="Weight"
-                value={form.load}
-                onChange={(v) => setForm({ ...form, load: v })}
-                suffix="lb"
-              />
-              <NumInput
-                label="Reps"
-                value={form.reps}
-                onChange={(v) => setForm({ ...form, reps: v })}
-              />
-            </>
-          )}
+          {currentMeasurement === "load" &&
+            (selfService && !editingValues && form.load !== "" && form.reps !== "" ? (
+              <div className="col-span-2 flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
+                <span className="text-2xl font-bold tabular-nums">
+                  {form.load} lb × {form.reps}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingValues(true)}
+                  className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  Edit
+                </button>
+              </div>
+            ) : (
+              <>
+                <NumInput
+                  label="Weight"
+                  value={form.load}
+                  onChange={(v) => setForm({ ...form, load: v })}
+                  suffix="lb"
+                />
+                <NumInput
+                  label="Reps"
+                  value={form.reps}
+                  onChange={(v) => setForm({ ...form, reps: v })}
+                />
+              </>
+            ))}
           {currentMeasurement === "seconds" && (
             <div className="col-span-2">
               <div className="mb-1 flex items-center justify-between">
@@ -2033,41 +2062,64 @@ function AthleteTile(props: {
           )}
           {currentMeasurement === "reps" && (
             <div className="col-span-2">
-              <NumInput
-                label="Reps"
-                value={form.reps}
-                onChange={(v) => setForm({ ...form, reps: v })}
-              />
+              {selfService && !editingValues && form.reps !== "" ? (
+                <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
+                  <span className="text-2xl font-bold tabular-nums">{form.reps} reps</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingValues(true)}
+                    className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <NumInput
+                  label="Reps"
+                  value={form.reps}
+                  onChange={(v) => setForm({ ...form, reps: v })}
+                />
+              )}
             </div>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowExtra(!showExtra)}
-          className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          {showExtra ? "Hide extras" : "Add RPE / more"}
-        </button>
-        {showExtra && (
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            {currentMeasurement === "load" && (
-              <NumInput
-                label="Vel"
-                value={form.avg_velocity}
-                onChange={(v) => setForm({ ...form, avg_velocity: v })}
-                suffix="m/s"
-              />
+        {/* RPE/velocity extras are a coach's analysis tool, not something an
+            athlete logging their own set needs to see. */}
+        {!selfService && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowExtra(!showExtra)}
+              className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {showExtra ? "Hide extras" : "Add RPE / more"}
+            </button>
+            {showExtra && (
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                {currentMeasurement === "load" && (
+                  <NumInput
+                    label="Vel"
+                    value={form.avg_velocity}
+                    onChange={(v) => setForm({ ...form, avg_velocity: v })}
+                    suffix="m/s"
+                  />
+                )}
+                {currentMeasurement !== "reps" && (
+                  <NumInput
+                    label="Reps"
+                    value={form.reps}
+                    onChange={(v) => setForm({ ...form, reps: v })}
+                  />
+                )}
+                <NumInput
+                  label="RPE"
+                  value={form.rpe}
+                  onChange={(v) => setForm({ ...form, rpe: v })}
+                />
+              </div>
             )}
-            {currentMeasurement !== "reps" && (
-              <NumInput
-                label="Reps"
-                value={form.reps}
-                onChange={(v) => setForm({ ...form, reps: v })}
-              />
-            )}
-            <NumInput label="RPE" value={form.rpe} onChange={(v) => setForm({ ...form, rpe: v })} />
-          </div>
+          </>
         )}
         {currentMeasurement === "seconds" &&
           form.timeUnit === "mph" &&
@@ -2153,91 +2205,115 @@ function AthleteTile(props: {
       )}
       {isPr && <ConfettiBurst />}
 
-      {/* Header */}
+      {/* Header — self-service drops the coach's tools (swap/injure) and the
+          redundant expand/back control, since the outer "Back to list"
+          button already covers leaving this screen. */}
       <header
         className={cn("flex items-start justify-between gap-2 px-3", compact ? "pt-2" : "pt-3")}
       >
-        <button
-          type="button"
-          onClick={onToggleFocus}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-          title={focused ? "Back to grid" : "Expand this athlete"}
-        >
-          <Avatar
-            name={athleteDisplayName(athlete)}
-            color={team?.color ?? null}
-            size={compact && !focused ? "md" : "lg"}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <h3
-                className={cn(
-                  "truncate font-bold tracking-tight",
-                  focused ? "text-xl" : compact ? "text-base" : "text-lg",
+        {selfService ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <Avatar name={athleteDisplayName(athlete)} color={team?.color ?? null} size="lg" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h3 className="truncate text-xl font-bold tracking-tight">
+                  {athleteDisplayName(athlete)}
+                </h3>
+                {isLeader && (
+                  <Trophy className="h-3.5 w-3.5 text-amber-500" aria-label="Top load today" />
                 )}
-              >
-                {athleteDisplayName(athlete)}
-              </h3>
-              {isLeader && (
-                <Trophy className="h-3.5 w-3.5 text-amber-500" aria-label="Top load today" />
-              )}
-            </div>
-            <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-              {team && <span className="truncate">{team.name}</span>}
-              {workout && <span className="truncate">· {workout.name}</span>}
-              {lastCompleted && (
-                <span className="whitespace-nowrap">
-                  · {relTime(new Date(lastCompleted.completed_at).getTime(), now)} ago
-                </span>
-              )}
+              </div>
+              <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                {workout && <span className="truncate">{workout.name}</span>}
+              </div>
             </div>
           </div>
-          <span
-            className={cn(
-              "ml-1 flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
-              focused
-                ? "bg-muted text-foreground"
-                : "bg-primary/10 text-primary ring-1 ring-primary/30",
-            )}
-          >
-            {focused ? (
-              <>
-                <Minimize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Back</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="h-3.5 w-3.5" />{" "}
-                <span className="hidden sm:inline">Expand</span>
-              </>
-            )}
-          </span>
-        </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onToggleFocus}
+              className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+              title={focused ? "Back to grid" : "Expand this athlete"}
+            >
+              <Avatar
+                name={athleteDisplayName(athlete)}
+                color={team?.color ?? null}
+                size={compact && !focused ? "md" : "lg"}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <h3
+                    className={cn(
+                      "truncate font-bold tracking-tight",
+                      focused ? "text-xl" : compact ? "text-base" : "text-lg",
+                    )}
+                  >
+                    {athleteDisplayName(athlete)}
+                  </h3>
+                  {isLeader && (
+                    <Trophy className="h-3.5 w-3.5 text-amber-500" aria-label="Top load today" />
+                  )}
+                </div>
+                <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                  {team && <span className="truncate">{team.name}</span>}
+                  {workout && <span className="truncate">· {workout.name}</span>}
+                  {lastCompleted && (
+                    <span className="whitespace-nowrap">
+                      · {relTime(new Date(lastCompleted.completed_at).getTime(), now)} ago
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "ml-1 flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
+                  focused
+                    ? "bg-muted text-foreground"
+                    : "bg-primary/10 text-primary ring-1 ring-primary/30",
+                )}
+              >
+                {focused ? (
+                  <>
+                    <Minimize2 className="h-3.5 w-3.5" />{" "}
+                    <span className="hidden sm:inline">Back</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="h-3.5 w-3.5" />{" "}
+                    <span className="hidden sm:inline">Expand</span>
+                  </>
+                )}
+              </span>
+            </button>
 
-        <TileActions
-          onRemove={onRemove}
-          onSwapWorkout={onSetWorkout}
-          workouts={workouts}
-          programs={programs}
-          athleteProgramId={athlete.program_id}
-          athleteId={athlete.id}
-          athleteName={athleteDisplayName(athlete)}
-          currentWorkoutId={workout?.id ?? null}
-          currentExerciseId={current?.exercise.id ?? null}
-          currentExerciseLabel={currentExerciseName}
-          hasOverride={!!currentOverride}
-          exerciseLib={exerciseLib as { id: string; name: string }[]}
-          onSwapExercise={(sub) => {
-            if (!current) return;
-            onSwapExercise({
-              workout_exercise_id: current.exercise.id,
-              substitute_exercise_id: sub.id,
-              substitute_exercise_name: sub.name,
-              reason: sub.reason ?? null,
-            });
-          }}
-          onClearSwap={() => current && onClearSwap(current.exercise.id)}
-          onMarkOut={onMarkOut}
-        />
+            <TileActions
+              onRemove={onRemove}
+              onSwapWorkout={onSetWorkout}
+              workouts={workouts}
+              programs={programs}
+              athleteProgramId={athlete.program_id}
+              athleteId={athlete.id}
+              athleteName={athleteDisplayName(athlete)}
+              currentWorkoutId={workout?.id ?? null}
+              currentExerciseId={current?.exercise.id ?? null}
+              currentExerciseLabel={currentExerciseName}
+              hasOverride={!!currentOverride}
+              exerciseLib={exerciseLib as { id: string; name: string }[]}
+              onSwapExercise={(sub) => {
+                if (!current) return;
+                onSwapExercise({
+                  workout_exercise_id: current.exercise.id,
+                  substitute_exercise_id: sub.id,
+                  substitute_exercise_name: sub.name,
+                  reason: sub.reason ?? null,
+                });
+              }}
+              onClearSwap={() => current && onClearSwap(current.exercise.id)}
+              onMarkOut={onMarkOut}
+            />
+          </>
+        )}
       </header>
 
       {/* Progress */}
@@ -2293,7 +2369,10 @@ function AthleteTile(props: {
         /* Focus view — only the current exercise prints its full set table;
            everything else is a tappable one-line "done / up next" summary. */
         <div className="px-2 pb-2">
-          {sheet.length > 1 && (
+          {/* Self-service only ever shows the exercise in front of the
+              athlete right now — the cursor already auto-advances, so
+              there's nothing else worth tapping into. */}
+          {!selfService && sheet.length > 1 && (
             <button
               type="button"
               onClick={() => setSheetExpanded((v) => !v)}
@@ -2313,6 +2392,8 @@ function AthleteTile(props: {
               "grid h-4 w-6 shrink-0 place-items-center rounded-[3px] text-[9px] font-bold text-white",
               allDone ? "bg-emerald-500" : (SUPERSET_ACCENT[g.label[0]!] ?? "bg-slate-500"),
             );
+
+            if (!isActive && selfService) return null;
 
             if (!isActive && !sheetExpanded) {
               return (
