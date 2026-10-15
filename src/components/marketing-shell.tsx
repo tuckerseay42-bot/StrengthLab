@@ -53,37 +53,26 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
-          <Link to="/reports" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
             <span
               className="grid h-9 w-9 place-items-center rounded-md font-display text-sm font-bold text-white shadow-[0_0_24px_-4px_oklch(0.62_0.19_255/0.8)]"
-              style={{ background: "linear-gradient(135deg, oklch(0.62 0.19 255), oklch(0.55 0.24 295))" }}
+              style={{
+                background: "linear-gradient(135deg, oklch(0.62 0.19 255), oklch(0.55 0.24 295))",
+              }}
             >
               SL
             </span>
             <div className="leading-tight">
-              <div className="font-display text-sm font-semibold tracking-tight">Strength Lab Hub</div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Performance OS</div>
+              <div className="font-display text-sm font-semibold tracking-tight">
+                Strength Lab Hub
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Performance OS
+              </div>
             </div>
           </Link>
-          <nav className="ml-6 hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <Link to="/reports" className="transition-colors hover:text-foreground" activeProps={{ className: "text-foreground" }}>
-              Reports
-            </Link>
-
-
-            <Link to="/athlete-login" className="transition-colors hover:text-foreground" activeProps={{ className: "text-foreground" }}>
-              Athlete Sign In
-            </Link>
-          </nav>
           <div className="ml-auto flex items-center gap-2">
-            <Link
-              to="/reports"
-              className="inline-flex h-9 items-center rounded-md border border-primary/40 px-3 text-sm font-medium text-foreground hover:bg-primary/10"
-            >
-              Reports
-            </Link>
             {signedIn ? (
-
               <Link
                 to="/performance"
                 className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-[0_0_24px_-4px_oklch(0.62_0.19_255/0.8)] hover:opacity-90"
@@ -116,12 +105,13 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <div>© {new Date().getFullYear()} Strength Lab Hub. Built for coaches.</div>
           <div className="flex gap-6">
-            <Link to="/reports" className="hover:text-foreground">Reports</Link>
+            <Link to="/athlete-login" className="hover:text-foreground">
+              Athlete Sign In
+            </Link>
 
-            
-            <Link to="/athlete-login" className="hover:text-foreground">Athlete Sign In</Link>
-
-            <Link to="/auth" className="hover:text-foreground">Coach Sign In</Link>
+            <Link to="/auth" className="hover:text-foreground">
+              Coach Sign In
+            </Link>
           </div>
         </div>
       </footer>

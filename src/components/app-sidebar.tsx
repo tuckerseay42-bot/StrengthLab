@@ -11,7 +11,6 @@ import {
   Layers,
   FileCheck2,
   BarChart3,
-  FileBarChart2,
   Gauge,
   Dumbbell,
   ClipboardCheck,
@@ -93,7 +92,6 @@ const GROUPS: Group[] = [
       { to: "/live-leaderboard", label: "Live View", icon: Tv },
       { to: "/badges", label: "Badges", icon: Award },
       { to: "/athleticism-report", label: "Athleticism Report", icon: Radar },
-      { to: "/reports", label: "Reports", icon: FileBarChart2 },
     ],
   },
   {

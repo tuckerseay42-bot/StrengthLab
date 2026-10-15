@@ -12,9 +12,15 @@ export const Route = createFileRoute("/training/calendar")({
   component: CalendarView,
 });
 
-function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function daysInMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
-function fmt(d: Date) { return d.toISOString().slice(0, 10); }
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function daysInMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+function fmt(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
 
 function CalendarView() {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
@@ -27,7 +33,8 @@ function CalendarView() {
     const m = new Map<string, typeof assignments>();
     for (const a of assignments) {
       const arr = m.get(a.scheduled_date) ?? [];
-      arr.push(a); m.set(a.scheduled_date, arr);
+      arr.push(a);
+      m.set(a.scheduled_date, arr);
     }
     return m;
   }, [assignments]);
@@ -37,63 +44,93 @@ function CalendarView() {
   const leadBlanks = first.getDay();
   const cells: (Date | null)[] = [
     ...Array(leadBlanks).fill(null),
-    ...Array.from({ length: total }, (_, i) => new Date(cursor.getFullYear(), cursor.getMonth(), i + 1)),
+    ...Array.from(
+      { length: total },
+      (_, i) => new Date(cursor.getFullYear(), cursor.getMonth(), i + 1),
+    ),
   ];
   const monthLabel = cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const todayKey = fmt(new Date());
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="font-medium">{monthLabel}</div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setCursor(startOfMonth(new Date()))}>Today</Button>
-            <Button variant="ghost" size="icon" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+    <div className="space-y-4">
+      <h1 className="text-xl font-semibold sm:text-2xl">Calendar</h1>
+      <Card>
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-medium">{monthLabel}</div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCursor(startOfMonth(new Date()))}
+              >
+                Today
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => <div key={d} className="py-1">{d}</div>)}
-        </div>
-        <div className="mt-1 grid grid-cols-7 gap-1">
-          {cells.map((d, i) => {
-            if (!d) return <div key={i} className="min-h-[80px] rounded-md bg-muted/20" />;
-            const key = fmt(d);
-            const items = byDate.get(key) ?? [];
-            const isToday = key === todayKey;
-            return (
-              <div key={i} className={`min-h-[80px] rounded-md border p-1.5 text-left ${isToday ? "border-primary" : "border-border/60"}`}>
-                <div className="text-xs font-medium">{d.getDate()}</div>
-                <div className="mt-1 space-y-0.5">
-                  {items.slice(0, 3).map((a) => {
-                    const w = workouts.find((x) => x.id === a.workout_id);
-                    const t = a.team_id ? teams.find((x) => x.id === a.team_id) : null;
-                    const ath = a.athlete_id ? athletes.find((x) => x.id === a.athlete_id) : null;
-                    return (
-                      <Link
-                        key={a.id}
-                        to="/workouts/$id" params={{ id: a.workout_id }}
-                        className="block truncate rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-foreground hover:bg-primary/20"
-                        title={`${w?.name ?? "Session"} — ${t?.name ?? ath?.name ?? ""}`}
-                      >
-                        {w?.name ?? "Session"}
-                      </Link>
-                    );
-                  })}
-                  {items.length > 3 && (
-                    <Badge variant="outline" className="text-[10px]">+{items.length - 3}</Badge>
-                  )}
-                </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+              <div key={d} className="py-1">
+                {d}
               </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {cells.map((d, i) => {
+              if (!d) return <div key={i} className="min-h-[80px] rounded-md bg-muted/20" />;
+              const key = fmt(d);
+              const items = byDate.get(key) ?? [];
+              const isToday = key === todayKey;
+              return (
+                <div
+                  key={i}
+                  className={`min-h-[80px] rounded-md border p-1.5 text-left ${isToday ? "border-primary" : "border-border/60"}`}
+                >
+                  <div className="text-xs font-medium">{d.getDate()}</div>
+                  <div className="mt-1 space-y-0.5">
+                    {items.slice(0, 3).map((a) => {
+                      const w = workouts.find((x) => x.id === a.workout_id);
+                      const t = a.team_id ? teams.find((x) => x.id === a.team_id) : null;
+                      const ath = a.athlete_id ? athletes.find((x) => x.id === a.athlete_id) : null;
+                      return (
+                        <Link
+                          key={a.id}
+                          to="/workouts/$id"
+                          params={{ id: a.workout_id }}
+                          className="block truncate rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-foreground hover:bg-primary/20"
+                          title={`${w?.name ?? "Session"} — ${t?.name ?? ath?.name ?? ""}`}
+                        >
+                          {w?.name ?? "Session"}
+                        </Link>
+                      );
+                    })}
+                    {items.length > 3 && (
+                      <Badge variant="outline" className="text-[10px]">
+                        +{items.length - 3}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
