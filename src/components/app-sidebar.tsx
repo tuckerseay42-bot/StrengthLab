@@ -17,8 +17,6 @@ import {
   CalendarCheck,
   LineChart,
   Trophy,
-  Tv,
-  Award,
   Radar,
   Building2,
   UserCog,
@@ -89,8 +87,6 @@ const GROUPS: Group[] = [
     items: [
       { to: "/metrics", label: "Metrics", icon: LineChart },
       { to: "/leaderboards", label: "Leaderboards", icon: Trophy },
-      { to: "/live-leaderboard", label: "Live View", icon: Tv },
-      { to: "/badges", label: "Badges", icon: Award },
       { to: "/athleticism-report", label: "Athleticism Report", icon: Radar },
     ],
   },

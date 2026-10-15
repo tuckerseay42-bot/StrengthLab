@@ -7,24 +7,64 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  athletesQO, testsQO, testAssignmentsQO, testTypesQO, liftsQO, attendanceQO, repMaxesQO, teamsQO, programsQO, athleteDisplayName, spiderTemplatesQO, type Athlete, type Team,
+  athletesQO,
+  testsQO,
+  testAssignmentsQO,
+  testTypesQO,
+  liftsQO,
+  attendanceQO,
+  repMaxesQO,
+  teamsQO,
+  programsQO,
+  athleteDisplayName,
+  spiderTemplatesQO,
+  type Athlete,
+  type Team,
 } from "@/lib/queries";
 import { pickTemplate } from "@/lib/spider";
 import { supabase as sb } from "@/integrations/supabase/client";
-import { LogOut, Trophy, Dumbbell, TrendingUp, ClipboardList, Check, KeyRound, Download, Mail, ListOrdered } from "lucide-react";
-import { TEST_TYPES, testTypeMeta as baseTestTypeMeta, SPORTS, GENDERS, GENDER_LABELS } from "@/lib/domain";
+import {
+  LogOut,
+  Trophy,
+  Dumbbell,
+  TrendingUp,
+  ClipboardList,
+  Check,
+  KeyRound,
+  Download,
+  Mail,
+  ListOrdered,
+} from "lucide-react";
+import {
+  TEST_TYPES,
+  testTypeMeta as baseTestTypeMeta,
+  SPORTS,
+  GENDERS,
+  GENDER_LABELS,
+} from "@/lib/domain";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 import { buildAthleteResultsPdf } from "@/lib/athlete-results-export";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Legend,
 } from "recharts";
 import { useServerFn } from "@tanstack/react-start";
 import { setAthletePin, getMyPinStatus } from "@/lib/athlete-pin.functions";
-import { BadgeShelf } from "@/components/badge-shelf";
 import { AthleteProfileHero } from "@/components/athlete-profile-hero";
 import { AthleteHeroCard } from "@/components/athlete-hero-card";
 import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
@@ -32,10 +72,14 @@ import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { PredictedHeightTool } from "@/components/predicted-height-tool";
 import { TodaysLiftCard } from "@/components/todays-lift-card";
 
-
 export const Route = createFileRoute("/athlete")({
-  head: () => ({ meta: [{ title: "My Dashboard — Strength Lab" }, { name: "robots", content: "noindex" }] }),
-  validateSearch: (s: Record<string, unknown>): { claim?: string; setupPin?: boolean } => ({ claim: s.claim as string | undefined, setupPin: s.setupPin === "1" || s.setupPin === true }),
+  head: () => ({
+    meta: [{ title: "My Dashboard — Strength Lab" }, { name: "robots", content: "noindex" }],
+  }),
+  validateSearch: (s: Record<string, unknown>): { claim?: string; setupPin?: boolean } => ({
+    claim: s.claim as string | undefined,
+    setupPin: s.setupPin === "1" || s.setupPin === true,
+  }),
   component: AthletePortal,
 });
 
@@ -64,32 +108,40 @@ function AthletePortal() {
     });
   }, [claim, userId, setupPin, navigate]);
 
-  if (userId === undefined) return <div className="py-16 text-center text-muted-foreground">Loading…</div>;
+  if (userId === undefined)
+    return <div className="py-16 text-center text-muted-foreground">Loading…</div>;
 
   if (!userId) {
     return (
       <div className="mx-auto max-w-md space-y-6 py-12">
         <div className="text-center">
           <h1 className="text-2xl font-semibold">Athlete sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in with your email and password.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sign in with your email and password.
+          </p>
         </div>
         <AthletePasswordAuth />
         <div className="text-center text-xs text-muted-foreground">
           New here? Ask your coach for your personal QR code — scan it once to link your account.
         </div>
         <div className="pt-4 border-t text-center">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Coach / Admin</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+            Coach / Admin
+          </p>
           <Button asChild variant="outline" size="sm">
-            <Link to="/auth" search={{ redirect: "/athlete" } as never}>Sign in to preview</Link>
+            <Link to="/auth" search={{ redirect: "/athlete" } as never}>
+              Sign in to preview
+            </Link>
           </Button>
         </div>
       </div>
     );
   }
 
-
-  if (claiming) return <div className="py-16 text-center text-muted-foreground">Linking your account…</div>;
-  if (claimError) return <div className="mx-auto max-w-md py-16 text-center text-destructive">{claimError}</div>;
+  if (claiming)
+    return <div className="py-16 text-center text-muted-foreground">Linking your account…</div>;
+  if (claimError)
+    return <div className="mx-auto max-w-md py-16 text-center text-destructive">{claimError}</div>;
 
   return <Dashboard userId={userId} setupPin={setupPin} />;
 }
@@ -108,15 +160,38 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
   const { data: spiderTemplates = [] } = useQuery(spiderTemplatesQO);
 
   const testTypeMeta = useMemo(() => {
-    const m = new Map(customTypes.map((c) => [c.value, { value: c.value, label: c.label, unit: c.unit, lowerIsBetter: c.lower_is_better, group: c.group_name }]));
+    const m = new Map(
+      customTypes.map((c) => [
+        c.value,
+        {
+          value: c.value,
+          label: c.label,
+          unit: c.unit,
+          lowerIsBetter: c.lower_is_better,
+          group: c.group_name,
+        },
+      ]),
+    );
     return (v: string) => m.get(v) ?? baseTestTypeMeta(v);
   }, [customTypes]);
 
   const allTestTypeDefs = useMemo(() => {
     const seen = new Set<string>();
     const out: { value: string; label: string; unit: string; lowerIsBetter: boolean }[] = [];
-    for (const t of TEST_TYPES) { seen.add(t.value); out.push({ value: t.value, label: t.label, unit: t.unit, lowerIsBetter: t.lowerIsBetter }); }
-    for (const c of customTypes) if (!seen.has(c.value)) { seen.add(c.value); out.push({ value: c.value, label: c.label, unit: c.unit, lowerIsBetter: c.lower_is_better }); }
+    for (const t of TEST_TYPES) {
+      seen.add(t.value);
+      out.push({ value: t.value, label: t.label, unit: t.unit, lowerIsBetter: t.lowerIsBetter });
+    }
+    for (const c of customTypes)
+      if (!seen.has(c.value)) {
+        seen.add(c.value);
+        out.push({
+          value: c.value,
+          label: c.label,
+          unit: c.unit,
+          lowerIsBetter: c.lower_is_better,
+        });
+      }
     return out;
   }, [customTypes]);
 
@@ -127,8 +202,6 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
     () => (me ? pickTemplate(spiderTemplates, me) : null),
     [spiderTemplates, me],
   );
-  const showBadges = dashboardTemplate?.options?.show_badges ?? true;
-
   // Assigned tests visible to this athlete (their own + their team's), from today forward
   const myAssignments = useMemo(() => {
     if (!me) return [];
@@ -140,7 +213,11 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
   }, [assignments, me]);
 
   const isDone = (a: { test_type: string; scheduled_date: string }) =>
-    !!me && tests.some((t) => t.athlete_id === me.id && t.test_type === a.test_type && t.test_date === a.scheduled_date);
+    !!me &&
+    tests.some(
+      (t) =>
+        t.athlete_id === me.id && t.test_type === a.test_type && t.test_date === a.scheduled_date,
+    );
 
   const [logFor, setLogFor] = useState<string | null>(null);
   const [logValue, setLogValue] = useState("");
@@ -152,19 +229,23 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
       const meta = testTypeMeta(a.test_type);
       const { error } = await supabase.from("tests").insert({
         organization_id: me.organization_id,
-        athlete_id: me.id, test_type: a.test_type, value: val,
-        unit: meta.unit, test_date: a.scheduled_date, notes: null,
+        athlete_id: me.id,
+        test_type: a.test_type,
+        value: val,
+        unit: meta.unit,
+        test_date: a.scheduled_date,
+        notes: null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tests"] });
       toast.success("Logged");
-      setLogFor(null); setLogValue("");
+      setLogFor(null);
+      setLogValue("");
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
-
 
   const myTestTypes = useMemo(() => {
     if (!me) return [];
@@ -179,7 +260,11 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
 
   // Trend series for chosen metric
   const trend = useMemo(() => {
-    if (!me || !metric) return { points: [] as { date: string; value: number; best: number; teamAvg: number | null }[], meta: testTypeMeta(metric ?? "") };
+    if (!me || !metric)
+      return {
+        points: [] as { date: string; value: number; best: number; teamAvg: number | null }[],
+        meta: testTypeMeta(metric ?? ""),
+      };
     const meta = testTypeMeta(metric);
     const mine = tests
       .filter((t) => t.athlete_id === me.id && t.test_type === metric)
@@ -194,50 +279,76 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
       else best = meta.lowerIsBetter ? Math.min(best, v) : Math.max(best, v);
       // team avg on that date (same team, same test)
       const sameDay = tests.filter(
-        (x) => x.test_type === metric && x.test_date === t.test_date && athletes.find((a) => a.id === x.athlete_id)?.team_id === me.team_id,
+        (x) =>
+          x.test_type === metric &&
+          x.test_date === t.test_date &&
+          athletes.find((a) => a.id === x.athlete_id)?.team_id === me.team_id,
       );
-      const teamAvg = sameDay.length ? sameDay.reduce((s, x) => s + Number(x.value), 0) / sameDay.length : null;
-      return { date: t.test_date.slice(5), value: v, best, teamAvg: teamAvg != null ? Number(teamAvg.toFixed(2)) : null };
+      const teamAvg = sameDay.length
+        ? sameDay.reduce((s, x) => s + Number(x.value), 0) / sameDay.length
+        : null;
+      return {
+        date: t.test_date.slice(5),
+        value: v,
+        best,
+        teamAvg: teamAvg != null ? Number(teamAvg.toFixed(2)) : null,
+      };
     });
     return { points, meta };
   }, [tests, athletes, me, metric]);
 
   const leaderboardRank = useMemo(() => {
     if (!me) return [];
-    return allTestTypeDefs.map((tt) => {
-      const meta = testTypeMeta(tt.value);
-      const bestByAthlete = new Map<string, number>();
-      for (const t of tests.filter((x) => x.test_type === tt.value)) {
-        const cur = bestByAthlete.get(t.athlete_id);
-        const better = cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur);
-        if (better) bestByAthlete.set(t.athlete_id, t.value);
-      }
-      const myGender = (me.gender ?? "").trim().toLowerCase();
-      const mySport = (me.sport ?? "").trim().toLowerCase();
-      const pool = athletes.filter((a) => {
-        const g = (a.gender ?? "").trim().toLowerCase();
-        const s = (a.sport ?? "").trim().toLowerCase();
-        if (myGender && g && g !== myGender) return false;
-        if (mySport && s && s !== mySport) return false;
-        return true;
-      });
-      const rows = pool.map((a) => ({ id: a.id, v: bestByAthlete.get(a.id) })).filter((r) => r.v != null) as { id: string; v: number }[];
-      if (!rows.length || !bestByAthlete.has(me.id)) return null;
-      rows.sort((a, b) => meta.lowerIsBetter ? a.v - b.v : b.v - a.v);
-      const rank = rows.findIndex((r) => r.id === me.id) + 1;
-      const myValue = bestByAthlete.get(me.id)!;
-      // Score = percentile within the same pool used for rank, 0..10 (10 = best).
-      const poolValues = rows.map((r) => r.v);
-      const worseCount = meta.lowerIsBetter
-        ? poolValues.filter((v) => v > myValue).length
-        : poolValues.filter((v) => v < myValue).length;
-      const score = Math.round((worseCount / poolValues.length) * 100) / 10;
-      return {
-        type: tt.label, unit: tt.unit, rank, of: rows.length, value: myValue, score,
-        scope: [me.gender, me.sport].filter(Boolean).join(" · ") || "All",
-      };
-    }).filter(Boolean) as { type: string; unit: string; rank: number; of: number; value: number; score: number; scope: string }[];
-
+    return allTestTypeDefs
+      .map((tt) => {
+        const meta = testTypeMeta(tt.value);
+        const bestByAthlete = new Map<string, number>();
+        for (const t of tests.filter((x) => x.test_type === tt.value)) {
+          const cur = bestByAthlete.get(t.athlete_id);
+          const better = cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur);
+          if (better) bestByAthlete.set(t.athlete_id, t.value);
+        }
+        const myGender = (me.gender ?? "").trim().toLowerCase();
+        const mySport = (me.sport ?? "").trim().toLowerCase();
+        const pool = athletes.filter((a) => {
+          const g = (a.gender ?? "").trim().toLowerCase();
+          const s = (a.sport ?? "").trim().toLowerCase();
+          if (myGender && g && g !== myGender) return false;
+          if (mySport && s && s !== mySport) return false;
+          return true;
+        });
+        const rows = pool
+          .map((a) => ({ id: a.id, v: bestByAthlete.get(a.id) }))
+          .filter((r) => r.v != null) as { id: string; v: number }[];
+        if (!rows.length || !bestByAthlete.has(me.id)) return null;
+        rows.sort((a, b) => (meta.lowerIsBetter ? a.v - b.v : b.v - a.v));
+        const rank = rows.findIndex((r) => r.id === me.id) + 1;
+        const myValue = bestByAthlete.get(me.id)!;
+        // Score = percentile within the same pool used for rank, 0..10 (10 = best).
+        const poolValues = rows.map((r) => r.v);
+        const worseCount = meta.lowerIsBetter
+          ? poolValues.filter((v) => v > myValue).length
+          : poolValues.filter((v) => v < myValue).length;
+        const score = Math.round((worseCount / poolValues.length) * 100) / 10;
+        return {
+          type: tt.label,
+          unit: tt.unit,
+          rank,
+          of: rows.length,
+          value: myValue,
+          score,
+          scope: [me.gender, me.sport].filter(Boolean).join(" · ") || "All",
+        };
+      })
+      .filter(Boolean) as {
+      type: string;
+      unit: string;
+      rank: number;
+      of: number;
+      value: number;
+      score: number;
+      scope: string;
+    }[];
   }, [tests, athletes, me, allTestTypeDefs, testTypeMeta]);
 
   // Composite = average score across every test the athlete has a ranked
@@ -297,34 +408,46 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
     return (
       <div className="mx-auto max-w-md space-y-4 py-16 text-center">
         <h1 className="text-xl font-semibold">Admin preview</h1>
-        <p className="text-sm text-muted-foreground">Your account isn't linked to an athlete. Pick one to preview their dashboard.</p>
+        <p className="text-sm text-muted-foreground">
+          Your account isn't linked to an athlete. Pick one to preview their dashboard.
+        </p>
         <Select value={previewId ?? ""} onValueChange={setPreviewId}>
-          <SelectTrigger className="mx-auto w-[260px]"><SelectValue placeholder="Select an athlete…" /></SelectTrigger>
+          <SelectTrigger className="mx-auto w-[260px]">
+            <SelectValue placeholder="Select an athlete…" />
+          </SelectTrigger>
           <SelectContent>
             {athletes.map((a) => (
-              <SelectItem key={a.id} value={a.id}>{athleteDisplayName(a)}</SelectItem>
+              <SelectItem key={a.id} value={a.id}>
+                {athleteDisplayName(a)}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <div><Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}><LogOut className="mr-1 h-4 w-4" /> Sign out</Button></div>
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+            <LogOut className="mr-1 h-4 w-4" /> Sign out
+          </Button>
+        </div>
       </div>
     );
   }
 
-
   const avg = trend.points.length
     ? trend.points.reduce((s, p) => s + p.value, 0) / trend.points.length
     : null;
-  const bestOverall = trend.points.length
-    ? trend.points[trend.points.length - 1].best
-    : null;
+  const bestOverall = trend.points.length ? trend.points[trend.points.length - 1].best : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 py-4">
       {!linked && (
         <div className="flex items-center justify-between rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs">
-          <span className="text-muted-foreground">Admin preview — viewing as <span className="font-medium text-foreground">{athleteDisplayName(me)}</span></span>
-          <Button variant="ghost" size="sm" className="h-7" onClick={() => setPreviewId(null)}>Change</Button>
+          <span className="text-muted-foreground">
+            Admin preview — viewing as{" "}
+            <span className="font-medium text-foreground">{athleteDisplayName(me)}</span>
+          </span>
+          <Button variant="ghost" size="sm" className="h-7" onClick={() => setPreviewId(null)}>
+            Change
+          </Button>
         </div>
       )}
       <div className="flex items-center justify-end">
@@ -339,7 +462,9 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="font-display text-4xl font-bold tracking-tight text-primary">{composite.value.toFixed(1)}</span>
+                <span className="font-display text-4xl font-bold tracking-tight text-primary">
+                  {composite.value.toFixed(1)}
+                </span>
                 <span className="text-lg text-muted-foreground">/10</span>
               </div>
               <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -370,12 +495,7 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
       {/* Today's Lift — hero */}
       <TodaysLiftCard athleteId={me.id} programId={me.program_id ?? null} />
 
-      <AthleteProfileHero
-        athlete={me}
-        athletes={athletes}
-        tests={tests}
-        attendance={attendance}
-      />
+      <AthleteProfileHero athlete={me} athletes={athletes} tests={tests} attendance={attendance} />
 
       <AthleteSpiderGraph athlete={me} />
       <AthleteKpiDashboard
@@ -388,22 +508,7 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         athletesAll={athletes}
       />
 
-      {showBadges && (
-        <BadgeShelf
-          athlete={me}
-          tests={tests.filter((t) => t.athlete_id === me.id)}
-          lifts={lifts.filter((l) => l.athlete_id === me.id)}
-          attendance={attendance.filter((a) => a.athlete_id === me.id)}
-          repMaxes={repMaxes.filter((r) => r.athlete_id === me.id)}
-          canAward={false}
-        />
-      )}
-
       <PredictedHeightTool athlete={me} />
-
-
-
-
 
       {/* Assigned tests */}
       {myAssignments.length > 0 && (
@@ -423,10 +528,21 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{meta.label}</Badge>
                     <span className="text-xs text-muted-foreground">{a.scheduled_date}</span>
-                    {done && <Badge className="ml-auto"><Check className="mr-1 h-3 w-3" /> Logged</Badge>}
+                    {done && (
+                      <Badge className="ml-auto">
+                        <Check className="mr-1 h-3 w-3" /> Logged
+                      </Badge>
+                    )}
                     {!done && !active && (
-                      <Button size="sm" variant="outline" className="ml-auto"
-                        onClick={() => { setLogFor(a.id); setLogValue(""); }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-auto"
+                        onClick={() => {
+                          setLogFor(a.id);
+                          setLogValue("");
+                        }}
+                      >
                         Log result
                       </Button>
                     )}
@@ -434,10 +550,23 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
                   {a.notes && <div className="mt-1 text-xs text-muted-foreground">{a.notes}</div>}
                   {!done && active && (
                     <div className="mt-2 flex items-center gap-2">
-                      <Input inputMode="decimal" placeholder={`Value (${meta.unit})`}
-                        value={logValue} onChange={(e) => setLogValue(e.target.value)} className="h-9" />
-                      <Button size="sm" onClick={() => logResult.mutate(a)} disabled={logResult.isPending}>Save</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setLogFor(null)}>Cancel</Button>
+                      <Input
+                        inputMode="decimal"
+                        placeholder={`Value (${meta.unit})`}
+                        value={logValue}
+                        onChange={(e) => setLogValue(e.target.value)}
+                        className="h-9"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => logResult.mutate(a)}
+                        disabled={logResult.isPending}
+                      >
+                        Save
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setLogFor(null)}>
+                        Cancel
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -447,8 +576,6 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         </Card>
       )}
 
-
-
       {/* Trend chart */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -457,10 +584,14 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
           </CardTitle>
           {myTestTypes.length > 0 && metric && (
             <Select value={metric} onValueChange={setMetric}>
-              <SelectTrigger className="h-8 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {myTestTypes.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -468,24 +599,63 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         </CardHeader>
         <CardContent>
           {trend.points.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No test data yet. Once your coach logs a test, your trend will show up here.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No test data yet. Once your coach logs a test, your trend will show up here.
+            </p>
           ) : (
             <>
               <div className="mb-3 flex gap-4 text-sm">
-                <div><span className="text-muted-foreground">Avg </span><span className="font-semibold">{avg?.toFixed(2)}</span> <span className="text-xs text-muted-foreground">{trend.meta.unit}</span></div>
-                <div><span className="text-muted-foreground">Best </span><span className="font-semibold text-primary">{bestOverall}</span> <span className="text-xs text-muted-foreground">{trend.meta.unit}</span></div>
+                <div>
+                  <span className="text-muted-foreground">Avg </span>
+                  <span className="font-semibold">{avg?.toFixed(2)}</span>{" "}
+                  <span className="text-xs text-muted-foreground">{trend.meta.unit}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Best </span>
+                  <span className="font-semibold text-primary">{bestOverall}</span>{" "}
+                  <span className="text-xs text-muted-foreground">{trend.meta.unit}</span>
+                </div>
               </div>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trend.points} margin={{ top: 5, right: 8, left: -12, bottom: 0 }}>
+                  <LineChart
+                    data={trend.points}
+                    margin={{ top: 5, right: 8, left: -12, bottom: 0 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="date" fontSize={11} />
-                    <YAxis fontSize={11} domain={["auto", "auto"]} reversed={trend.meta.lowerIsBetter} />
+                    <YAxis
+                      fontSize={11}
+                      domain={["auto", "auto"]}
+                      reversed={trend.meta.lowerIsBetter}
+                    />
                     <Tooltip contentStyle={{ fontSize: 12 }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    {avg != null && <ReferenceLine y={avg} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" label={{ value: "avg", fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />}
-                    <Line type="monotone" dataKey="value" name="Result" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="best" name="Personal best" stroke="hsl(var(--accent))" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    {avg != null && (
+                      <ReferenceLine
+                        y={avg}
+                        stroke="hsl(var(--muted-foreground))"
+                        strokeDasharray="4 4"
+                        label={{ value: "avg", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      />
+                    )}
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      name="Result"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="best"
+                      name="Personal best"
+                      stroke="hsl(var(--accent))"
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -496,7 +666,11 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
 
       {/* Test results — Test / Result / Score / Team Rank, like a real testing report */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><ListOrdered className="h-4 w-4" /> My Results</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListOrdered className="h-4 w-4" /> My Results
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
           {leaderboardRank.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">No results ranked yet.</p>
@@ -518,10 +692,16 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
                       <tr key={r.type}>
                         <td className="px-4 py-2.5">
                           <div className="font-medium">{r.type}</div>
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">vs {r.scope}</div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            vs {r.scope}
+                          </div>
                         </td>
-                        <td className="px-4 py-2.5 tabular-nums">{r.value} {r.unit}</td>
-                        <td className="px-4 py-2.5 tabular-nums font-semibold">{r.score.toFixed(1)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">
+                          {r.value} {r.unit}
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums font-semibold">
+                          {r.score.toFixed(1)}
+                        </td>
                         <td className="px-4 py-2.5">
                           <Badge variant={top3 ? "default" : "secondary"} className="tabular-nums">
                             #{r.rank} <span className="ml-1 opacity-70">of {r.of}</span>
@@ -537,12 +717,21 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
         </CardContent>
       </Card>
 
-      <TeamLeaderboardCard me={me} athletes={athletes} teams={teams} tests={tests} allTestTypeDefs={allTestTypeDefs} testTypeMeta={testTypeMeta} />
+      <TeamLeaderboardCard
+        me={me}
+        athletes={athletes}
+        teams={teams}
+        tests={tests}
+        allTestTypeDefs={allTestTypeDefs}
+        testTypeMeta={testTypeMeta}
+      />
 
       <PinCard autoFocus={setupPin} />
 
       <div className="text-center">
-        <Link to="/" className="text-xs text-muted-foreground hover:underline">Back to main site</Link>
+        <Link to="/" className="text-xs text-muted-foreground hover:underline">
+          Back to main site
+        </Link>
       </div>
     </div>
   );
@@ -551,7 +740,14 @@ function Dashboard({ userId, setupPin }: { userId: string; setupPin?: boolean })
 // Filterable, org-wide "who's at the top" board — a browsable counterpart to
 // the personal "My Results" table above, matching the school-wide leaderboard
 // coaches expect on a testing report.
-function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, testTypeMeta }: {
+function TeamLeaderboardCard({
+  me,
+  athletes,
+  teams,
+  tests,
+  allTestTypeDefs,
+  testTypeMeta,
+}: {
   me: Athlete;
   athletes: Athlete[];
   teams: Team[];
@@ -575,7 +771,10 @@ function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, test
   const [position, setPosition] = useState("all");
 
   const positions = useMemo(() => {
-    const pool = sport === "all" ? athletes : athletes.filter((a) => (a.sport ?? "").toLowerCase() === sport.toLowerCase());
+    const pool =
+      sport === "all"
+        ? athletes
+        : athletes.filter((a) => (a.sport ?? "").toLowerCase() === sport.toLowerCase());
     return Array.from(new Set(pool.map((a) => a.position).filter((p): p is string => !!p))).sort();
   }, [athletes, sport]);
 
@@ -586,7 +785,8 @@ function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, test
     for (const t of tests) {
       if (t.test_type !== metric) continue;
       const cur = bestByAthlete.get(t.athlete_id);
-      if (cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur)) bestByAthlete.set(t.athlete_id, t.value);
+      if (cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur))
+        bestByAthlete.set(t.athlete_id, t.value);
     }
     const pool = athletes.filter((a) => {
       if (gender !== "all" && (a.gender ?? "").toLowerCase() !== gender) return false;
@@ -606,49 +806,89 @@ function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, test
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Team Leaderboard</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Trophy className="h-4 w-4" /> Team Leaderboard
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Select value={metric} onValueChange={setMetric}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Test" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Test" />
+            </SelectTrigger>
             <SelectContent>
-              {testTypesWithData.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              {testTypesWithData.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={topN} onValueChange={setTopN}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {["5", "10", "25"].map((n) => <SelectItem key={n} value={n}>Top {n}</SelectItem>)}
+              {["5", "10", "25"].map((n) => (
+                <SelectItem key={n} value={n}>
+                  Top {n}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={gender} onValueChange={setGender}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All genders</SelectItem>
-              {GENDERS.map((g) => <SelectItem key={g} value={g}>{GENDER_LABELS[g]}</SelectItem>)}
+              {GENDERS.map((g) => (
+                <SelectItem key={g} value={g}>
+                  {GENDER_LABELS[g]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Select value={sport} onValueChange={(v) => { setSport(v); setPosition("all"); }}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <Select
+            value={sport}
+            onValueChange={(v) => {
+              setSport(v);
+              setPosition("all");
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All sports</SelectItem>
-              {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {SPORTS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         {positions.length > 0 && (
           <Select value={position} onValueChange={setPosition}>
-            <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All positions</SelectItem>
-              {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              {positions.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
 
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No results yet for this test.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No results yet for this test.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -662,14 +902,25 @@ function TeamLeaderboardCard({ me, athletes, teams, tests, allTestTypeDefs, test
               </thead>
               <tbody className="divide-y">
                 {rows.map((r, i) => (
-                  <tr key={r.athlete.id} className={r.athlete.id === me.id ? "bg-primary/5" : undefined}>
+                  <tr
+                    key={r.athlete.id}
+                    className={r.athlete.id === me.id ? "bg-primary/5" : undefined}
+                  >
                     <td className="px-2 py-2 font-semibold tabular-nums">{i + 1}</td>
                     <td className="px-2 py-2">
                       {athleteDisplayName(r.athlete)}
-                      {r.athlete.id === me.id && <span className="ml-1.5 text-[10px] font-semibold uppercase text-primary">You</span>}
+                      {r.athlete.id === me.id && (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase text-primary">
+                          You
+                        </span>
+                      )}
                     </td>
-                    <td className="px-2 py-2 text-muted-foreground">{teamById.get(r.athlete.team_id ?? "")?.name ?? "—"}</td>
-                    <td className="px-2 py-2 tabular-nums">{r.value} {meta?.unit}</td>
+                    <td className="px-2 py-2 text-muted-foreground">
+                      {teamById.get(r.athlete.team_id ?? "")?.name ?? "—"}
+                    </td>
+                    <td className="px-2 py-2 tabular-nums">
+                      {r.value} {meta?.unit}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -710,11 +961,14 @@ function PinCard({ autoFocus }: { autoFocus?: boolean }) {
     try {
       await setPin({ data: { pin } });
       toast.success(status?.hasPin ? "PIN updated" : "PIN set — you can now sign in with your PIN");
-      setPinValue(""); setConfirm("");
+      setPinValue("");
+      setConfirm("");
       refetch();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save PIN");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -722,7 +976,8 @@ function PinCard({ autoFocus }: { autoFocus?: boolean }) {
       <Card className={autoFocus ? "ring-2 ring-primary animate-pulse" : undefined}>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <KeyRound className="h-4 w-4" /> {status?.hasPin ? "Change my PIN" : "Set a 6-digit PIN"}
+            <KeyRound className="h-4 w-4" />{" "}
+            {status?.hasPin ? "Change my PIN" : "Set a 6-digit PIN"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -732,17 +987,27 @@ function PinCard({ autoFocus }: { autoFocus?: boolean }) {
           <div className="grid grid-cols-2 gap-2">
             <Input
               ref={firstInputRef}
-              inputMode="numeric" maxLength={6} placeholder="New PIN"
-              value={pin} onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="New PIN"
+              value={pin}
+              onChange={(e) => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
               className="text-center tracking-[0.5em]"
             />
             <Input
-              inputMode="numeric" maxLength={6} placeholder="Confirm"
-              value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Confirm"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value.replace(/\D/g, "").slice(0, 6))}
               className="text-center tracking-[0.5em]"
             />
           </div>
-          <Button onClick={save} disabled={busy || pin.length !== 6 || confirm.length !== 6} className="w-full">
+          <Button
+            onClick={save}
+            disabled={busy || pin.length !== 6 || confirm.length !== 6}
+            className="w-full"
+          >
             {busy ? "Saving…" : status?.hasPin ? "Update PIN" : "Save PIN"}
           </Button>
         </CardContent>
@@ -750,7 +1015,6 @@ function PinCard({ autoFocus }: { autoFocus?: boolean }) {
     </div>
   );
 }
-
 
 function AthletePasswordAuth() {
   const [email, setEmail] = useState("");
@@ -783,11 +1047,24 @@ function AthletePasswordAuth() {
         <form onSubmit={submit} className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Email</label>
-            <Input type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@school.edu" />
+            <Input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@school.edu"
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Password</label>
-            <Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "…" : "Sign in"}

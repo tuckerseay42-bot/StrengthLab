@@ -18,14 +18,12 @@ import { Route as AthletesRouteImport } from './routes/athletes'
 import { Route as AthleticismReportRouteImport } from './routes/athleticism-report'
 import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as BadgesRouteImport } from './routes/badges'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard-settings'
 import { Route as ExercisesRouteImport } from './routes/exercises'
 import { Route as GpsRouteImport } from './routes/gps'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as LeaderboardsRouteImport } from './routes/leaderboards'
 import { Route as LiftsRouteImport } from './routes/lifts'
-import { Route as LiveLeaderboardRouteImport } from './routes/live-leaderboard'
 import { Route as LogReviewRouteImport } from './routes/log-review'
 import { Route as MaxesRouteImport } from './routes/maxes'
 import { Route as MetricsRouteImport } from './routes/metrics'
@@ -113,11 +111,6 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BadgesRoute = BadgesRouteImport.update({
-  id: '/badges',
-  path: '/badges',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/dashboard-settings',
   path: '/dashboard-settings',
@@ -146,11 +139,6 @@ const LeaderboardsRoute = LeaderboardsRouteImport.update({
 const LiftsRoute = LiftsRouteImport.update({
   id: '/lifts',
   path: '/lifts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LiveLeaderboardRoute = LiveLeaderboardRouteImport.update({
-  id: '/live-leaderboard',
-  path: '/live-leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogReviewRoute = LogReviewRouteImport.update({
@@ -370,14 +358,12 @@ export interface FileRoutesByFullPath {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
@@ -430,14 +416,12 @@ export interface FileRoutesByTo {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
@@ -490,14 +474,12 @@ export interface FileRoutesById {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
@@ -552,14 +534,12 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
@@ -612,14 +592,12 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
@@ -671,14 +649,12 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
@@ -732,14 +708,12 @@ export interface RootRouteChildren {
   AthleticismReportRoute: typeof AthleticismReportRoute
   AttendanceRoute: typeof AttendanceRoute
   AuthRoute: typeof AuthRoute
-  BadgesRoute: typeof BadgesRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   ExercisesRoute: typeof ExercisesRoute
   GpsRoute: typeof GpsRoute
   ImportRoute: typeof ImportRoute
   LeaderboardsRoute: typeof LeaderboardsRoute
   LiftsRoute: typeof LiftsRoute
-  LiveLeaderboardRoute: typeof LiveLeaderboardRoute
   LogReviewRoute: typeof LogReviewRoute
   MaxesRoute: typeof MaxesRoute
   MetricsRoute: typeof MetricsRoute
@@ -836,13 +810,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/badges': {
-      id: '/badges'
-      path: '/badges'
-      fullPath: '/badges'
-      preLoaderRoute: typeof BadgesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboard-settings': {
       id: '/dashboard-settings'
       path: '/dashboard-settings'
@@ -883,13 +850,6 @@ declare module '@tanstack/react-router' {
       path: '/lifts'
       fullPath: '/lifts'
       preLoaderRoute: typeof LiftsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/live-leaderboard': {
-      id: '/live-leaderboard'
-      path: '/live-leaderboard'
-      fullPath: '/live-leaderboard'
-      preLoaderRoute: typeof LiveLeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/log-review': {
@@ -1273,14 +1233,12 @@ const rootRouteChildren: RootRouteChildren = {
   AthleticismReportRoute: AthleticismReportRoute,
   AttendanceRoute: AttendanceRoute,
   AuthRoute: AuthRoute,
-  BadgesRoute: BadgesRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   ExercisesRoute: ExercisesRoute,
   GpsRoute: GpsRoute,
   ImportRoute: ImportRoute,
   LeaderboardsRoute: LeaderboardsRoute,
   LiftsRoute: LiftsRoute,
-  LiveLeaderboardRoute: LiveLeaderboardRoute,
   LogReviewRoute: LogReviewRoute,
   MaxesRoute: MaxesRoute,
   MetricsRoute: MetricsRoute,

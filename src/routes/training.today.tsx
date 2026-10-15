@@ -3,16 +3,30 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  workoutAssignmentsQO, workoutsQO, athletesQO, athleteTeamsQO,
-  teamsQO, repMaxesQO,
+  workoutAssignmentsQO,
+  workoutsQO,
+  athletesQO,
+  athleteTeamsQO,
+  teamsQO,
+  repMaxesQO,
 } from "@/lib/queries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  AlertTriangle, Award, CheckCircle2, CircleDashed, PlayCircle,
-  Users, UserCheck, Activity, Flame, ClipboardList, Plus, Radio,
-  ArrowUpRight, TrendingUp,
+  AlertTriangle,
+  Award,
+  CheckCircle2,
+  CircleDashed,
+  PlayCircle,
+  Users,
+  UserCheck,
+  Activity,
+  Flame,
+  ClipboardList,
+  Plus,
+  ArrowUpRight,
+  TrendingUp,
 } from "lucide-react";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { cn } from "@/lib/utils";
@@ -22,7 +36,9 @@ export const Route = createFileRoute("/training/today")({
   component: TodayView,
 });
 
-function fmtDate(d: Date) { return d.toISOString().slice(0, 10); }
+function fmtDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
 
 function TodayView() {
   const today = fmtDate(new Date());
@@ -39,8 +55,11 @@ function TodayView() {
     queryKey: ["rack_sessions_today", today],
     queryFn: async () => {
       const start = `${today}T00:00:00Z`;
-      const { data, error } = await supabase.from("rack_sessions")
-        .select("*").gte("started_at", start).order("started_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("rack_sessions")
+        .select("*")
+        .gte("started_at", start)
+        .order("started_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -51,8 +70,11 @@ function TodayView() {
     queryKey: ["rack_set_logs_today", today],
     queryFn: async () => {
       const start = `${today}T00:00:00Z`;
-      const { data, error } = await supabase.from("rack_set_logs")
-        .select("id, athlete_id, workout_exercise_id, status, approval_status, completed_at, load, reps")
+      const { data, error } = await supabase
+        .from("rack_set_logs")
+        .select(
+          "id, athlete_id, workout_exercise_id, status, approval_status, completed_at, load, reps",
+        )
         .gte("completed_at", start)
         .order("completed_at", { ascending: false });
       if (error) throw error;
@@ -64,7 +86,8 @@ function TodayView() {
   const { data: attendanceToday = [] } = useQuery({
     queryKey: ["attendance_today", today],
     queryFn: async () => {
-      const { data, error } = await supabase.from("attendance")
+      const { data, error } = await supabase
+        .from("attendance")
         .select("athlete_id, present, session_date")
         .eq("session_date", today);
       if (error) throw error;
@@ -76,8 +99,7 @@ function TodayView() {
   const { data: exerciseNames = {} } = useQuery({
     queryKey: ["workout_exercise_names"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("workout_exercises")
-        .select("id, exercise_name");
+      const { data, error } = await supabase.from("workout_exercises").select("id, exercise_name");
       if (error) throw error;
       return Object.fromEntries((data ?? []).map((e) => [e.id, e.exercise_name]));
     },
@@ -93,7 +115,10 @@ function TodayView() {
   const assignedAthleteIds = useMemo(() => {
     const set = new Set<string>();
     for (const a of todaysAssignments) {
-      if (a.athlete_id) { set.add(a.athlete_id); continue; }
+      if (a.athlete_id) {
+        set.add(a.athlete_id);
+        continue;
+      }
       if (a.team_id) {
         for (const at of athleteTeams) if (at.team_id === a.team_id) set.add(at.athlete_id);
       }
@@ -107,16 +132,23 @@ function TodayView() {
   );
 
   const stats = useMemo(() => {
-    const completedIds = new Set(setsToday.filter((s) => s.status === "completed").map((s) => s.athlete_id));
+    const completedIds = new Set(
+      setsToday.filter((s) => s.status === "completed").map((s) => s.athlete_id),
+    );
     const activeAthleteIds = new Set(setsToday.map((s) => s.athlete_id));
     const flagged = setsToday.filter((s) => s.approval_status === "pending").length;
     const totalSets = setsToday.filter((s) => s.status === "completed").length;
     const finished = [...completedIds].filter((id) => assignedAthleteIds.has(id)).length;
-    const active = [...activeAthleteIds].filter((id) => assignedAthleteIds.has(id) && !completedIds.has(id)).length;
-    const checkedIn = [...checkedInIds].filter((id) => assignedAthleteIds.has(id) || checkedInIds.has(id)).length;
+    const active = [...activeAthleteIds].filter(
+      (id) => assignedAthleteIds.has(id) && !completedIds.has(id),
+    ).length;
+    const checkedIn = [...checkedInIds].filter(
+      (id) => assignedAthleteIds.has(id) || checkedInIds.has(id),
+    ).length;
     const notStarted = Math.max(0, assignedAthleteIds.size - active - finished);
     const completionPct = assignedAthleteIds.size
-      ? Math.round((finished / assignedAthleteIds.size) * 100) : 0;
+      ? Math.round((finished / assignedAthleteIds.size) * 100)
+      : 0;
     const prsToday = repMaxes.filter((r) => (r.tested_at ?? "").slice(0, 10) === today).length;
     return { flagged, finished, active, notStarted, completionPct, prsToday, checkedIn, totalSets };
   }, [setsToday, assignedAthleteIds, checkedInIds, repMaxes, today]);
@@ -127,29 +159,28 @@ function TodayView() {
   }, [todaysAssignments, teams]);
 
   const todayPRs = useMemo(
-    () => repMaxes
-      .filter((r) => (r.tested_at ?? "").slice(0, 10) === today)
-      .slice(0, 8),
+    () => repMaxes.filter((r) => (r.tested_at ?? "").slice(0, 10) === today).slice(0, 8),
     [repMaxes, today],
   );
 
   const activityFeed = useMemo(() => setsToday.slice(0, 12), [setsToday]);
 
   const todayLabel = new Date().toLocaleDateString(undefined, {
-    weekday: "long", month: "long", day: "numeric",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
   });
 
-  const athleteById = useMemo(
-    () => Object.fromEntries(athletes.map((a) => [a.id, a])),
-    [athletes],
-  );
+  const athleteById = useMemo(() => Object.fromEntries(athletes.map((a) => [a.id, a])), [athletes]);
 
   return (
     <div className="space-y-5">
       {/* Header + Quick Actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Training Home</div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground">
+            Training Home
+          </div>
           <div className="mt-0.5 flex items-baseline gap-3">
             <h2 className="text-2xl font-semibold sm:text-3xl">{todayLabel}</h2>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -163,23 +194,29 @@ function TodayView() {
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {activeTeams.length === 0 ? (
               <span className="text-xs text-muted-foreground">No teams scheduled</span>
-            ) : activeTeams.map((t) => (
-              <Badge key={t!.id} variant="outline" className="gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: t!.color ?? "hsl(var(--primary))" }} />
-                {t!.name}
-              </Badge>
-            ))}
+            ) : (
+              activeTeams.map((t) => (
+                <Badge key={t!.id} variant="outline" className="gap-1.5">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: t!.color ?? "hsl(var(--primary))" }}
+                  />
+                  {t!.name}
+                </Badge>
+              ))
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" className="gap-1.5">
-            <Link to="/live-leaderboard"><Radio className="h-4 w-4" /> Open Live Room</Link>
+          <Button asChild size="sm" variant="outline" className="gap-1.5">
+            <Link to="/workouts">
+              <Plus className="h-4 w-4" /> Build Session
+            </Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="gap-1.5">
-            <Link to="/workouts"><Plus className="h-4 w-4" /> Build Session</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline" className="gap-1.5">
-            <Link to="/attendance"><UserCheck className="h-4 w-4" /> Attendance</Link>
+            <Link to="/attendance">
+              <UserCheck className="h-4 w-4" /> Attendance
+            </Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="gap-1.5">
             <Link to="/log-review">
@@ -196,14 +233,53 @@ function TodayView() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8">
-        <Kpi label="Sessions" value={todaysAssignments.length} icon={<PlayCircle className="h-3.5 w-3.5" />} />
-        <Kpi label="Assigned" value={assignedAthleteIds.size} icon={<Users className="h-3.5 w-3.5" />} />
-        <Kpi label="Checked in" value={stats.checkedIn} tone="info" icon={<UserCheck className="h-3.5 w-3.5" />} />
-        <Kpi label="Training now" value={stats.active} tone="info" icon={<Activity className="h-3.5 w-3.5" />} pulse />
-        <Kpi label="Finished" value={stats.finished} tone="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
-        <Kpi label="Not started" value={stats.notStarted} tone="muted" icon={<CircleDashed className="h-3.5 w-3.5" />} />
-        <Kpi label="Completion" value={`${stats.completionPct}%`} tone="info" icon={<TrendingUp className="h-3.5 w-3.5" />} />
-        <Kpi label="PRs today" value={stats.prsToday} tone="success" icon={<Award className="h-3.5 w-3.5" />} />
+        <Kpi
+          label="Sessions"
+          value={todaysAssignments.length}
+          icon={<PlayCircle className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="Assigned"
+          value={assignedAthleteIds.size}
+          icon={<Users className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="Checked in"
+          value={stats.checkedIn}
+          tone="info"
+          icon={<UserCheck className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="Training now"
+          value={stats.active}
+          tone="info"
+          icon={<Activity className="h-3.5 w-3.5" />}
+          pulse
+        />
+        <Kpi
+          label="Finished"
+          value={stats.finished}
+          tone="success"
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="Not started"
+          value={stats.notStarted}
+          tone="muted"
+          icon={<CircleDashed className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="Completion"
+          value={`${stats.completionPct}%`}
+          tone="info"
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+        />
+        <Kpi
+          label="PRs today"
+          value={stats.prsToday}
+          tone="success"
+          icon={<Award className="h-3.5 w-3.5" />}
+        />
       </div>
 
       {/* Completion bar */}
@@ -211,9 +287,12 @@ function TodayView() {
         <Card>
           <CardContent className="p-3">
             <div className="mb-1.5 flex items-baseline justify-between text-xs">
-              <span className="uppercase tracking-wide text-muted-foreground">Session progress</span>
+              <span className="uppercase tracking-wide text-muted-foreground">
+                Session progress
+              </span>
               <span className="tabular-nums text-muted-foreground">
-                {stats.finished}/{assignedAthleteIds.size} finished · {stats.totalSets} sets logged · {stats.flagged} flagged
+                {stats.finished}/{assignedAthleteIds.size} finished · {stats.totalSets} sets logged
+                · {stats.flagged} flagged
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -234,17 +313,23 @@ function TodayView() {
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-baseline gap-2">
                 <div className="font-medium">Scheduled sessions</div>
-                <span className="text-xs text-muted-foreground">{todaysAssignments.length} today</span>
+                <span className="text-xs text-muted-foreground">
+                  {todaysAssignments.length} today
+                </span>
               </div>
               <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-xs">
-                <Link to="/training/calendar">Calendar <ArrowUpRight className="h-3 w-3" /></Link>
+                <Link to="/training/calendar">
+                  Calendar <ArrowUpRight className="h-3 w-3" />
+                </Link>
               </Button>
             </div>
             {todaysAssignments.length === 0 ? (
               <div className="rounded-md border border-dashed p-8 text-center">
                 <div className="text-sm text-muted-foreground">Nothing scheduled today.</div>
                 <Button asChild size="sm" variant="outline" className="mt-3 gap-1.5">
-                  <Link to="/workouts"><Plus className="h-3.5 w-3.5" /> Assign a workout</Link>
+                  <Link to="/workouts">
+                    <Plus className="h-3.5 w-3.5" /> Assign a workout
+                  </Link>
                 </Button>
               </div>
             ) : (
@@ -258,7 +343,9 @@ function TodayView() {
                   );
                   const teamAthletes = a.team_id
                     ? athleteTeams.filter((at) => at.team_id === a.team_id).length
-                    : (a.athlete_id ? 1 : 0);
+                    : a.athlete_id
+                      ? 1
+                      : 0;
                   const teamActive = a.team_id
                     ? new Set(
                         setsToday
@@ -303,11 +390,19 @@ function TodayView() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        {a.status && <Badge variant="outline" className="capitalize">{a.status}</Badge>}
+                        {a.status && (
+                          <Badge variant="outline" className="capitalize">
+                            {a.status}
+                          </Badge>
+                        )}
                         <Button asChild size="sm" variant="outline">
                           <Link
                             to="/rack-console"
-                            search={sessionForWorkout ? { session: (sessionForWorkout as { id: string }).id } : undefined}
+                            search={
+                              sessionForWorkout
+                                ? { session: (sessionForWorkout as { id: string }).id }
+                                : undefined
+                            }
                           >
                             Open
                           </Link>
@@ -350,7 +445,9 @@ function TodayView() {
                           <Avatar name={a?.name} />
                           <span className="min-w-0 truncate">
                             <span className="font-medium">{a?.name ?? "Athlete"}</span>{" "}
-                            <span className="text-xs text-muted-foreground">— {r.exercise_name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              — {r.exercise_name}
+                            </span>
                           </span>
                         </div>
                         <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
@@ -369,14 +466,21 @@ function TodayView() {
             <CardContent className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 font-medium">
-                  <AlertTriangle className={cn(
-                    "h-4 w-4",
-                    stats.flagged > 0 ? "text-[color:var(--status-near,hsl(var(--primary)))]" : "text-muted-foreground",
-                  )} />
+                  <AlertTriangle
+                    className={cn(
+                      "h-4 w-4",
+                      stats.flagged > 0
+                        ? "text-[color:var(--status-near,hsl(var(--primary)))]"
+                        : "text-muted-foreground",
+                    )}
+                  />
                   Needs review
                 </div>
                 {stats.flagged > 0 && (
-                  <Badge variant="outline" className="border-[color:var(--status-near,hsl(var(--primary)))] text-[color:var(--status-near,hsl(var(--primary)))]">
+                  <Badge
+                    variant="outline"
+                    className="border-[color:var(--status-near,hsl(var(--primary)))] text-[color:var(--status-near,hsl(var(--primary)))]"
+                  >
                     {stats.flagged}
                   </Badge>
                 )}
@@ -435,7 +539,10 @@ function TodayView() {
                         </span>
                       )}
                       {isPending && (
-                        <Badge variant="outline" className="border-[color:var(--status-near,hsl(var(--primary)))] text-[color:var(--status-near,hsl(var(--primary)))]">
+                        <Badge
+                          variant="outline"
+                          className="border-[color:var(--status-near,hsl(var(--primary)))] text-[color:var(--status-near,hsl(var(--primary)))]"
+                        >
                           Review
                         </Badge>
                       )}
@@ -452,16 +559,26 @@ function TodayView() {
 }
 
 function Kpi({
-  label, value, icon, tone = "default", pulse,
+  label,
+  value,
+  icon,
+  tone = "default",
+  pulse,
 }: {
-  label: string; value: number | string; icon?: React.ReactNode;
-  tone?: "default" | "success" | "muted" | "info"; pulse?: boolean;
+  label: string;
+  value: number | string;
+  icon?: React.ReactNode;
+  tone?: "default" | "success" | "muted" | "info";
+  pulse?: boolean;
 }) {
   const toneClass =
-    tone === "success" ? "text-[color:var(--status-pr,hsl(var(--primary)))]"
-    : tone === "info" ? "text-[color:var(--status-info,hsl(var(--primary)))]"
-    : tone === "muted" ? "text-muted-foreground"
-    : "text-foreground";
+    tone === "success"
+      ? "text-[color:var(--status-pr,hsl(var(--primary)))]"
+      : tone === "info"
+        ? "text-[color:var(--status-info,hsl(var(--primary)))]"
+        : tone === "muted"
+          ? "text-muted-foreground"
+          : "text-foreground";
   return (
     <Card className="relative overflow-hidden">
       <CardContent className="p-3">
@@ -478,12 +595,17 @@ function Kpi({
 }
 
 function Avatar({ name }: { name?: string | null }) {
-  const initials = (name ?? "?")
-    .split(/\s+/).filter(Boolean).slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? "").join("") || "?";
+  const initials =
+    (name ?? "?")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() ?? "")
+      .join("") || "?";
   // deterministic hue from name
   let hash = 0;
-  for (let i = 0; i < (name ?? "").length; i++) hash = (hash * 31 + (name ?? "").charCodeAt(i)) >>> 0;
+  for (let i = 0; i < (name ?? "").length; i++)
+    hash = (hash * 31 + (name ?? "").charCodeAt(i)) >>> 0;
   const hue = hash % 360;
   return (
     <span
