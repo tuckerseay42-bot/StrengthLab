@@ -16,7 +16,12 @@ function scoped<T extends { eq: (col: string, v: string) => T }>(q: T): T {
  */
 const PAGE = 1000;
 async function fetchAll<T>(
-  build: () => { range: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }> },
+  build: () => {
+    range: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  },
 ): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -27,7 +32,6 @@ async function fetchAll<T>(
     if (rows.length < PAGE) return out;
   }
 }
-
 
 export type Athlete = {
   id: string;
@@ -63,59 +67,118 @@ export type Athlete = {
   tags: string[];
 };
 export type Program = {
-  id: string; name: string; description: string | null;
-  team_id: string | null; weeks: number | null;
-  created_at: string; updated_at: string; organization_id: string;
+  id: string;
+  name: string;
+  description: string | null;
+  team_id: string | null;
+  weeks: number | null;
+  created_at: string;
+  updated_at: string;
+  organization_id: string;
 };
 export type ProgramWorkout = {
-  id: string; program_id: string; workout_id: string;
-  week: number; day: number; position: number; created_at: string;
+  id: string;
+  program_id: string;
+  workout_id: string;
+  week: number;
+  day: number;
+  position: number;
+  created_at: string;
 };
 export type TestRow = {
-  id: string; athlete_id: string; test_type: string; value: number;
-  unit: string | null; test_date: string; notes: string | null;
+  id: string;
+  athlete_id: string;
+  test_type: string;
+  value: number;
+  unit: string | null;
+  test_date: string;
+  notes: string | null;
 };
 export type LiftRow = {
-  id: string; athlete_id: string; exercise: string; load: number | null;
-  sets: number | null; reps: number | null; velocity: number | null;
-  time_seconds: number | null; distance_in: number | null;
-  lift_date: string; notes: string | null;
+  id: string;
+  athlete_id: string;
+  exercise: string;
+  load: number | null;
+  sets: number | null;
+  reps: number | null;
+  velocity: number | null;
+  time_seconds: number | null;
+  distance_in: number | null;
+  lift_date: string;
+  notes: string | null;
 };
 
 export type AttendanceRow = {
-  id: string; athlete_id: string; session_date: string; present: boolean; notes: string | null;
-  updated_at?: string | null; created_at?: string | null;
+  id: string;
+  athlete_id: string;
+  session_date: string;
+  present: boolean;
+  notes: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
 };
 
 export type BodyweightLog = {
-  id: string; athlete_id: string; log_date: string; value: number; source: string; created_at: string;
+  id: string;
+  athlete_id: string;
+  log_date: string;
+  value: number;
+  source: string;
+  created_at: string;
 };
 
 export type Team = {
-  id: string; name: string; sport: string | null; season: string | null;
-  color: string | null; qr_token: string; notes: string | null;
-  archived_at: string | null; created_at: string; organization_id: string;
+  id: string;
+  name: string;
+  sport: string | null;
+  season: string | null;
+  color: string | null;
+  qr_token: string;
+  notes: string | null;
+  archived_at: string | null;
+  created_at: string;
+  organization_id: string;
 };
 export type Registration = {
-  id: string; team_id: string;
-  first_name: string; last_name: string; preferred_name: string | null;
-  student_id: string | null; grade: number | null; sport: string | null;
-  position: string | null; graduation_year: number | null;
-  height_in: number | null; weight_lb: number | null;
-  parent_email: string | null; athlete_email: string | null;
-  status: string; reviewed_at: string | null; created_at: string;
+  id: string;
+  team_id: string;
+  first_name: string;
+  last_name: string;
+  preferred_name: string | null;
+  student_id: string | null;
+  grade: number | null;
+  sport: string | null;
+  position: string | null;
+  graduation_year: number | null;
+  height_in: number | null;
+  weight_lb: number | null;
+  parent_email: string | null;
+  athlete_email: string | null;
+  status: string;
+  reviewed_at: string | null;
+  created_at: string;
 };
 export type Exercise = {
-  id: string; name: string; category: string | null; equipment: string | null;
+  id: string;
+  name: string;
+  category: string | null;
+  equipment: string | null;
   primary_muscles: string[] | null;
-  video_url: string | null; image_url: string | null; is_custom: boolean;
+  video_url: string | null;
+  image_url: string | null;
+  is_custom: boolean;
   measurement_type: "load" | "seconds" | "inches" | "reps" | "mph";
   is_metric: boolean;
-  created_at: string; organization_id: string;
+  created_at: string;
+  organization_id: string;
 };
 export type ExerciseRelationship = {
-  id: string; from_exercise_id: string; to_exercise_id: string;
-  ratio: number; notes: string | null; created_at: string;
+  id: string;
+  from_exercise_id: string;
+  to_exercise_id: string;
+  ratio: number;
+  notes: string | null;
+  created_at: string;
 };
 export type MetricVariable = {
   name: string; // identifier used in the formula
@@ -124,12 +187,25 @@ export type MetricVariable = {
   agg?: "best" | "latest" | "first"; // for test/lift
 };
 export type CustomMetric = {
-  id: string; name: string; description: string | null;
-  kind: "test_value" | "bw_coefficient" | "ratio" | "lift_max" | "attendance_pct" | "improvement_pct" | "formula" | "bodyweight";
+  id: string;
+  name: string;
+  description: string | null;
+  kind:
+    | "test_value"
+    | "bw_coefficient"
+    | "ratio"
+    | "lift_max"
+    | "attendance_pct"
+    | "improvement_pct"
+    | "formula"
+    | "bodyweight";
   test_type: string | null;
-  numerator_test: string | null; denominator_test: string | null;
-  lower_is_better: boolean; unit: string | null;
-  exercise_name: string | null; since_days: number | null;
+  numerator_test: string | null;
+  denominator_test: string | null;
+  lower_is_better: boolean;
+  unit: string | null;
+  exercise_name: string | null;
+  since_days: number | null;
   formula: string | null;
   variables: MetricVariable[];
   measurement: "load" | "time" | "height" | "speed";
@@ -137,68 +213,114 @@ export type CustomMetric = {
 };
 
 export type Workout = {
-  id: string; name: string; description: string | null;
-  team_id: string | null; notes: string | null;
-  created_at: string; updated_at: string; organization_id: string;
+  id: string;
+  name: string;
+  description: string | null;
+  team_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  organization_id: string;
 };
 export type WorkoutBlock = {
-  id: string; workout_id: string; name: string; position: number; notes: string | null; created_at: string;
+  id: string;
+  workout_id: string;
+  name: string;
+  position: number;
+  notes: string | null;
+  created_at: string;
 };
 export type WorkoutExercise = {
-  id: string; workout_id: string; block_id: string | null;
-  exercise_id: string | null; exercise_name: string; position: number;
-  sets: number | null; reps: string | null; load: number | null;
-  percent_of_exercise_id: string | null; percent: number | null;
-  tempo: string | null; rest_seconds: number | null; notes: string | null;
-  target_velocity_min: number | null; target_velocity_max: number | null;
+  id: string;
+  workout_id: string;
+  block_id: string | null;
+  exercise_id: string | null;
+  exercise_name: string;
+  position: number;
+  sets: number | null;
+  reps: string | null;
+  load: number | null;
+  percent_of_exercise_id: string | null;
+  percent: number | null;
+  tempo: string | null;
+  rest_seconds: number | null;
+  notes: string | null;
+  target_velocity_min: number | null;
+  target_velocity_max: number | null;
   superset_group: string | null;
   created_at: string;
 };
 export type WorkoutSet = {
-  id: string; workout_exercise_id: string; position: number;
-  sets: number | null; reps: string | null;
-  load: number | null; percent: number | null;
+  id: string;
+  workout_exercise_id: string;
+  position: number;
+  sets: number | null;
+  reps: string | null;
+  load: number | null;
+  percent: number | null;
   percent_of_exercise_id: string | null;
   rm_reps: number | null;
-  target_velocity_min: number | null; target_velocity_max: number | null;
-  time_seconds: number | null; distance_in: number | null;
-  notes: string | null; created_at: string;
+  target_velocity_min: number | null;
+  target_velocity_max: number | null;
+  time_seconds: number | null;
+  distance_in: number | null;
+  notes: string | null;
+  created_at: string;
 };
 export type RepMax = {
-  id: string; athlete_id: string; exercise_id: string | null;
-  exercise_name: string; reps: number; load: number;
-  tested_at: string; notes: string | null; created_at: string;
+  id: string;
+  athlete_id: string;
+  exercise_id: string | null;
+  exercise_name: string;
+  reps: number;
+  load: number;
+  tested_at: string;
+  notes: string | null;
+  created_at: string;
 };
 export type WorkoutAssignment = {
-  id: string; workout_id: string;
-  athlete_id: string | null; team_id: string | null;
-  scheduled_date: string; status: string; notes: string | null; created_at: string;
+  id: string;
+  workout_id: string;
+  athlete_id: string | null;
+  team_id: string | null;
+  scheduled_date: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
 };
 export type Leaderboard = {
-  id: string; name: string; metric_id: string;
-  team_id: string | null; sport: string | null;
-  grade: number | null; position: string | null;
+  id: string;
+  name: string;
+  metric_id: string;
+  team_id: string | null;
+  sport: string | null;
+  grade: number | null;
+  position: string | null;
   gender: string | null;
   row_limit: number;
   since_days: number | null;
-  date_from: string | null; date_to: string | null;
+  date_from: string | null;
+  date_to: string | null;
   created_at: string;
 };
 
 export const athletesQO = queryOptions({
   queryKey: ["athletes"],
   queryFn: (): Promise<Athlete[]> =>
-    fetchAll<Athlete>(() => scoped(supabase.from("athletes").select("*")).order("name").order("id")),
+    fetchAll<Athlete>(() =>
+      scoped(supabase.from("athletes").select("*")).order("name").order("id"),
+    ),
 });
 
 export const testsQO = queryOptions({
   queryKey: ["tests"],
   queryFn: (): Promise<TestRow[]> =>
     fetchAll<TestRow>(() =>
-      scoped(supabase.from("tests").select("*")).order("test_date", { ascending: false }).order("id"),
+      scoped(supabase.from("tests").select("*"))
+        .order("test_date", { ascending: false })
+        .order("id"),
     ),
 });
-
 
 export type TestAssignment = {
   id: string;
@@ -215,10 +337,9 @@ export type TestAssignment = {
 export const testAssignmentsQO = queryOptions({
   queryKey: ["test_assignments"],
   queryFn: async (): Promise<TestAssignment[]> => {
-    const { data, error } = await scoped(supabase
-      .from("test_assignments" as never)
-      .select("*"))
-      .order("scheduled_date", { ascending: false });
+    const { data, error } = await scoped(
+      supabase.from("test_assignments" as never).select("*"),
+    ).order("scheduled_date", { ascending: false });
     if (error) throw error;
     return (data ?? []) as TestAssignment[];
   },
@@ -228,14 +349,21 @@ export const liftsQO = queryOptions({
   queryKey: ["lifts"],
   queryFn: (): Promise<LiftRow[]> =>
     fetchAll<LiftRow>(() =>
-      scoped(supabase.from("lifts").select("*")).order("lift_date", { ascending: false }).order("id"),
+      scoped(supabase.from("lifts").select("*"))
+        .order("lift_date", { ascending: false })
+        .order("id"),
     ),
 });
 
 export type LiftSet = {
-  id: string; lift_id: string; position: number;
-  load: number | null; reps: number | null; velocity: number | null;
-  notes: string | null; created_at: string;
+  id: string;
+  lift_id: string;
+  position: number;
+  load: number | null;
+  reps: number | null;
+  velocity: number | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export const liftSetsQO = queryOptions({
@@ -244,11 +372,13 @@ export const liftSetsQO = queryOptions({
     fetchAll<LiftSet>(() => supabase.from("lift_sets").select("*").order("position").order("id")),
 });
 
-
 export const attendanceQO = queryOptions({
   queryKey: ["attendance"],
   queryFn: async (): Promise<AttendanceRow[]> => {
-    const { data, error } = await scoped(supabase.from("attendance").select("*")).order("session_date", { ascending: false });
+    const { data, error } = await scoped(supabase.from("attendance").select("*")).order(
+      "session_date",
+      { ascending: false },
+    );
     if (error) throw error;
     return (data ?? []) as AttendanceRow[];
   },
@@ -257,7 +387,10 @@ export const attendanceQO = queryOptions({
 export const bodyweightLogsQO = queryOptions({
   queryKey: ["bodyweight_logs"],
   queryFn: async (): Promise<BodyweightLog[]> => {
-    const { data, error } = await scoped(supabase.from("bodyweight_logs").select("*")).order("log_date", { ascending: false });
+    const { data, error } = await scoped(supabase.from("bodyweight_logs").select("*")).order(
+      "log_date",
+      { ascending: false },
+    );
     if (error) throw error;
     return (data ?? []) as BodyweightLog[];
   },
@@ -266,7 +399,9 @@ export const bodyweightLogsQO = queryOptions({
 export const teamsQO = queryOptions({
   queryKey: ["teams"],
   queryFn: async (): Promise<Team[]> => {
-    const { data, error } = await scoped(supabase.from("teams").select("*").is("archived_at", null)).order("name");
+    const { data, error } = await scoped(
+      supabase.from("teams").select("*").is("archived_at", null),
+    ).order("name");
     if (error) throw error;
     return (data ?? []) as Team[];
   },
@@ -275,7 +410,10 @@ export const teamsQO = queryOptions({
 export const registrationsQO = queryOptions({
   queryKey: ["registrations"],
   queryFn: async (): Promise<Registration[]> => {
-    const { data, error } = await scoped(supabase.from("registrations").select("*")).order("created_at", { ascending: false });
+    const { data, error } = await scoped(supabase.from("registrations").select("*")).order(
+      "created_at",
+      { ascending: false },
+    );
     if (error) throw error;
     return (data ?? []) as Registration[];
   },
@@ -285,12 +423,13 @@ export type AthleteTeam = { athlete_id: string; team_id: string; season: string 
 export const athleteTeamsQO = queryOptions({
   queryKey: ["athlete_teams"],
   queryFn: async (): Promise<AthleteTeam[]> => {
-    const { data, error } = await supabase.from("athlete_teams").select("athlete_id, team_id, season");
+    const { data, error } = await supabase
+      .from("athlete_teams")
+      .select("athlete_id, team_id, season");
     if (error) throw error;
     return (data ?? []) as AthleteTeam[];
   },
 });
-
 
 export const exercisesQO = queryOptions({
   queryKey: ["exercises"],
@@ -332,7 +471,9 @@ export type CustomTestType = {
 export const testTypesQO = queryOptions({
   queryKey: ["test_types"],
   queryFn: async (): Promise<CustomTestType[]> => {
-    const { data, error } = await scoped(supabase.from("test_types" as never).select("*")).order("label");
+    const { data, error } = await scoped(supabase.from("test_types" as never).select("*")).order(
+      "label",
+    );
     if (error) throw error;
     return (data ?? []) as unknown as CustomTestType[];
   },
@@ -350,7 +491,10 @@ export const leaderboardsQO = queryOptions({
 export const workoutsQO = queryOptions({
   queryKey: ["workouts"],
   queryFn: async (): Promise<Workout[]> => {
-    const { data, error } = await scoped(supabase.from("workouts").select("*")).order("updated_at", { ascending: false });
+    const { data, error } = await scoped(supabase.from("workouts").select("*")).order(
+      "updated_at",
+      { ascending: false },
+    );
     if (error) throw error;
     return (data ?? []) as Workout[];
   },
@@ -377,7 +521,10 @@ export const workoutExercisesQO = queryOptions({
 export const workoutAssignmentsQO = queryOptions({
   queryKey: ["workout_assignments"],
   queryFn: async (): Promise<WorkoutAssignment[]> => {
-    const { data, error } = await supabase.from("workout_assignments").select("*").order("scheduled_date", { ascending: false });
+    const { data, error } = await supabase
+      .from("workout_assignments")
+      .select("*")
+      .order("scheduled_date", { ascending: false });
     if (error) throw error;
     return (data ?? []) as WorkoutAssignment[];
   },
@@ -442,17 +589,19 @@ export const repMaxesQO = queryOptions({
     // Thousands of rows across a roster — page through, or older athletes'
     // maxes fall off and their prescribed loads come back blank.
     return fetchAll<RepMax>(() =>
-      scoped(supabase.from("rep_maxes").select("*")).order("tested_at", { ascending: false }).order("id"),
+      scoped(supabase.from("rep_maxes").select("*"))
+        .order("tested_at", { ascending: false })
+        .order("id"),
     );
   },
 });
 
-
-
 export const programsQO = queryOptions({
   queryKey: ["programs"],
   queryFn: async (): Promise<Program[]> => {
-    const { data, error } = await scoped(supabase.from("programs" as never).select("*")).order("name");
+    const { data, error } = await scoped(supabase.from("programs" as never).select("*")).order(
+      "name",
+    );
     if (error) throw error;
     return (data ?? []) as unknown as Program[];
   },
@@ -461,7 +610,10 @@ export const programsQO = queryOptions({
 export const programWorkoutsQO = queryOptions({
   queryKey: ["program_workouts"],
   queryFn: async (): Promise<ProgramWorkout[]> => {
-    const { data, error } = await supabase.from("program_workouts" as never).select("*").order("position");
+    const { data, error } = await supabase
+      .from("program_workouts" as never)
+      .select("*")
+      .order("position");
     if (error) throw error;
     return (data ?? []) as unknown as ProgramWorkout[];
   },
@@ -470,75 +622,125 @@ export const programWorkoutsQO = queryOptions({
 // ---------- Program hierarchy (phases → cycles → sessions) ----------
 
 export type ProgramPhase = {
-  id: string; program_id: string; organization_id: string;
-  name: string; goal: string | null; color: string | null;
-  position: number; start_date: string | null; end_date: string | null;
-  created_at: string; updated_at: string;
+  id: string;
+  program_id: string;
+  organization_id: string;
+  name: string;
+  goal: string | null;
+  color: string | null;
+  position: number;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
 };
 export type ProgramCycle = {
-  id: string; phase_id: string; program_id: string; organization_id: string;
-  name: string; weeks: number; intensity: string | null; volume: string | null;
-  focus: string | null; position: number; start_date: string | null;
-  created_at: string; updated_at: string;
+  id: string;
+  phase_id: string;
+  program_id: string;
+  organization_id: string;
+  name: string;
+  weeks: number;
+  intensity: string | null;
+  volume: string | null;
+  focus: string | null;
+  position: number;
+  start_date: string | null;
+  created_at: string;
+  updated_at: string;
 };
 export type ProgramSession = {
-  id: string; cycle_id: string; phase_id: string; program_id: string; organization_id: string;
-  workout_id: string | null; name: string;
-  week: number; day: number; position: number;
-  scheduled_date: string | null; notes: string | null;
-  created_at: string; updated_at: string;
+  id: string;
+  cycle_id: string;
+  phase_id: string;
+  program_id: string;
+  organization_id: string;
+  workout_id: string | null;
+  name: string;
+  week: number;
+  day: number;
+  position: number;
+  scheduled_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 export type ProgramVersion = {
-  id: string; program_id: string; organization_id: string;
-  label: string; notes: string | null; snapshot: unknown;
-  created_by: string | null; created_at: string; version_number: number;
+  id: string;
+  program_id: string;
+  organization_id: string;
+  label: string;
+  notes: string | null;
+  snapshot: unknown;
+  created_by: string | null;
+  created_at: string;
+  version_number: number;
 };
 
-export const programPhasesQO = (programId: string) => queryOptions({
-  queryKey: ["program_phases", programId],
-  queryFn: async (): Promise<ProgramPhase[]> => {
-    const { data, error } = await supabase.from("program_phases" as never)
-      .select("*").eq("program_id", programId).order("position");
-    if (error) throw error;
-    return (data ?? []) as unknown as ProgramPhase[];
-  },
-});
-export const programCyclesQO = (programId: string) => queryOptions({
-  queryKey: ["program_cycles", programId],
-  queryFn: async (): Promise<ProgramCycle[]> => {
-    const { data, error } = await supabase.from("program_cycles" as never)
-      .select("*").eq("program_id", programId).order("position");
-    if (error) throw error;
-    return (data ?? []) as unknown as ProgramCycle[];
-  },
-});
-export const programSessionsQO = (programId: string) => queryOptions({
-  queryKey: ["program_sessions", programId],
-  queryFn: async (): Promise<ProgramSession[]> => {
-    const { data, error } = await supabase.from("program_sessions" as never)
-      .select("*").eq("program_id", programId).order("week").order("day").order("position");
-    if (error) throw error;
-    return (data ?? []) as unknown as ProgramSession[];
-  },
-});
-export const programVersionsQO = (programId: string) => queryOptions({
-  queryKey: ["program_versions", programId],
-  queryFn: async (): Promise<ProgramVersion[]> => {
-    const { data, error } = await supabase.from("program_versions" as never)
-      .select("*").eq("program_id", programId).order("created_at", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as unknown as ProgramVersion[];
-  },
-});
-
-
+export const programPhasesQO = (programId: string) =>
+  queryOptions({
+    queryKey: ["program_phases", programId],
+    queryFn: async (): Promise<ProgramPhase[]> => {
+      const { data, error } = await supabase
+        .from("program_phases" as never)
+        .select("*")
+        .eq("program_id", programId)
+        .order("position");
+      if (error) throw error;
+      return (data ?? []) as unknown as ProgramPhase[];
+    },
+  });
+export const programCyclesQO = (programId: string) =>
+  queryOptions({
+    queryKey: ["program_cycles", programId],
+    queryFn: async (): Promise<ProgramCycle[]> => {
+      const { data, error } = await supabase
+        .from("program_cycles" as never)
+        .select("*")
+        .eq("program_id", programId)
+        .order("position");
+      if (error) throw error;
+      return (data ?? []) as unknown as ProgramCycle[];
+    },
+  });
+export const programSessionsQO = (programId: string) =>
+  queryOptions({
+    queryKey: ["program_sessions", programId],
+    queryFn: async (): Promise<ProgramSession[]> => {
+      const { data, error } = await supabase
+        .from("program_sessions" as never)
+        .select("*")
+        .eq("program_id", programId)
+        .order("week")
+        .order("day")
+        .order("position");
+      if (error) throw error;
+      return (data ?? []) as unknown as ProgramSession[];
+    },
+  });
+export const programVersionsQO = (programId: string) =>
+  queryOptions({
+    queryKey: ["program_versions", programId],
+    queryFn: async (): Promise<ProgramVersion[]> => {
+      const { data, error } = await supabase
+        .from("program_versions" as never)
+        .select("*")
+        .eq("program_id", programId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as ProgramVersion[];
+    },
+  });
 
 // Capitalizes the first letter of each space/hyphen-separated word, e.g.
 // "mary-jane o'brien" -> "Mary-Jane O'brien". Applied at display time so
 // names already stored in any casing (old CSV imports, etc.) still render
 // correctly without a data backfill.
 export function titleCaseName(s: string): string {
-  return s.replace(/[^\s-]+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+  return s.replace(
+    /[^\s-]+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+  );
 }
 
 export function athleteDisplayName(a: Pick<Athlete, "name" | "first_name" | "last_name">) {
@@ -555,13 +757,8 @@ export type SpiderAssignment = {
   training_group?: string | null;
 };
 
-export type SpiderNormalizationMethod =
-  | "percentile"
-  | "pb_percent"
-  | "goal"
-  | "threshold";
-export type SpiderComparisonGroup =
-  | "team" | "sport" | "grade" | "position" | "org" | "custom";
+export type SpiderNormalizationMethod = "percentile" | "pb_percent" | "goal" | "threshold";
+export type SpiderComparisonGroup = "team" | "sport" | "grade" | "position" | "org" | "custom";
 export type SpiderDateRule = "latest" | "season" | "career" | "last_90d";
 
 export type SpiderTemplate = {
@@ -574,12 +771,11 @@ export type SpiderTemplate = {
   comparison_group: SpiderComparisonGroup;
   date_rule: SpiderDateRule;
   kpi_config: {
-    kpis?: string[];              // ordered list of kpi keys
+    kpis?: string[]; // ordered list of kpi keys
     sparkline?: boolean;
     highlight_pb?: boolean;
   };
   options: {
-    show_badges?: boolean;
     show_progress?: boolean;
     show_prs?: boolean;
   };
@@ -591,7 +787,7 @@ export type SpiderMetric = {
   id: string;
   template_id: string;
   position: number;
-  metric_key: string;            // "test:sprint_40y" or "metric:<custom_metric_id>"
+  metric_key: string; // "test:sprint_40y" or "metric:<custom_metric_id>"
   display_label: string | null;
   hide_if_missing: boolean;
 };
@@ -599,9 +795,9 @@ export type SpiderMetric = {
 export const spiderTemplatesQO = queryOptions({
   queryKey: ["spider_graph_templates"],
   queryFn: async (): Promise<SpiderTemplate[]> => {
-    const { data, error } = await scoped(supabase
-      .from("spider_graph_templates" as never)
-      .select("*"))
+    const { data, error } = await scoped(
+      supabase.from("spider_graph_templates" as never).select("*"),
+    )
       .order("is_default", { ascending: false })
       .order("name");
     if (error) throw error;
@@ -620,4 +816,3 @@ export const spiderMetricsQO = queryOptions({
     return (data ?? []) as unknown as SpiderMetric[];
   },
 });
-

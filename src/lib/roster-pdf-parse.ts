@@ -1,8 +1,10 @@
-// Parses a school SIS "Section Roster"-style PDF (one row per student: name,
-// student #, gender, grade) into rows usable for the class-period bulk
-// import — entirely client-side via pdfjs-dist. Always dynamically imported
-// so pdfjs (a DOM-dependent library) never loads during SSR.
+// Parses a school SIS "Section Roster" export — PDF or CSV — (one row per
+// student: name, student #, gender, grade) into rows usable for the
+// class-period bulk import. PDF parsing is entirely client-side via
+// pdfjs-dist, always dynamically imported so pdfjs (a DOM-dependent
+// library) never loads during SSR.
 import { titleCaseName } from "@/lib/queries";
+import { toRecords } from "@/lib/csv-parse";
 
 export type RosterPdfRow = {
   firstName: string;
@@ -13,8 +15,17 @@ export type RosterPdfRow = {
 };
 export type RosterPdfResult = { periodGuess: string | null; rows: RosterPdfRow[] };
 
+// Format A — one line per student, ID inline:
 // "LAST[ LAST2], FIRST[ MIDDLE...] 12345 M 11 [08/10/2026 -]"
 const ROW_RE = /^([A-Z][A-Z'.\- ]*?),\s+([A-Z][A-Z'.\- ]+?)\s+(\d{3,8})\s+([MF])\s+(\d{1,2})\b/;
+
+// Format B — grade leads, ID on its own line right after (a different
+// Infinite Campus "Section Roster" export layout than Format A):
+// "11 LAST[ Jr./III], FIRST[ MIDDLE...] M [08/10/2026]" then "#12345"
+const NAME_ROW_RE =
+  /^(\d{2})\s+([A-Za-z][A-Za-z'.-]*(?:\s+[A-Za-z][A-Za-z'.-]*)?),\s+([A-Za-z][A-Za-z'.\- ]+?)\s+([MF])(?:\s+\d{2}\/\d{2}\/\d{4})?\s*$/;
+const ID_LINE_RE = /^#\s*(\d{3,8})\s*$/;
+
 const PERIOD_RE = /Period:\s*0*(\d{1,2})\b/i;
 
 export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
@@ -58,6 +69,16 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
         const pm = line.match(PERIOD_RE);
         if (pm) periodGuess = `Period ${Number(pm[1])}`;
       }
+
+      // A standalone "#12345" line is Format B's student ID, attached to
+      // whichever row was just pushed (it has no ID of its own yet).
+      const idMatch = line.match(ID_LINE_RE);
+      const lastRow = rows[rows.length - 1];
+      if (idMatch && lastRow && !lastRow.studentId) {
+        lastRow.studentId = idMatch[1];
+        continue;
+      }
+
       const m = line.match(ROW_RE);
       if (m) {
         const lastName = m[1].trim();
@@ -72,7 +93,63 @@ export async function parseRosterPdf(file: File): Promise<RosterPdfResult> {
           grade: Number.isFinite(grade) ? grade : null,
           gender,
         });
+        continue;
       }
+
+      const nm = line.match(NAME_ROW_RE);
+      if (nm) {
+        const grade = Number(nm[1]);
+        const lastName = nm[2].trim();
+        const firstName = nm[3].trim().split(/\s+/)[0];
+        const gender = nm[4] === "M" ? "male" : nm[4] === "F" ? "female" : null;
+        rows.push({
+          firstName,
+          lastName,
+          studentId: "",
+          grade: Number.isFinite(grade) ? grade : null,
+          gender,
+        });
+      }
+    }
+  }
+
+  return { periodGuess, rows };
+}
+
+/**
+ * Parses an Infinite Campus "Section Roster" CSV export — the same report
+ * as parseRosterPdf, just downloaded as CSV instead of printed to PDF.
+ * Columns: Staff Number, Course, Room, Term(s), Period, Last Name,
+ * First Name, Middle Name, Suffix, Alias, Gender, Grade, Start Date,
+ * End Date, Student Number, IEP.
+ */
+export async function parseRosterCsv(file: File): Promise<RosterPdfResult> {
+  const text = await file.text();
+  const { records } = toRecords(text);
+
+  const rows: RosterPdfRow[] = [];
+  let periodGuess: string | null = null;
+
+  for (const r of records) {
+    const lastName = r["last name"] || "";
+    const firstName = (r["first name"] || "").trim().split(/\s+/)[0] || "";
+    if (!lastName || !firstName) continue;
+
+    const suffix = (r["suffix"] || "").trim();
+    const genderRaw = (r["gender"] || "").trim().toUpperCase();
+    const grade = Number(r["grade"]);
+
+    rows.push({
+      firstName,
+      lastName: suffix ? `${lastName} ${suffix}` : lastName,
+      studentId: r["student number"] || "",
+      grade: Number.isFinite(grade) ? grade : null,
+      gender: genderRaw === "M" ? "male" : genderRaw === "F" ? "female" : null,
+    });
+
+    if (!periodGuess) {
+      const pm = (r["period"] || "").match(/^0*(\d{1,2})\b/);
+      if (pm) periodGuess = `Period ${Number(pm[1])}`;
     }
   }
 

@@ -18,29 +18,23 @@ import { Route as AthletesRouteImport } from './routes/athletes'
 import { Route as AthleticismReportRouteImport } from './routes/athleticism-report'
 import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as BadgesRouteImport } from './routes/badges'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard-settings'
 import { Route as ExercisesRouteImport } from './routes/exercises'
-import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as GpsRouteImport } from './routes/gps'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as LeaderboardsRouteImport } from './routes/leaderboards'
 import { Route as LiftsRouteImport } from './routes/lifts'
-import { Route as LiveLeaderboardRouteImport } from './routes/live-leaderboard'
 import { Route as LogReviewRouteImport } from './routes/log-review'
 import { Route as MaxesRouteImport } from './routes/maxes'
 import { Route as MetricsRouteImport } from './routes/metrics'
 import { Route as OrgMembersRouteImport } from './routes/org-members'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
-import { Route as OverheadDisplayRouteImport } from './routes/overhead-display'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as PermissionsRouteImport } from './routes/permissions'
-import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ProgramDeliveryRouteImport } from './routes/program-delivery'
 import { Route as ProgrammingRouteImport } from './routes/programming'
 import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as RackConsoleRouteImport } from './routes/rack-console'
-import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -56,10 +50,6 @@ import { Route as CheckinTokenRouteImport } from './routes/checkin.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as ProgramsIdRouteImport } from './routes/programs.$id'
-import { Route as ReportsIndexRouteImport } from './routes/reports.index'
-import { Route as ReportsGpsReportRouteImport } from './routes/reports.gps-report'
-import { Route as ReportsKpiReportRouteImport } from './routes/reports.kpi-report'
-import { Route as ReportsSpeedPotentialRouteImport } from './routes/reports.speed-potential'
 import { Route as TestsKioskRouteImport } from './routes/tests.kiosk'
 import { Route as TrainingViewAttendanceRouteImport } from './routes/training-view.attendance'
 import { Route as TrainingViewCheckInRouteImport } from './routes/training-view.check-in'
@@ -121,11 +111,6 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BadgesRoute = BadgesRouteImport.update({
-  id: '/badges',
-  path: '/badges',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/dashboard-settings',
   path: '/dashboard-settings',
@@ -134,11 +119,6 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
 const ExercisesRoute = ExercisesRouteImport.update({
   id: '/exercises',
   path: '/exercises',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FeaturesRoute = FeaturesRouteImport.update({
-  id: '/features',
-  path: '/features',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GpsRoute = GpsRouteImport.update({
@@ -159,11 +139,6 @@ const LeaderboardsRoute = LeaderboardsRouteImport.update({
 const LiftsRoute = LiftsRouteImport.update({
   id: '/lifts',
   path: '/lifts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LiveLeaderboardRoute = LiveLeaderboardRouteImport.update({
-  id: '/live-leaderboard',
-  path: '/live-leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LogReviewRoute = LogReviewRouteImport.update({
@@ -191,11 +166,6 @@ const OrganizationsRoute = OrganizationsRouteImport.update({
   path: '/organizations',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OverheadDisplayRoute = OverheadDisplayRouteImport.update({
-  id: '/overhead-display',
-  path: '/overhead-display',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
   path: '/performance',
@@ -204,11 +174,6 @@ const PerformanceRoute = PerformanceRouteImport.update({
 const PermissionsRoute = PermissionsRouteImport.update({
   id: '/permissions',
   path: '/permissions',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PricingRoute = PricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProgramDeliveryRoute = ProgramDeliveryRouteImport.update({
@@ -229,11 +194,6 @@ const ProgramsRoute = ProgramsRouteImport.update({
 const RackConsoleRoute = RackConsoleRouteImport.update({
   id: '/rack-console',
   path: '/rack-console',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -310,26 +270,6 @@ const ProgramsIdRoute = ProgramsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => ProgramsRoute,
-} as any)
-const ReportsIndexRoute = ReportsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ReportsGpsReportRoute = ReportsGpsReportRouteImport.update({
-  id: '/gps-report',
-  path: '/gps-report',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ReportsKpiReportRoute = ReportsKpiReportRouteImport.update({
-  id: '/kpi-report',
-  path: '/kpi-report',
-  getParentRoute: () => ReportsRoute,
-} as any)
-const ReportsSpeedPotentialRoute = ReportsSpeedPotentialRouteImport.update({
-  id: '/speed-potential',
-  path: '/speed-potential',
-  getParentRoute: () => ReportsRoute,
 } as any)
 const TestsKioskRoute = TestsKioskRouteImport.update({
   id: '/kiosk',
@@ -418,29 +358,23 @@ export interface FileRoutesByFullPath {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
-  '/features': typeof FeaturesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
-  '/overhead-display': typeof OverheadDisplayRoute
   '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
-  '/pricing': typeof PricingRoute
   '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
   '/rack-console': typeof RackConsoleRoute
-  '/reports': typeof ReportsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
@@ -456,9 +390,6 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$token': typeof JoinTokenRoute
   '/programs/$id': typeof ProgramsIdRoute
-  '/reports/gps-report': typeof ReportsGpsReportRoute
-  '/reports/kpi-report': typeof ReportsKpiReportRoute
-  '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
   '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
@@ -470,7 +401,6 @@ export interface FileRoutesByFullPath {
   '/training/live': typeof TrainingLiveRoute
   '/training/today': typeof TrainingTodayRoute
   '/workouts/$id': typeof WorkoutsIdRoute
-  '/reports/': typeof ReportsIndexRoute
   '/training/': typeof TrainingIndexRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -486,24 +416,19 @@ export interface FileRoutesByTo {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
-  '/features': typeof FeaturesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
-  '/overhead-display': typeof OverheadDisplayRoute
   '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
-  '/pricing': typeof PricingRoute
   '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
@@ -522,9 +447,6 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$token': typeof JoinTokenRoute
   '/programs/$id': typeof ProgramsIdRoute
-  '/reports/gps-report': typeof ReportsGpsReportRoute
-  '/reports/kpi-report': typeof ReportsKpiReportRoute
-  '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
   '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
@@ -536,7 +458,6 @@ export interface FileRoutesByTo {
   '/training/live': typeof TrainingLiveRoute
   '/training/today': typeof TrainingTodayRoute
   '/workouts/$id': typeof WorkoutsIdRoute
-  '/reports': typeof ReportsIndexRoute
   '/training': typeof TrainingIndexRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -553,29 +474,23 @@ export interface FileRoutesById {
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
-  '/badges': typeof BadgesRoute
   '/dashboard-settings': typeof DashboardSettingsRoute
   '/exercises': typeof ExercisesRoute
-  '/features': typeof FeaturesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
-  '/live-leaderboard': typeof LiveLeaderboardRoute
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
-  '/overhead-display': typeof OverheadDisplayRoute
   '/performance': typeof PerformanceRoute
   '/permissions': typeof PermissionsRoute
-  '/pricing': typeof PricingRoute
   '/program-delivery': typeof ProgramDeliveryRoute
   '/programming': typeof ProgrammingRoute
   '/programs': typeof ProgramsRouteWithChildren
   '/rack-console': typeof RackConsoleRoute
-  '/reports': typeof ReportsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
@@ -591,9 +506,6 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$token': typeof JoinTokenRoute
   '/programs/$id': typeof ProgramsIdRoute
-  '/reports/gps-report': typeof ReportsGpsReportRoute
-  '/reports/kpi-report': typeof ReportsKpiReportRoute
-  '/reports/speed-potential': typeof ReportsSpeedPotentialRoute
   '/tests/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
@@ -605,7 +517,6 @@ export interface FileRoutesById {
   '/training/live': typeof TrainingLiveRoute
   '/training/today': typeof TrainingTodayRoute
   '/workouts/$id': typeof WorkoutsIdRoute
-  '/reports/': typeof ReportsIndexRoute
   '/training/': typeof TrainingIndexRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -623,29 +534,23 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
-    | '/features'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
     | '/org-members'
     | '/organizations'
-    | '/overhead-display'
     | '/performance'
     | '/permissions'
-    | '/pricing'
     | '/program-delivery'
     | '/programming'
     | '/programs'
     | '/rack-console'
-    | '/reports'
     | '/reset-password'
     | '/settings'
     | '/setup'
@@ -661,9 +566,6 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$token'
     | '/programs/$id'
-    | '/reports/gps-report'
-    | '/reports/kpi-report'
-    | '/reports/speed-potential'
     | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
@@ -675,7 +577,6 @@ export interface FileRouteTypes {
     | '/training/live'
     | '/training/today'
     | '/workouts/$id'
-    | '/reports/'
     | '/training/'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -691,24 +592,19 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
-    | '/features'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
     | '/org-members'
     | '/organizations'
-    | '/overhead-display'
     | '/performance'
     | '/permissions'
-    | '/pricing'
     | '/program-delivery'
     | '/programming'
     | '/programs'
@@ -727,9 +623,6 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$token'
     | '/programs/$id'
-    | '/reports/gps-report'
-    | '/reports/kpi-report'
-    | '/reports/speed-potential'
     | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
@@ -741,7 +634,6 @@ export interface FileRouteTypes {
     | '/training/live'
     | '/training/today'
     | '/workouts/$id'
-    | '/reports'
     | '/training'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -757,29 +649,23 @@ export interface FileRouteTypes {
     | '/athleticism-report'
     | '/attendance'
     | '/auth'
-    | '/badges'
     | '/dashboard-settings'
     | '/exercises'
-    | '/features'
     | '/gps'
     | '/import'
     | '/leaderboards'
     | '/lifts'
-    | '/live-leaderboard'
     | '/log-review'
     | '/maxes'
     | '/metrics'
     | '/org-members'
     | '/organizations'
-    | '/overhead-display'
     | '/performance'
     | '/permissions'
-    | '/pricing'
     | '/program-delivery'
     | '/programming'
     | '/programs'
     | '/rack-console'
-    | '/reports'
     | '/reset-password'
     | '/settings'
     | '/setup'
@@ -795,9 +681,6 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$token'
     | '/programs/$id'
-    | '/reports/gps-report'
-    | '/reports/kpi-report'
-    | '/reports/speed-potential'
     | '/tests/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
@@ -809,7 +692,6 @@ export interface FileRouteTypes {
     | '/training/live'
     | '/training/today'
     | '/workouts/$id'
-    | '/reports/'
     | '/training/'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -826,29 +708,23 @@ export interface RootRouteChildren {
   AthleticismReportRoute: typeof AthleticismReportRoute
   AttendanceRoute: typeof AttendanceRoute
   AuthRoute: typeof AuthRoute
-  BadgesRoute: typeof BadgesRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   ExercisesRoute: typeof ExercisesRoute
-  FeaturesRoute: typeof FeaturesRoute
   GpsRoute: typeof GpsRoute
   ImportRoute: typeof ImportRoute
   LeaderboardsRoute: typeof LeaderboardsRoute
   LiftsRoute: typeof LiftsRoute
-  LiveLeaderboardRoute: typeof LiveLeaderboardRoute
   LogReviewRoute: typeof LogReviewRoute
   MaxesRoute: typeof MaxesRoute
   MetricsRoute: typeof MetricsRoute
   OrgMembersRoute: typeof OrgMembersRoute
   OrganizationsRoute: typeof OrganizationsRoute
-  OverheadDisplayRoute: typeof OverheadDisplayRoute
   PerformanceRoute: typeof PerformanceRoute
   PermissionsRoute: typeof PermissionsRoute
-  PricingRoute: typeof PricingRoute
   ProgramDeliveryRoute: typeof ProgramDeliveryRoute
   ProgrammingRoute: typeof ProgrammingRoute
   ProgramsRoute: typeof ProgramsRouteWithChildren
   RackConsoleRoute: typeof RackConsoleRoute
-  ReportsRoute: typeof ReportsRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
@@ -934,13 +810,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/badges': {
-      id: '/badges'
-      path: '/badges'
-      fullPath: '/badges'
-      preLoaderRoute: typeof BadgesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboard-settings': {
       id: '/dashboard-settings'
       path: '/dashboard-settings'
@@ -953,13 +822,6 @@ declare module '@tanstack/react-router' {
       path: '/exercises'
       fullPath: '/exercises'
       preLoaderRoute: typeof ExercisesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/features': {
-      id: '/features'
-      path: '/features'
-      fullPath: '/features'
-      preLoaderRoute: typeof FeaturesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gps': {
@@ -988,13 +850,6 @@ declare module '@tanstack/react-router' {
       path: '/lifts'
       fullPath: '/lifts'
       preLoaderRoute: typeof LiftsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/live-leaderboard': {
-      id: '/live-leaderboard'
-      path: '/live-leaderboard'
-      fullPath: '/live-leaderboard'
-      preLoaderRoute: typeof LiveLeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/log-review': {
@@ -1032,13 +887,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/overhead-display': {
-      id: '/overhead-display'
-      path: '/overhead-display'
-      fullPath: '/overhead-display'
-      preLoaderRoute: typeof OverheadDisplayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/performance': {
       id: '/performance'
       path: '/performance'
@@ -1051,13 +899,6 @@ declare module '@tanstack/react-router' {
       path: '/permissions'
       fullPath: '/permissions'
       preLoaderRoute: typeof PermissionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/program-delivery': {
@@ -1086,13 +927,6 @@ declare module '@tanstack/react-router' {
       path: '/rack-console'
       fullPath: '/rack-console'
       preLoaderRoute: typeof RackConsoleRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reports': {
-      id: '/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -1199,34 +1033,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/programs/$id'
       preLoaderRoute: typeof ProgramsIdRouteImport
       parentRoute: typeof ProgramsRoute
-    }
-    '/reports/': {
-      id: '/reports/'
-      path: '/'
-      fullPath: '/reports/'
-      preLoaderRoute: typeof ReportsIndexRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/reports/gps-report': {
-      id: '/reports/gps-report'
-      path: '/gps-report'
-      fullPath: '/reports/gps-report'
-      preLoaderRoute: typeof ReportsGpsReportRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/reports/kpi-report': {
-      id: '/reports/kpi-report'
-      path: '/kpi-report'
-      fullPath: '/reports/kpi-report'
-      preLoaderRoute: typeof ReportsKpiReportRouteImport
-      parentRoute: typeof ReportsRoute
-    }
-    '/reports/speed-potential': {
-      id: '/reports/speed-potential'
-      path: '/speed-potential'
-      fullPath: '/reports/speed-potential'
-      preLoaderRoute: typeof ReportsSpeedPotentialRouteImport
-      parentRoute: typeof ReportsRoute
     }
     '/tests/kiosk': {
       id: '/tests/kiosk'
@@ -1371,23 +1177,6 @@ const ProgramsRouteWithChildren = ProgramsRoute._addFileChildren(
   ProgramsRouteChildren,
 )
 
-interface ReportsRouteChildren {
-  ReportsGpsReportRoute: typeof ReportsGpsReportRoute
-  ReportsKpiReportRoute: typeof ReportsKpiReportRoute
-  ReportsSpeedPotentialRoute: typeof ReportsSpeedPotentialRoute
-  ReportsIndexRoute: typeof ReportsIndexRoute
-}
-
-const ReportsRouteChildren: ReportsRouteChildren = {
-  ReportsGpsReportRoute: ReportsGpsReportRoute,
-  ReportsKpiReportRoute: ReportsKpiReportRoute,
-  ReportsSpeedPotentialRoute: ReportsSpeedPotentialRoute,
-  ReportsIndexRoute: ReportsIndexRoute,
-}
-
-const ReportsRouteWithChildren =
-  ReportsRoute._addFileChildren(ReportsRouteChildren)
-
 interface TestsRouteChildren {
   TestsKioskRoute: typeof TestsKioskRoute
 }
@@ -1444,29 +1233,23 @@ const rootRouteChildren: RootRouteChildren = {
   AthleticismReportRoute: AthleticismReportRoute,
   AttendanceRoute: AttendanceRoute,
   AuthRoute: AuthRoute,
-  BadgesRoute: BadgesRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   ExercisesRoute: ExercisesRoute,
-  FeaturesRoute: FeaturesRoute,
   GpsRoute: GpsRoute,
   ImportRoute: ImportRoute,
   LeaderboardsRoute: LeaderboardsRoute,
   LiftsRoute: LiftsRoute,
-  LiveLeaderboardRoute: LiveLeaderboardRoute,
   LogReviewRoute: LogReviewRoute,
   MaxesRoute: MaxesRoute,
   MetricsRoute: MetricsRoute,
   OrgMembersRoute: OrgMembersRoute,
   OrganizationsRoute: OrganizationsRoute,
-  OverheadDisplayRoute: OverheadDisplayRoute,
   PerformanceRoute: PerformanceRoute,
   PermissionsRoute: PermissionsRoute,
-  PricingRoute: PricingRoute,
   ProgramDeliveryRoute: ProgramDeliveryRoute,
   ProgrammingRoute: ProgrammingRoute,
   ProgramsRoute: ProgramsRouteWithChildren,
   RackConsoleRoute: RackConsoleRoute,
-  ReportsRoute: ReportsRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,

@@ -5,14 +5,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { athletesQO, teamsQO, workoutAssignmentsQO, athleteDisplayName } from "@/lib/queries";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
 } from "recharts";
 
 export const Route = createFileRoute("/training/analytics")({
@@ -38,8 +52,14 @@ type WorkoutExerciseRow = { id: string; exercise_name: string | null };
 
 const LINE_COLORS = ["var(--primary)", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
-function fmtDate(d: Date) { return d.toISOString().slice(0, 10); }
-function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return fmtDate(d); }
+function fmtDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return fmtDate(d);
+}
 function isoWeek(dateStr: string) {
   // Group by ISO week start (Mon)
   const d = new Date(dateStr);
@@ -63,7 +83,9 @@ function AnalyticsView() {
     queryFn: async (): Promise<ApprovedLog[]> => {
       const { data, error } = await supabase
         .from("rack_set_logs")
-        .select("id, athlete_id, workout_exercise_id, set_position, load, reps, avg_velocity, estimated_1rm, completed_at, approval_status, status")
+        .select(
+          "id, athlete_id, workout_exercise_id, set_position, load, reps, avg_velocity, estimated_1rm, completed_at, approval_status, status",
+        )
         .in("approval_status", ["auto", "approved"])
         .eq("status", "completed")
         .gte("completed_at", `${dateFrom}T00:00:00`)
@@ -76,7 +98,10 @@ function AnalyticsView() {
   });
 
   const weIds = useMemo(
-    () => Array.from(new Set((logsQ.data ?? []).map((l) => l.workout_exercise_id).filter(Boolean))) as string[],
+    () =>
+      Array.from(
+        new Set((logsQ.data ?? []).map((l) => l.workout_exercise_id).filter(Boolean)),
+      ) as string[],
     [logsQ.data],
   );
 
@@ -176,7 +201,10 @@ function AnalyticsView() {
       const name = exerciseName.get(l.workout_exercise_id!) ?? "Unknown";
       totalsByEx.set(name, (totalsByEx.get(name) ?? 0) + 1);
     }
-    const top = Array.from(totalsByEx.entries()).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+    const top = Array.from(totalsByEx.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([n]) => n);
     const byWeek = new Map<string, Record<string, { sum: number; n: number }>>();
     for (const l of withVel) {
       const name = exerciseName.get(l.workout_exercise_id!) ?? "Unknown";
@@ -218,7 +246,9 @@ function AnalyticsView() {
         }
       }
     }
-    return Array.from(byWeek.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([week, PRs]) => ({ week, PRs }));
+    return Array.from(byWeek.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([week, PRs]) => ({ week, PRs }));
   }, [scopedLogs]);
 
   // Compliance by athlete
@@ -243,7 +273,9 @@ function AnalyticsView() {
       const assigned = assignedPerA.get(a.id)?.size ?? 0;
       if (assigned === 0) continue;
       const done = completedPerA.get(a.id) ?? new Set();
-      const completed = Array.from(assignedPerA.get(a.id) ?? []).filter((k) => done.has(k.split(":")[0])).length;
+      const completed = Array.from(assignedPerA.get(a.id) ?? []).filter((k) =>
+        done.has(k.split(":")[0]),
+      ).length;
       rows.push({
         name: athleteDisplayName(a),
         assigned,
@@ -262,32 +294,64 @@ function AnalyticsView() {
 
   return (
     <div className="space-y-4">
+      <h1 className="text-xl font-semibold sm:text-2xl">Analytics</h1>
       {/* Filters */}
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">From</Label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[150px]" />
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              From
+            </Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-9 w-[150px]"
+            />
           </div>
           <div>
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">To</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 w-[150px]" />
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-9 w-[150px]"
+            />
           </div>
           <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Team</Label>
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Team
+            </Label>
             <Select value={teamId} onValueChange={setTeamId}>
-              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All teams</SelectItem>
-                {teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
             <StatPill label="Sets logged" value={scopedLogs.length.toLocaleString()} />
-            <StatPill label="Athletes active" value={new Set(scopedLogs.map((l) => l.athlete_id)).size.toLocaleString()} />
-            <StatPill label="Compliance" value={`${totalCompletion.pct}%`} tone={totalCompletion.pct >= 80 ? "good" : totalCompletion.pct >= 60 ? "warn" : "bad"} />
-            <StatPill label="PRs" value={prTrend.reduce((s, r) => s + r.PRs, 0).toLocaleString()} tone="good" />
+            <StatPill
+              label="Athletes active"
+              value={new Set(scopedLogs.map((l) => l.athlete_id)).size.toLocaleString()}
+            />
+            <StatPill
+              label="Compliance"
+              value={`${totalCompletion.pct}%`}
+              tone={totalCompletion.pct >= 80 ? "good" : totalCompletion.pct >= 60 ? "warn" : "bad"}
+            />
+            <StatPill
+              label="PRs"
+              value={prTrend.reduce((s, r) => s + r.PRs, 0).toLocaleString()}
+              tone="good"
+            />
           </div>
         </CardContent>
       </Card>
@@ -312,13 +376,33 @@ function AnalyticsView() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="week" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
                   <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="Assigned" stroke="#94a3b8" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="Completed" stroke="var(--primary)" strokeWidth={2} dot={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="Assigned"
+                    stroke="#94a3b8"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Completed"
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
-            ) : <Empty />}
+            ) : (
+              <Empty />
+            )}
           </ChartCard>
         </TabsContent>
 
@@ -328,16 +412,32 @@ function AnalyticsView() {
             hint="Total weight moved (load × reps) across all approved sets in range. Top 12 shown."
           >
             {volumeByExercise.length ? (
-              <ResponsiveContainer width="100%" height={Math.max(320, volumeByExercise.length * 28)}>
+              <ResponsiveContainer
+                width="100%"
+                height={Math.max(320, volumeByExercise.length * 28)}
+              >
                 <BarChart data={volumeByExercise} layout="vertical" margin={{ left: 90 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={150} />
-                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    width={150}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
                   <Bar dataKey="volume" fill="var(--primary)" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : <Empty />}
+            ) : (
+              <Empty />
+            )}
           </ChartCard>
         </TabsContent>
 
@@ -352,14 +452,30 @@ function AnalyticsView() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="week" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
                   <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} unit=" m/s" />
-                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   {velocityTrend.keys.map((k, i) => (
-                    <Line key={k} type="monotone" dataKey={k} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
+                    <Line
+                      key={k}
+                      type="monotone"
+                      dataKey={k}
+                      stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                    />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
-            ) : <Empty message="No velocity data in this range." />}
+            ) : (
+              <Empty message="No velocity data in this range." />
+            )}
           </ChartCard>
         </TabsContent>
 
@@ -373,12 +489,23 @@ function AnalyticsView() {
                 <BarChart data={prTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="week" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", fontSize: 12 }} />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--card)",
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
                   <Bar dataKey="PRs" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : <Empty message="No PRs recorded in this range." />}
+            ) : (
+              <Empty message="No PRs recorded in this range." />
+            )}
           </ChartCard>
         </TabsContent>
 
@@ -389,9 +516,7 @@ function AnalyticsView() {
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Compliance by athlete
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Completed / assigned in range
-                </div>
+                <div className="text-xs text-muted-foreground">Completed / assigned in range</div>
               </div>
               {complianceByAthlete.length ? (
                 <div className="max-h-[520px] divide-y divide-border/40 overflow-auto">
@@ -430,12 +555,22 @@ function AnalyticsView() {
   );
 }
 
-function ChartCard({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function ChartCard({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Card>
       <CardContent className="p-4">
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </div>
           {hint && <div className="text-[11px] text-muted-foreground/70">{hint}</div>}
         </div>
         {children}
@@ -445,14 +580,28 @@ function ChartCard({ title, hint, children }: { title: string; hint?: string; ch
 }
 
 function Empty({ message = "Not enough data in this range." }: { message?: string }) {
-  return <div className="grid h-[320px] place-items-center text-sm text-muted-foreground">{message}</div>;
+  return (
+    <div className="grid h-[320px] place-items-center text-sm text-muted-foreground">{message}</div>
+  );
 }
 
-function StatPill({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" | "bad" }) {
+function StatPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "warn" | "bad";
+}) {
   const toneCls =
-    tone === "good" ? "text-emerald-500" :
-    tone === "warn" ? "text-amber-500" :
-    tone === "bad" ? "text-rose-500" : "text-foreground";
+    tone === "good"
+      ? "text-emerald-500"
+      : tone === "warn"
+        ? "text-amber-500"
+        : tone === "bad"
+          ? "text-rose-500"
+          : "text-foreground";
   return (
     <div className="rounded-md border border-border/60 bg-card/40 px-3 py-1.5">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
