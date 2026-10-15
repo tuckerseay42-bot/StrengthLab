@@ -112,6 +112,8 @@ import {
   Replace,
   HeartPulse,
   RotateCw,
+  List,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { suggestLoad } from "@/lib/prescription";
@@ -124,10 +126,15 @@ import { useOrg1RMFormula } from "@/hooks/use-1rm-formula";
 const today = () => new Date().toISOString().slice(0, 10);
 const RECENT_KEY = "training-view:recent-athletes";
 const LAYOUT_KEY = "training-view:layout";
+const VIEW_MODE_KEY = "training-view:viewmode";
 const RECENT_MAX = 10;
 const FLASH_MS = 5000;
+// How long an athlete can go without logging a set (while their workout
+// isn't finished) before the "Who's up" list flags them as Behind.
+const BEHIND_MS = 5 * 60_000;
 
 type LayoutSize = 2 | 4 | 6 | 8;
+type ViewMode = "list" | "grid";
 
 const LAYOUT_GRID: Record<LayoutSize, string> = {
   2: "grid-cols-2",
@@ -218,6 +225,45 @@ function mphToSeconds(mph: number, distanceIn: number): number {
   return (miles / mph) * 3600;
 }
 
+// Prescribed sets in order — shared by AthleteTile (per-set logging) and the
+// "Who's up" list (which only needs the total/count, not the full form).
+function buildPrescribedSets(
+  workout: Workout | null,
+  workoutExercises: WorkoutExercise[],
+  workoutSets: WorkoutSet[],
+): Array<{
+  exercise: WorkoutExercise;
+  setPosition: number;
+  setTotal: number;
+  setRow: WorkoutSet | null;
+}> {
+  if (!workout) return [];
+  const exs = workoutExercises
+    .filter((e) => e.workout_id === workout.id)
+    .sort((a, b) => a.position - b.position);
+  const list: Array<{
+    exercise: WorkoutExercise;
+    setPosition: number;
+    setTotal: number;
+    setRow: WorkoutSet | null;
+  }> = [];
+  for (const ex of exs) {
+    const rows = workoutSets
+      .filter((s) => s.workout_exercise_id === ex.id)
+      .sort((a, b) => a.position - b.position);
+    // Each workout_sets row is a *scheme* (e.g. "3 sets of 4") — expand by `sets` count.
+    const expanded: WorkoutSet[] = [];
+    for (const r of rows) {
+      const count = Math.max(1, Number(r.sets ?? 1) || 1);
+      for (let k = 0; k < count; k++) expanded.push(r);
+    }
+    const total = expanded.length > 0 ? expanded.length : (ex.sets ?? 1);
+    for (let i = 0; i < total; i++)
+      list.push({ exercise: ex, setPosition: i + 1, setTotal: total, setRow: expanded[i] ?? null });
+  }
+  return list;
+}
+
 // ============================================================================
 // Small hooks
 // ============================================================================
@@ -250,8 +296,6 @@ function useFrozen<T>(value: T, key: string, ready: boolean): T {
   }
   return ref.current.value;
 }
-
-
 
 function useLocalStorage<T>(key: string, initial: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
@@ -324,6 +368,10 @@ function TrainingView() {
   // UI state
   const [mode, setMode] = useState<"assign" | "live" | "display">("live");
   const [layoutSize, setLayoutSize] = useLocalStorage<LayoutSize>(LAYOUT_KEY, 4);
+  // "list" (default) is the shared-tablet workflow: a tappable roster with
+  // status, one athlete logs full-screen at a time. "grid" is the old
+  // all-tiles-at-once console, still useful when watching many racks.
+  const [viewMode, setViewMode] = useLocalStorage<ViewMode>(VIEW_MODE_KEY, "list");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Tap-to-expand: one athlete takes over the screen so numbers are readable.
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -353,6 +401,31 @@ function TrainingView() {
     () => selectedIds.map((id) => athletes.find((a) => a.id === id)).filter(Boolean) as Athlete[],
     [selectedIds, athletes],
   );
+
+  // Anchor timestamp per athlete for the "Behind" flag — set once when they
+  // first appear in this session, so someone just added isn't instantly
+  // flagged. Cleared when they're removed.
+  const [addedAtById, setAddedAtById] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setAddedAtById((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of selectedIds) {
+        if (next[id] == null) {
+          next[id] = Date.now();
+          changed = true;
+        }
+      }
+      for (const id of Object.keys(next)) {
+        if (!selectedIds.includes(id)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedIds]);
+  const now = useNow(5000);
 
   // Resolve assigned workouts
   const resolvedByAthlete = useMemo(() => {
@@ -398,7 +471,13 @@ function TrainingView() {
       const organization_id = team?.organization_id ?? (await getScopedOrgId());
       const { data: created, error: insErr } = await supabase
         .from("rack_sessions")
-        .insert({ organization_id, team_id: sessionTeamId!, rack_number: 1, session_date: today(), athlete_ids: [] })
+        .insert({
+          organization_id,
+          team_id: sessionTeamId!,
+          rack_number: 1,
+          session_date: today(),
+          athlete_ids: [],
+        })
         .select("*")
         .single();
       if (insErr) throw insErr;
@@ -472,7 +551,9 @@ function TrainingView() {
     queryFn: async (): Promise<RackAthleteOverride[]> => {
       const { data, error } = await supabase
         .from("rack_athlete_exercise_overrides")
-        .select("id, rack_session_id, athlete_id, workout_exercise_id, substitute_exercise_id, substitute_exercise_name, reason")
+        .select(
+          "id, rack_session_id, athlete_id, workout_exercise_id, substitute_exercise_id, substitute_exercise_name, reason",
+        )
         .eq("rack_session_id", sessionId!);
       if (error) throw error;
       return (data ?? []) as RackAthleteOverride[];
@@ -483,7 +564,10 @@ function TrainingView() {
     const m = new Map<string, Map<string, RackAthleteOverride>>();
     for (const o of overrides) {
       let am = m.get(o.athlete_id);
-      if (!am) { am = new Map(); m.set(o.athlete_id, am); }
+      if (!am) {
+        am = new Map();
+        m.set(o.athlete_id, am);
+      }
       am.set(o.workout_exercise_id, o);
     }
     return m;
@@ -500,20 +584,18 @@ function TrainingView() {
       if (!sessionId) throw new Error("No active session");
       const athlete = athletes.find((a) => a.id === input.athlete_id);
       const organization_id = athlete?.organization_id ?? (await getScopedOrgId());
-      const { error } = await supabase
-        .from("rack_athlete_exercise_overrides")
-        .upsert(
-          {
-            rack_session_id: sessionId,
-            athlete_id: input.athlete_id,
-            workout_exercise_id: input.workout_exercise_id,
-            substitute_exercise_id: input.substitute_exercise_id,
-            substitute_exercise_name: input.substitute_exercise_name,
-            reason: input.reason,
-            organization_id,
-          },
-          { onConflict: "rack_session_id,athlete_id,workout_exercise_id" },
-        );
+      const { error } = await supabase.from("rack_athlete_exercise_overrides").upsert(
+        {
+          rack_session_id: sessionId,
+          athlete_id: input.athlete_id,
+          workout_exercise_id: input.workout_exercise_id,
+          substitute_exercise_id: input.substitute_exercise_id,
+          substitute_exercise_name: input.substitute_exercise_name,
+          reason: input.reason,
+          organization_id,
+        },
+        { onConflict: "rack_session_id,athlete_id,workout_exercise_id" },
+      );
       if (error) throw error;
     },
     onSuccess: () => {
@@ -565,8 +647,6 @@ function TrainingView() {
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
-
-
   // Persist per-athlete slot rows
   useEffect(() => {
     if (!sessionId || selectedAthletes.length === 0) return;
@@ -602,7 +682,7 @@ function TrainingView() {
   const toggleAthlete = (id: string) => {
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= layoutSize) {
+      if (viewMode === "grid" && prev.length >= layoutSize) {
         toast.error(`Layout is set to ${layoutSize} athletes — remove one or expand the grid.`);
         return prev;
       }
@@ -613,11 +693,7 @@ function TrainingView() {
   const removeAthlete = (id: string) => setSelectedIds((prev) => prev.filter((x) => x !== id));
   const clearSelection = () => setSelectedIds([]);
 
-
-
-
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
-
 
   // Rack sessions today (for "By Rack" selection + rack mode grouping)
   const rackSessionsQ = useQuery({
@@ -667,6 +743,35 @@ function TrainingView() {
     return map;
   }, [logs]);
 
+  // ---- Per-athlete progress for the "Who's up" list ----
+  type AthleteStatus = {
+    totalSets: number;
+    completedCount: number;
+    finished: boolean;
+    lastCompletedAt: number | null;
+    workout: Workout | null;
+  };
+  const athleteStatus = useMemo(() => {
+    const m = new Map<string, AthleteStatus>();
+    for (const a of selectedAthletes) {
+      const workoutId = effectiveWorkoutFor(a.id);
+      const workout = workoutId ? (workouts.find((w) => w.id === workoutId) ?? null) : null;
+      const prescribed = buildPrescribedSets(workout, workoutExercises, workoutSets);
+      const athleteLogs = logs.filter((l) => l.athlete_id === a.id);
+      const totalSets = prescribed.length;
+      const completedCount = athleteLogs.filter((l) => l.status === "completed").length;
+      const finished = totalSets > 0 && completedCount >= totalSets;
+      let lastCompletedAt: number | null = null;
+      for (const l of athleteLogs) {
+        if (l.status !== "completed") continue;
+        const t = new Date(l.completed_at).getTime();
+        if (lastCompletedAt == null || t > lastCompletedAt) lastCompletedAt = t;
+      }
+      m.set(a.id, { totalSets, completedCount, finished, lastCompletedAt, workout });
+    }
+    return m;
+  }, [selectedAthletes, effectiveWorkoutFor, workouts, workoutExercises, workoutSets, logs]);
+
   // ---- Log mutation ----
   const logMutation = useMutation({
     mutationFn: async (
@@ -699,9 +804,18 @@ function TrainingView() {
     <div className="flex h-[calc(100dvh-4rem)] min-h-[560px] flex-col gap-3 pb-[env(safe-area-inset-bottom)]">
       <Tabs value={mode} onValueChange={(v) => setMode(v as "assign" | "live" | "display")}>
         <TabsList>
-          <TabsTrigger value="live" className="gap-1.5"><Radio className="h-3.5 w-3.5" />Live Training</TabsTrigger>
-          <TabsTrigger value="assign" className="gap-1.5"><Users className="h-3.5 w-3.5" />Assign Racks</TabsTrigger>
-          <TabsTrigger value="display" className="gap-1.5"><Tv className="h-3.5 w-3.5" />Display</TabsTrigger>
+          <TabsTrigger value="live" className="gap-1.5">
+            <Radio className="h-3.5 w-3.5" />
+            Live Training
+          </TabsTrigger>
+          <TabsTrigger value="assign" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            Assign Racks
+          </TabsTrigger>
+          <TabsTrigger value="display" className="gap-1.5">
+            <Tv className="h-3.5 w-3.5" />
+            Display
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -714,147 +828,189 @@ function TrainingView() {
           <RackDisplayBoard />
         </div>
       ) : (
-      <div className="hud-grid flex min-h-0 flex-1 gap-3">
+        <div className="hud-grid flex min-h-0 flex-1 gap-3">
+          {/* ---------------- Workspace ---------------- */}
+          <section className="flex min-w-0 flex-1 flex-col gap-3">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/60 px-2.5 py-2 shadow-sm">
+              <div className="flex items-center gap-1">
+                <ToolbarToggle
+                  active={viewMode === "list"}
+                  onClick={() => setViewMode("list")}
+                  icon={<List className="h-3.5 w-3.5" />}
+                  label="List"
+                />
+                <ToolbarToggle
+                  active={viewMode === "grid"}
+                  onClick={() => setViewMode("grid")}
+                  icon={<LayoutGrid className="h-3.5 w-3.5" />}
+                  label="Grid"
+                />
+                {viewMode === "grid" && (
+                  <>
+                    <div className="mx-1 h-5 w-px bg-border/60" />
+                    <span className="hidden pr-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
+                      Layout
+                    </span>
+                    {([2, 4, 6, 8] as LayoutSize[]).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setLayoutSize(n)}
+                        className={cn(
+                          "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium tabular-nums transition-colors",
+                          layoutSize === n
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        {n === 2 && <Columns2 className="h-3.5 w-3.5" />}
+                        {n === 4 && <Grid2X2 className="h-3.5 w-3.5" />}
+                        {n === 6 && <Grid3X3 className="h-3.5 w-3.5" />}
+                        {n === 8 && <LayoutGrid className="h-3.5 w-3.5" />}
+                        {n}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {activeCount > 0 && (
+                  <button
+                    onClick={clearSelection}
+                    className="ml-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+                  >
+                    Clear ({activeCount})
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {viewMode === "grid" && (
+                  <>
+                    <ToolbarToggle
+                      active={compact}
+                      onClick={() => setCompact((v) => !v)}
+                      icon={<Rows3 className="h-3.5 w-3.5" />}
+                      label={compact ? "Compact" : "Expanded"}
+                    />
+                    <ToolbarToggle
+                      active={rackMode}
+                      onClick={() => setRackMode((v) => !v)}
+                      icon={<LayoutGrid className="h-3.5 w-3.5" />}
+                      label="Rack mode"
+                    />
+                    <div className="mx-1 h-5 w-px bg-border/60" />
+                  </>
+                )}
+                <ToolbarToggle
+                  active={fullscreen}
+                  onClick={toggleFullscreen}
+                  icon={
+                    fullscreen ? (
+                      <Minimize2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    )
+                  }
+                  label="Fullscreen"
+                />
+                <Button size="sm" variant="ghost" asChild className="h-7 px-2">
+                  <Link to="/training/live" className="text-xs">
+                    Facility view
+                  </Link>
+                </Button>
+              </div>
+            </div>
 
-      {/* ---------------- Workspace ---------------- */}
-      <section className="flex min-w-0 flex-1 flex-col gap-3">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/60 px-2.5 py-2 shadow-sm">
-          <div className="flex items-center gap-1">
-            <span className="hidden pr-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
-              Layout
-            </span>
-            {([2, 4, 6, 8] as LayoutSize[]).map((n) => (
-              <button
-                key={n}
-                onClick={() => setLayoutSize(n)}
+            {/* "Who's up" roster — default shared-tablet workflow: tap your name,
+            log full-screen, hand it back. */}
+            {viewMode === "list" ? (
+              <AthleteStatusList
+                athletes={selectedAthletes}
+                teamById={teamById}
+                status={athleteStatus}
+                addedAtById={addedAtById}
+                now={now}
+                behindMs={BEHIND_MS}
+                onSelect={(id) => setFocusId(id)}
+                onRemove={removeAthlete}
+                allAthletes={athletes}
+                selectedIds={selectedIds}
+                recentIds={recent}
+                onAdd={toggleAthlete}
+              />
+            ) : rackMode && activeCount > 0 ? (
+              <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+                {groupByRack(selectedAthletes, rackAthletesByRack).map(({ rackNo, list }) => (
+                  <div key={rackNo ?? "unassigned"} className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-foreground">
+                        {rackNo != null ? `Rack ${rackNo}` : "Unassigned"}
+                      </span>
+                      <span className="tabular-nums">
+                        {list.length} athlete{list.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div
+                      className={cn(
+                        "grid auto-rows-min content-start gap-3",
+                        LAYOUT_GRID[layoutSize],
+                      )}
+                    >
+                      {list.map((a) => renderTile(a))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
                 className={cn(
-                  "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium tabular-nums transition-colors",
-                  layoutSize === n
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted",
+                  "grid flex-1 auto-rows-min content-start gap-3 overflow-y-auto overscroll-contain pb-6 pr-1",
+                  LAYOUT_GRID[layoutSize],
                 )}
               >
-                {n === 2 && <Columns2 className="h-3.5 w-3.5" />}
-                {n === 4 && <Grid2X2 className="h-3.5 w-3.5" />}
-                {n === 6 && <Grid3X3 className="h-3.5 w-3.5" />}
-                {n === 8 && <LayoutGrid className="h-3.5 w-3.5" />}
-                {n}
-              </button>
-            ))}
-            {activeCount > 0 && (
-              <button
-                onClick={clearSelection}
-                className="ml-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                Clear ({activeCount})
-              </button>
+                {Array.from({ length: layoutSize }).map((_, i) => {
+                  const a = selectedAthletes[i];
+                  if (a) return renderTile(a);
+                  return (
+                    <SlotPicker
+                      key={`slot-${i}`}
+                      index={i + 1}
+                      athletes={athletes}
+                      teamById={teamById}
+                      selectedIds={selectedIds}
+                      recentIds={recent}
+                      onPick={(id) => toggleAthlete(id)}
+                    />
+                  );
+                })}
+              </div>
             )}
-          </div>
-          <div className="flex items-center gap-1">
-            <ToolbarToggle
-              active={compact}
-              onClick={() => setCompact((v) => !v)}
-              icon={<Rows3 className="h-3.5 w-3.5" />}
-              label={compact ? "Compact" : "Expanded"}
-            />
-            <ToolbarToggle
-              active={rackMode}
-              onClick={() => setRackMode((v) => !v)}
-              icon={<LayoutGrid className="h-3.5 w-3.5" />}
-              label="Rack mode"
-            />
-            <div className="mx-1 h-5 w-px bg-border/60" />
-            <ToolbarToggle
-              active={fullscreen}
-              onClick={toggleFullscreen}
-              icon={
-                fullscreen ? (
-                  <Minimize2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" />
-                )
-              }
-              label="Fullscreen"
-            />
-            <Button size="sm" variant="ghost" asChild className="h-7 px-2">
-              <Link to="/training/live" className="text-xs">
-                Facility view
-              </Link>
-            </Button>
-          </div>
+
+            {/* Focused athlete — full-screen so the numbers are readable from the floor */}
+            {focusId && selectedAthletes.some((a) => a.id === focusId) && (
+              <div className="fixed inset-0 z-[100] flex flex-col bg-background">
+                <div className="safe-top flex items-center justify-between gap-2 border-b bg-background px-3 py-2">
+                  <div className="min-w-0 truncate text-base font-bold">
+                    {athleteDisplayName(selectedAthletes.find((a) => a.id === focusId)!)}
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => setFocusId(null)}>
+                    <Minimize2 className="h-4 w-4" />{" "}
+                    {viewMode === "list" ? "Back to list" : "Back to grid"}
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
+                  <div className="mx-auto max-w-2xl">
+                    {renderTile(
+                      selectedAthletes.find((a) => a.id === focusId)!,
+                      true,
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
-
-        {/* Grid — one block per layout slot; empty blocks are athlete search cards */}
-        {rackMode && activeCount > 0 ? (
-          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-            {groupByRack(selectedAthletes, rackAthletesByRack).map(({ rackNo, list }) => (
-              <div key={rackNo ?? "unassigned"} className="space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-foreground">
-                    {rackNo != null ? `Rack ${rackNo}` : "Unassigned"}
-                  </span>
-                  <span className="tabular-nums">
-                    {list.length} athlete{list.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className={cn("grid auto-rows-min content-start gap-3", LAYOUT_GRID[layoutSize])}>
-                  {list.map((a) => renderTile(a))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div
-            className={cn(
-              "grid flex-1 auto-rows-min content-start gap-3 overflow-y-auto overscroll-contain pb-6 pr-1",
-              LAYOUT_GRID[layoutSize],
-            )}
-          >
-            {Array.from({ length: layoutSize }).map((_, i) => {
-              const a = selectedAthletes[i];
-              if (a) return renderTile(a);
-              return (
-                <SlotPicker
-                  key={`slot-${i}`}
-                  index={i + 1}
-                  athletes={athletes}
-                  teamById={teamById}
-                  selectedIds={selectedIds}
-                  recentIds={recent}
-                  onPick={(id) => toggleAthlete(id)}
-                />
-              );
-            })}
-          </div>
-        )}
-
-
-        {/* Focused athlete — full-screen so the numbers are readable from the floor */}
-        {focusId && selectedAthletes.some((a) => a.id === focusId) && (
-          <div className="fixed inset-0 z-[100] flex flex-col bg-background">
-            <div className="safe-top flex items-center justify-between gap-2 border-b bg-background px-3 py-2">
-              <div className="min-w-0 truncate text-base font-bold">
-                {athleteDisplayName(selectedAthletes.find((a) => a.id === focusId)!)}
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => setFocusId(null)}>
-                <Minimize2 className="h-4 w-4" /> Back to grid
-              </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain p-3">
-              <div className="mx-auto max-w-2xl">
-                {renderTile(selectedAthletes.find((a) => a.id === focusId)!, true)}
-              </div>
-            </div>
-          </div>
-        )}
-
-      </section>
-      </div>
       )}
     </div>
   );
-
 
   function renderTile(a: Athlete, focused = false) {
     const workoutId = effectiveWorkoutFor(a.id);
@@ -886,7 +1042,9 @@ function TrainingView() {
         onSetWorkout={(wid) => setWorkoutByAthlete((p) => ({ ...p, [a.id]: wid }))}
         overrides={overridesByAthlete.get(a.id) ?? new Map()}
         onSwapExercise={(input) => swapMutation.mutate({ athlete_id: a.id, ...input })}
-        onClearSwap={(workout_exercise_id) => clearSwapMutation.mutate({ athlete_id: a.id, workout_exercise_id })}
+        onClearSwap={(workout_exercise_id) =>
+          clearSwapMutation.mutate({ athlete_id: a.id, workout_exercise_id })
+        }
         onMarkOut={(reason) => {
           markInjuredMutation.mutate({ athlete_id: a.id, reason });
           removeAthlete(a.id);
@@ -924,23 +1082,31 @@ function groupByRack(list: Athlete[], byRack: Map<number, string[]>) {
 // Slot picker — compact empty block that opens a full-screen athlete search
 // ============================================================================
 
-function SlotPicker({
-  index,
+// Shared search dialog behind both SlotPicker (grid) and AddAthleteInline
+// (list) — picks an athlete not already in the session.
+function AthletePickerDialog({
+  open,
+  onOpenChange,
+  title,
   athletes,
   teamById,
   selectedIds,
   recentIds,
   onPick,
 }: {
-  index: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
   athletes: Athlete[];
   teamById: Map<string, Team>;
   selectedIds: string[];
   recentIds: string[];
   onPick: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  useEffect(() => {
+    if (open) setQ("");
+  }, [open]);
 
   const available = useMemo(
     () =>
@@ -971,10 +1137,89 @@ function SlotPicker({
   }, [available, q, teamById]);
 
   return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-3 p-0">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {available.length} available · search by name or team
+          </DialogDescription>
+        </DialogHeader>
+        <div className="relative px-4">
+          <Search className="pointer-events-none absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search athlete or team"
+            className="h-10 pl-8"
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
+          {!q.trim() && recentAvailable.length > 0 && (
+            <>
+              <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Recent
+              </div>
+              {recentAvailable.map((a) => (
+                <SlotPickerRow
+                  key={`recent-${a.id}`}
+                  athlete={a}
+                  team={teamById.get(a.team_id ?? "") ?? null}
+                  onPick={() => {
+                    onPick(a.id);
+                    onOpenChange(false);
+                  }}
+                />
+              ))}
+              <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                All athletes
+              </div>
+            </>
+          )}
+          {results.map((a) => (
+            <SlotPickerRow
+              key={a.id}
+              athlete={a}
+              team={teamById.get(a.team_id ?? "") ?? null}
+              onPick={() => {
+                onPick(a.id);
+                onOpenChange(false);
+              }}
+            />
+          ))}
+          {results.length === 0 && (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+              No athletes match.
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SlotPicker({
+  index,
+  athletes,
+  teamById,
+  selectedIds,
+  recentIds,
+  onPick,
+}: {
+  index: number;
+  athletes: Athlete[];
+  teamById: Map<string, Team>;
+  selectedIds: string[];
+  recentIds: string[];
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
     <>
       <button
         type="button"
-        onClick={() => { setQ(""); setOpen(true); }}
+        onClick={() => setOpen(true)}
         className="flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/10 p-4 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/30 hover:text-foreground"
       >
         <Users className="h-5 w-5 opacity-60" />
@@ -983,55 +1228,240 @@ function SlotPicker({
           Slot {index}
         </span>
       </button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-3 p-0">
-          <DialogHeader className="px-4 pt-4">
-            <DialogTitle>Add athlete to slot {index}</DialogTitle>
-            <DialogDescription>
-              {available.length} available · search by name or team
-            </DialogDescription>
-          </DialogHeader>
-          <div className="relative px-4">
-            <Search className="pointer-events-none absolute left-6 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search athlete or team"
-              className="h-10 pl-8"
-            />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
-            {!q.trim() && recentAvailable.length > 0 && (
-              <>
-                <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Recent
-                </div>
-                {recentAvailable.map((a) => (
-                  <SlotPickerRow key={`recent-${a.id}`} athlete={a} team={teamById.get(a.team_id ?? "") ?? null} onPick={() => { onPick(a.id); setOpen(false); }} />
-                ))}
-                <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  All athletes
-                </div>
-              </>
-            )}
-            {results.map((a) => (
-              <SlotPickerRow key={a.id} athlete={a} team={teamById.get(a.team_id ?? "") ?? null} onPick={() => { onPick(a.id); setOpen(false); }} />
-            ))}
-            {results.length === 0 && (
-              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-                No athletes match.
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AthletePickerDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`Add athlete to slot ${index}`}
+        athletes={athletes}
+        teamById={teamById}
+        selectedIds={selectedIds}
+        recentIds={recentIds}
+        onPick={onPick}
+      />
     </>
   );
 }
 
-function SlotPickerRow({ athlete, team, onPick }: { athlete: Athlete; team: Team | null; onPick: () => void }) {
+// Same search dialog as SlotPicker, but as an inline button for the "Who's
+// up" list view, which has no fixed slots.
+function AddAthleteInline({
+  athletes,
+  teamById,
+  selectedIds,
+  recentIds,
+  onPick,
+}: {
+  athletes: Athlete[];
+  teamById: Map<string, Team>;
+  selectedIds: string[];
+  recentIds: string[];
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={() => setOpen(true)}
+      >
+        <Users className="h-3.5 w-3.5" /> Add athlete
+      </Button>
+      <AthletePickerDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Add athlete"
+        athletes={athletes}
+        teamById={teamById}
+        selectedIds={selectedIds}
+        recentIds={recentIds}
+        onPick={onPick}
+      />
+    </>
+  );
+}
+
+// "Who's up" — the default Live Training view for a shared tablet: a
+// tappable roster instead of several cramped logging forms at once. Tap a
+// name to log full-screen (via the existing focused AthleteTile); the
+// status pill tells the coach who's behind without anyone leaving their rack.
+function AthleteStatusList({
+  athletes,
+  teamById,
+  status,
+  addedAtById,
+  now,
+  behindMs,
+  onSelect,
+  onRemove,
+  allAthletes,
+  selectedIds,
+  recentIds,
+  onAdd,
+}: {
+  athletes: Athlete[];
+  teamById: Map<string, Team>;
+  status: Map<
+    string,
+    {
+      totalSets: number;
+      completedCount: number;
+      finished: boolean;
+      lastCompletedAt: number | null;
+      workout: Workout | null;
+    }
+  >;
+  addedAtById: Record<string, number>;
+  now: number;
+  behindMs: number;
+  onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
+  allAthletes: Athlete[];
+  selectedIds: string[];
+  recentIds: string[];
+  onAdd: (id: string) => void;
+}) {
+  // Not-finished athletes first (by name); finished athletes settle to the
+  // bottom. Stable — doesn't reshuffle every tick the way a live "behind"
+  // rank would.
+  const sorted = useMemo(() => {
+    return [...athletes].sort((a, b) => {
+      const fa = status.get(a.id)?.finished ? 1 : 0;
+      const fb = status.get(b.id)?.finished ? 1 : 0;
+      if (fa !== fb) return fa - fb;
+      return athleteDisplayName(a).localeCompare(athleteDisplayName(b));
+    });
+  }, [athletes, status]);
+
+  return (
+    <div className="flex-1 overflow-y-auto overscroll-contain pb-6 pr-1">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {athletes.length} athlete{athletes.length === 1 ? "" : "s"}
+        </span>
+        <AddAthleteInline
+          athletes={allAthletes}
+          teamById={teamById}
+          selectedIds={selectedIds}
+          recentIds={recentIds}
+          onPick={onAdd}
+        />
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-muted-foreground">
+          <Users className="h-6 w-6 opacity-60" />
+          <p className="text-sm font-medium">No athletes yet</p>
+          <p className="text-xs">Add athletes to start today's session.</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {sorted.map((a) => {
+            const team = teamById.get(a.team_id ?? "") ?? null;
+            const s = status.get(a.id);
+            const totalSets = s?.totalSets ?? 0;
+            const completedCount = s?.completedCount ?? 0;
+            const finished = s?.finished ?? false;
+            const anchor = s?.lastCompletedAt ?? addedAtById[a.id] ?? now;
+            const behind = !finished && !!s?.workout && totalSets > 0 && now - anchor > behindMs;
+            const pct = totalSets > 0 ? Math.round((completedCount / totalSets) * 100) : 0;
+
+            const statusLabel = !s?.workout
+              ? "No workout"
+              : finished
+                ? "Done"
+                : behind
+                  ? "Behind"
+                  : completedCount > 0
+                    ? "In progress"
+                    : "Not started";
+            const statusClass = finished
+              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              : behind
+                ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                : completedCount > 0
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-muted-foreground";
+
+            return (
+              <li
+                key={a.id}
+                className={cn(
+                  "flex items-center gap-1 rounded-xl border bg-card/60 p-1 shadow-sm",
+                  behind ? "border-red-500/50" : "border-border/60",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(a.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-muted/40"
+                >
+                  <Avatar name={athleteDisplayName(a)} color={team?.color ?? null} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="truncate text-base font-bold">{athleteDisplayName(a)}</span>
+                      <span
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                          statusClass,
+                        )}
+                      >
+                        {behind && <AlertTriangle className="h-3 w-3" />}
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 truncate text-xs text-muted-foreground">
+                      {team && <span className="truncate">{team.name}</span>}
+                      {s?.workout && <span className="truncate">· {s.workout.name}</span>}
+                      {totalSets > 0 && (
+                        <span className="shrink-0 tabular-nums">
+                          · {completedCount}/{totalSets} sets
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {totalSets > 0 && (
+                    <div className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted sm:block">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          finished ? "bg-emerald-500" : behind ? "bg-red-500" : "bg-primary",
+                        )}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => onRemove(a.id)}
+                  title="Remove from session"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SlotPickerRow({
+  athlete,
+  team,
+  onPick,
+}: {
+  athlete: Athlete;
+  team: Team | null;
+  onPick: () => void;
+}) {
   return (
     <button
       onClick={onPick}
@@ -1045,7 +1475,6 @@ function SlotPickerRow({ athlete, team, onPick }: { athlete: Athlete; team: Team
     </button>
   );
 }
-
 
 // ============================================================================
 // Toolbar toggle
@@ -1075,7 +1504,6 @@ function ToolbarToggle({
     </button>
   );
 }
-
 
 // ============================================================================
 // Avatar
@@ -1188,39 +1616,10 @@ function AthleteTile(props: {
   const now = useNow(1000);
 
   // Prescribed sets in order
-  const prescribed = useMemo(() => {
-    if (!workout)
-      return [] as Array<{
-        exercise: WorkoutExercise;
-        setPosition: number;
-        setTotal: number;
-        setRow: WorkoutSet | null;
-      }>;
-    const exs = workoutExercises
-      .filter((e) => e.workout_id === workout.id)
-      .sort((a, b) => a.position - b.position);
-    const list: Array<{
-      exercise: WorkoutExercise;
-      setPosition: number;
-      setTotal: number;
-      setRow: WorkoutSet | null;
-    }> = [];
-    for (const ex of exs) {
-      const rows = workoutSets
-        .filter((s) => s.workout_exercise_id === ex.id)
-        .sort((a, b) => a.position - b.position);
-      // Each workout_sets row is a *scheme* (e.g. "3 sets of 4") — expand by `sets` count.
-      const expanded: WorkoutSet[] = [];
-      for (const r of rows) {
-        const count = Math.max(1, Number(r.sets ?? 1) || 1);
-        for (let k = 0; k < count; k++) expanded.push(r);
-      }
-      const total = expanded.length > 0 ? expanded.length : (ex.sets ?? 1);
-      for (let i = 0; i < total; i++)
-        list.push({ exercise: ex, setPosition: i + 1, setTotal: total, setRow: expanded[i] ?? null });
-    }
-    return list;
-  }, [workout, workoutExercises, workoutSets]);
+  const prescribed = useMemo(
+    () => buildPrescribedSets(workout, workoutExercises, workoutSets),
+    [workout, workoutExercises, workoutSets],
+  );
 
   const doneKey = (exId: string, pos: number) => `${exId}:${pos}`;
   const doneMap = useMemo(() => {
@@ -1248,15 +1647,18 @@ function AthleteTile(props: {
   // everything else collapses to a one-line "done / up next" summary. A
   // coach who wants the whole printed sheet can still expand it.
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  
+
   const cursor =
     cursorOverride ?? (autoCursor >= 0 ? autoCursor : Math.max(0, prescribed.length - 1));
   const current = prescribed[cursor];
 
-  const currentOverride = current ? overrides.get(current.exercise.id) ?? null : null;
-  const currentExerciseName = currentOverride?.substitute_exercise_name ?? current?.exercise.exercise_name ?? "";
+  const currentOverride = current ? (overrides.get(current.exercise.id) ?? null) : null;
+  const currentExerciseName =
+    currentOverride?.substitute_exercise_name ?? current?.exercise.exercise_name ?? "";
   const currentMeasurement: Measurement = current
-    ? (measurementByExId.get(currentOverride?.substitute_exercise_id ?? current.exercise.exercise_id ?? "") ?? "load")
+    ? (measurementByExId.get(
+        currentOverride?.substitute_exercise_id ?? current.exercise.exercise_id ?? "",
+      ) ?? "load")
     : "load";
 
   const prescribedLoad = current?.setRow?.load ?? current?.exercise.load ?? null;
@@ -1274,23 +1676,30 @@ function AthleteTile(props: {
 
   const suggested = useMemo(() => {
     if (!current) return null;
-    const referenceExerciseId = current.setRow?.percent_of_exercise_id ?? current.exercise.percent_of_exercise_id;
+    const referenceExerciseId =
+      current.setRow?.percent_of_exercise_id ?? current.exercise.percent_of_exercise_id;
     const s = suggestLoad({
       athleteId: athlete.id,
       exercise: current.exercise,
       setRow: current.setRow,
       repMaxes: frozenRepMaxes,
       referenceExerciseName: referenceExerciseId
-        ? exerciseLib.find((e) => e.id === referenceExerciseId)?.name ?? null
+        ? (exerciseLib.find((e) => e.id === referenceExerciseId)?.name ?? null)
         : null,
       formula,
     });
     return s && s.basis !== "explicit" ? s : null;
   }, [current, athlete.id, frozenRepMaxes, exerciseLib, formula]);
 
-
   const [form, setForm] = useState({
-    load: "", reps: "", avg_velocity: "", time: "", distance: "", timeUnit: "s" as "s" | "mph", rpe: "", notes: "",
+    load: "",
+    reps: "",
+    avg_velocity: "",
+    time: "",
+    distance: "",
+    timeUnit: "s" as "s" | "mph",
+    rpe: "",
+    notes: "",
   });
   const formKey = `${current?.exercise.id}:${current?.setPosition}`;
   const exerciseDistanceIn = useMemo(
@@ -1326,7 +1735,6 @@ function AthleteTile(props: {
     if (!autoLoad) return;
     setForm((prev) => (prev.load === "" ? { ...prev, load: autoLoad } : prev));
   }, [autoLoad]);
-
 
   const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -1405,9 +1813,13 @@ function AthleteTile(props: {
         exercise: p.exercise,
         setRow: p.setRow,
         repMaxes: frozenRepMaxes,
-        referenceExerciseName: (p.setRow?.percent_of_exercise_id ?? p.exercise.percent_of_exercise_id)
-          ? exerciseLib.find((e) => e.id === (p.setRow?.percent_of_exercise_id ?? p.exercise.percent_of_exercise_id))?.name ?? null
-          : null,
+        referenceExerciseName:
+          (p.setRow?.percent_of_exercise_id ?? p.exercise.percent_of_exercise_id)
+            ? (exerciseLib.find(
+                (e) =>
+                  e.id === (p.setRow?.percent_of_exercise_id ?? p.exercise.percent_of_exercise_id),
+              )?.name ?? null)
+            : null,
         formula,
       });
       out[gi]!.rows.push({
@@ -1434,11 +1846,15 @@ function AthleteTile(props: {
     if (currentMeasurement === "seconds") {
       const raw = numOrNull(form.time);
       if (raw != null) {
-        timeSec = form.timeUnit === "mph" && exerciseDistanceIn ? mphToSeconds(raw, exerciseDistanceIn) : raw;
+        timeSec =
+          form.timeUnit === "mph" && exerciseDistanceIn
+            ? mphToSeconds(raw, exerciseDistanceIn)
+            : raw;
       }
     } else if (currentMeasurement === "mph") {
       // Store canonically: distance (in) + elapsed seconds derived from the mph entry.
-      const yd = numOrNull(form.distance) ?? (exerciseDistanceIn != null ? exerciseDistanceIn / 36 : null);
+      const yd =
+        numOrNull(form.distance) ?? (exerciseDistanceIn != null ? exerciseDistanceIn / 36 : null);
       distIn = yd != null ? yd * 36 : null;
       const mph = numOrNull(form.time);
       if (mph != null && distIn) timeSec = mphToSeconds(mph, distIn);
@@ -1451,7 +1867,8 @@ function AthleteTile(props: {
     // an equally-valid PR signal by the flash/confetti/FinishScreen logic).
     const loggedLoad = currentMeasurement === "load" ? numOrNull(form.load) : null;
     const priorBest = personalBestFor(repMaxes, athlete.id, current.exercise);
-    const isPr = status === "completed" && loggedLoad != null && !!priorBest && loggedLoad > priorBest.load;
+    const isPr =
+      status === "completed" && loggedLoad != null && !!priorBest && loggedLoad > priorBest.load;
     onLog({
       workout_exercise_id: current.exercise.id,
       set_position: current.setPosition,
@@ -1515,7 +1932,8 @@ function AthleteTile(props: {
             )}
             {priorSame && (
               <span>
-                Last: {priorSame.load ?? "—"}{priorSame.load != null ? " lb" : ""}
+                Last: {priorSame.load ?? "—"}
+                {priorSame.load != null ? " lb" : ""}
                 {priorSame.reps != null ? ` × ${priorSame.reps}` : ""}
               </span>
             )}
@@ -1531,8 +1949,17 @@ function AthleteTile(props: {
         <div className="mt-2 grid grid-cols-2 gap-2">
           {currentMeasurement === "load" && (
             <>
-              <NumInput label="Weight" value={form.load} onChange={(v) => setForm({ ...form, load: v })} suffix="lb" />
-              <NumInput label="Reps" value={form.reps} onChange={(v) => setForm({ ...form, reps: v })} />
+              <NumInput
+                label="Weight"
+                value={form.load}
+                onChange={(v) => setForm({ ...form, load: v })}
+                suffix="lb"
+              />
+              <NumInput
+                label="Reps"
+                value={form.reps}
+                onChange={(v) => setForm({ ...form, reps: v })}
+              />
             </>
           )}
           {currentMeasurement === "seconds" && (
@@ -1545,14 +1972,24 @@ function AthleteTile(props: {
                   <div className="inline-flex overflow-hidden rounded border border-border/60 text-[9px] font-semibold uppercase">
                     <button
                       type="button"
-                      className={cn("px-2 py-1", form.timeUnit === "s" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground")}
+                      className={cn(
+                        "px-2 py-1",
+                        form.timeUnit === "s"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/30 text-muted-foreground",
+                      )}
                       onClick={() => setForm({ ...form, timeUnit: "s" })}
                     >
                       s
                     </button>
                     <button
                       type="button"
-                      className={cn("px-2 py-1", form.timeUnit === "mph" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground")}
+                      className={cn(
+                        "px-2 py-1",
+                        form.timeUnit === "mph"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/30 text-muted-foreground",
+                      )}
                       onClick={() => setForm({ ...form, timeUnit: "mph" })}
                     >
                       mph
@@ -1570,18 +2007,37 @@ function AthleteTile(props: {
           )}
           {currentMeasurement === "inches" && (
             <div className="col-span-2">
-              <NumInput label="Distance" value={form.distance} onChange={(v) => setForm({ ...form, distance: v })} suffix="in" />
+              <NumInput
+                label="Distance"
+                value={form.distance}
+                onChange={(v) => setForm({ ...form, distance: v })}
+                suffix="in"
+              />
             </div>
           )}
           {currentMeasurement === "mph" && (
             <>
-              <NumInput label="Speed" value={form.time} onChange={(v) => setForm({ ...form, time: v })} suffix="mph" />
-              <NumInput label="Dist" value={form.distance} onChange={(v) => setForm({ ...form, distance: v })} suffix="yd" />
+              <NumInput
+                label="Speed"
+                value={form.time}
+                onChange={(v) => setForm({ ...form, time: v })}
+                suffix="mph"
+              />
+              <NumInput
+                label="Dist"
+                value={form.distance}
+                onChange={(v) => setForm({ ...form, distance: v })}
+                suffix="yd"
+              />
             </>
           )}
           {currentMeasurement === "reps" && (
             <div className="col-span-2">
-              <NumInput label="Reps" value={form.reps} onChange={(v) => setForm({ ...form, reps: v })} />
+              <NumInput
+                label="Reps"
+                value={form.reps}
+                onChange={(v) => setForm({ ...form, reps: v })}
+              />
             </div>
           )}
         </div>
@@ -1596,22 +2052,36 @@ function AthleteTile(props: {
         {showExtra && (
           <div className="mt-1.5 grid grid-cols-2 gap-2">
             {currentMeasurement === "load" && (
-              <NumInput label="Vel" value={form.avg_velocity} onChange={(v) => setForm({ ...form, avg_velocity: v })} suffix="m/s" />
+              <NumInput
+                label="Vel"
+                value={form.avg_velocity}
+                onChange={(v) => setForm({ ...form, avg_velocity: v })}
+                suffix="m/s"
+              />
             )}
             {currentMeasurement !== "reps" && (
-              <NumInput label="Reps" value={form.reps} onChange={(v) => setForm({ ...form, reps: v })} />
+              <NumInput
+                label="Reps"
+                value={form.reps}
+                onChange={(v) => setForm({ ...form, reps: v })}
+              />
             )}
             <NumInput label="RPE" value={form.rpe} onChange={(v) => setForm({ ...form, rpe: v })} />
           </div>
         )}
-        {currentMeasurement === "seconds" && form.timeUnit === "mph" && exerciseDistanceIn != null && form.time && (
-          <div className="mt-1 text-[10px] text-muted-foreground">
-            ≈ {mphToSeconds(Number(form.time), exerciseDistanceIn).toFixed(2)}s over {(exerciseDistanceIn / 36).toFixed(0)}y
-          </div>
-        )}
+        {currentMeasurement === "seconds" &&
+          form.timeUnit === "mph" &&
+          exerciseDistanceIn != null &&
+          form.time && (
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              ≈ {mphToSeconds(Number(form.time), exerciseDistanceIn).toFixed(2)}s over{" "}
+              {(exerciseDistanceIn / 36).toFixed(0)}y
+            </div>
+          )}
         {currentMeasurement === "mph" && form.time && Number(form.distance) > 0 && (
           <div className="mt-1 text-[10px] text-muted-foreground">
-            ≈ {mphToSeconds(Number(form.time), Number(form.distance) * 36).toFixed(2)}s over {Number(form.distance)}y
+            ≈ {mphToSeconds(Number(form.time), Number(form.distance) * 36).toFixed(2)}s over{" "}
+            {Number(form.distance)}y
           </div>
         )}
 
@@ -1641,8 +2111,6 @@ function AthleteTile(props: {
       </div>
     );
   })();
-
-
 
   return (
     <Card
@@ -1681,7 +2149,6 @@ function AthleteTile(props: {
           )}
         >
           {isPr ? "PR!" : isFlag ? "Review" : "New set"}
-
         </div>
       )}
       {isPr && <ConfettiBurst />}
@@ -1739,7 +2206,8 @@ function AthleteTile(props: {
               </>
             ) : (
               <>
-                <Maximize2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Expand</span>
+                <Maximize2 className="h-3.5 w-3.5" />{" "}
+                <span className="hidden sm:inline">Expand</span>
               </>
             )}
           </span>
@@ -1851,7 +2319,11 @@ function AthleteTile(props: {
                 <button
                   key={g.ex.id}
                   type="button"
-                  onClick={() => setCursorOverride(g.rows.find((r) => r.log?.status !== "completed")?.idx ?? g.rows[0].idx)}
+                  onClick={() =>
+                    setCursorOverride(
+                      g.rows.find((r) => r.log?.status !== "completed")?.idx ?? g.rows[0].idx,
+                    )
+                  }
                   className="mt-1.5 flex w-full items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-1.5 py-1.5 text-left hover:bg-muted/40"
                 >
                   <span className={badgeClass}>{g.label}</span>
@@ -1867,7 +2339,10 @@ function AthleteTile(props: {
             }
 
             return (
-              <div key={g.ex.id} className="mt-1.5 overflow-hidden rounded-md border border-border/50">
+              <div
+                key={g.ex.id}
+                className="mt-1.5 overflow-hidden rounded-md border border-border/50"
+              >
                 <div
                   className={cn(
                     "flex items-center gap-1.5 px-1.5 py-1",
@@ -1899,7 +2374,8 @@ function AthleteTile(props: {
                     {g.rows.map((r) => {
                       const done = r.log?.status === "completed";
                       const skipped = r.log?.status === "skipped";
-                      const isCurrent = current?.exercise.id === g.ex.id && current.setPosition === r.pos;
+                      const isCurrent =
+                        current?.exercise.id === g.ex.id && current.setPosition === r.pos;
                       return (
                         <tr
                           key={r.pos}
@@ -1912,7 +2388,9 @@ function AthleteTile(props: {
                           )}
                         >
                           <td className="px-1 py-1">{r.pos}</td>
-                          <td className="px-1 py-1">{done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}</td>
+                          <td className="px-1 py-1">
+                            {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
+                          </td>
                           <td className="px-1 py-1 font-semibold">
                             {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
                           </td>
@@ -1944,7 +2422,6 @@ function AthleteTile(props: {
           })}
         </div>
       )}
-
     </Card>
   );
 }
@@ -1993,7 +2470,6 @@ function estimateRemaining(prescribed: Array<{ exercise: WorkoutExercise }>, don
   return Math.max(1, Math.round(totalSec / 60));
 }
 
-
 // ============================================================================
 // Tile helpers
 // ============================================================================
@@ -2024,7 +2500,6 @@ function NumInput({
       />
     </label>
   );
-
 }
 
 // Digits + at most one decimal point, no sign — a mid-set weight/rep/time
@@ -2128,10 +2603,7 @@ function TileActions({
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={!currentExerciseId}
-            onClick={() => setSwapOpen(true)}
-          >
+          <DropdownMenuItem disabled={!currentExerciseId} onClick={() => setSwapOpen(true)}>
             <Replace className="mr-2 h-3.5 w-3.5" /> Swap exercise…
           </DropdownMenuItem>
           {hasOverride && (
@@ -2160,8 +2632,8 @@ function TileActions({
               Mark {athleteName} {confirmReason === "injured" ? "injured" : "excused"}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This logs today's attendance as {confirmReason} and removes {athleteName} from the grid. You can
-              re-add them from an empty slot afterward if this was a mistake.
+              This logs today's attendance as {confirmReason} and removes {athleteName} from the
+              grid. You can re-add them from an empty slot afterward if this was a mistake.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2183,7 +2655,8 @@ function TileActions({
           <DialogHeader>
             <DialogTitle>Swap exercise</DialogTitle>
             <DialogDescription>
-              Replace <span className="font-medium text-foreground">{currentExerciseLabel}</span> for this athlete in this session only.
+              Replace <span className="font-medium text-foreground">{currentExerciseLabel}</span>{" "}
+              for this athlete in this session only.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -2203,7 +2676,11 @@ function TileActions({
             <div>
               <Label className="text-xs">Substitute from library</Label>
               <Command className="mt-1 rounded-md border">
-                <CommandInput placeholder="Search exercises…" value={swapSearch} onValueChange={setSwapSearch} />
+                <CommandInput
+                  placeholder="Search exercises…"
+                  value={swapSearch}
+                  onValueChange={setSwapSearch}
+                />
                 <CommandList className="max-h-48">
                   <CommandEmpty>No matches.</CommandEmpty>
                   <CommandGroup>
@@ -2249,7 +2726,9 @@ function TileActions({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setSwapOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setSwapOpen(false)}>
+              Cancel
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
