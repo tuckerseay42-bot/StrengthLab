@@ -577,8 +577,11 @@ async function refreshRepMaxRollup() {
   lastRepMaxRollup = now;
   try {
     await supabase.rpc("rollup_rep_maxes" as never);
-  } catch {
-    /* non-fatal: fall back to whatever is already stored */
+  } catch (e) {
+    // Non-fatal — prescribed loads fall back to whatever rep_maxes already
+    // has — but silent failure here is exactly how "weights stopped
+    // pulling" goes unnoticed for weeks, so at least get it into the console.
+    console.error("rollup_rep_maxes failed; prescribed loads may be stale", e);
   }
 }
 
