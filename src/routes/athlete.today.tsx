@@ -658,6 +658,12 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
   const [vel, setVel] = useState<string>(existing?.avg_velocity?.toString() ?? "");
   const [rpe, setRpe] = useState<string>(existing?.rpe?.toString() ?? "");
   const [showMore, setShowMore] = useState(targetVMin != null || !!existing?.avg_velocity || !!existing?.rpe);
+  // A fresh, prescribed set shows as a plain readout the athlete can confirm
+  // in one tap; "Edit" reveals the input boxes only when a number actually
+  // needs to change. Re-logging an already-completed set always starts in
+  // edit mode — that's a correction, not a confirmation.
+  const hasPrefill = !existing && load !== "" && reps !== "";
+  const [editing, setEditing] = useState(!hasPrefill);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -688,32 +694,53 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
   return (
     <div className={cn("space-y-3 rounded-lg border bg-muted/30 p-3", done && "border-emerald-500/40 bg-emerald-500/5")}>
       <div className="text-sm font-semibold text-muted-foreground">Set {position}</div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-[11px] text-muted-foreground">Weight (lb)</Label>
-          <Input
-            className="h-16 text-center text-3xl font-bold tabular-nums"
-            inputMode="decimal" placeholder="0" value={load} onChange={(e) => setLoad(e.target.value)}
-          />
+      {!editing && hasPrefill ? (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
+          <span className="text-3xl font-bold tabular-nums">
+            {load} lb × {reps}
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Edit
+          </button>
         </div>
-        <div>
-          <Label className="text-[11px] text-muted-foreground">Reps</Label>
-          <Input
-            className="h-16 text-center text-3xl font-bold tabular-nums"
-            inputMode="numeric" placeholder="0" value={reps} onChange={(e) => setReps(e.target.value)}
-          />
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Weight (lb)</Label>
+            <Input
+              className="h-16 text-center text-3xl font-bold tabular-nums"
+              inputMode="decimal" placeholder="0" value={load} onChange={(e) => setLoad(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Reps</Label>
+            <Input
+              className="h-16 text-center text-3xl font-bold tabular-nums"
+              inputMode="numeric" placeholder="0" value={reps} onChange={(e) => setReps(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      <button
-        type="button"
-        onClick={() => setShowMore((v) => !v)}
-        className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
-      >
-        {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        Velocity &amp; RPE
-      </button>
-      {showMore && (
+      {/* Velocity/RPE entry is only useful once you're already editing the
+          numbers — showing it next to a one-tap confirm readout would just
+          add a second thing to tap through for no reason. The target
+          velocity itself (if this set has one) is still in the header above. */}
+      {editing && (
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
+        >
+          {showMore ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          Velocity &amp; RPE
+        </button>
+      )}
+      {editing && showMore && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-[11px] text-muted-foreground">Velocity (m/s)</Label>
