@@ -1,16 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, KeyRound, Dumbbell, ClipboardCheck, Users } from "lucide-react";
+import { Copy, KeyRound, Dumbbell, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 import { publicOrigin } from "@/lib/share-url";
-import { teamsQO } from "@/lib/queries";
 
 export const Route = createFileRoute("/athlete-qr")({
   head: () => ({
@@ -25,13 +22,6 @@ export const Route = createFileRoute("/athlete-qr")({
 function AthleteQrPage() {
   const origin = publicOrigin();
   const [size, setSize] = useState(280);
-  const { data: teams } = useQuery(teamsQO);
-  const [teamId, setTeamId] = useState<string>("");
-  const activeTeam = useMemo(
-    () => (teams ?? []).find((t) => t.id === teamId) ?? (teams ?? [])[0],
-    [teams, teamId],
-  );
-  const rosterUrl = activeTeam ? `${origin}/checkin/${activeTeam.qr_token}` : "";
 
   const fullUrl = useMemo(() => `${origin}/training-view/check-in`, [origin]);
   const attendanceUrl = useMemo(() => `${origin}/training-view/attendance`, [origin]);
@@ -66,58 +56,8 @@ function AthleteQrPage() {
         />
       </div>
 
-      <Card className="border-primary/40">
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base">No-PIN roster check-in</CardTitle>
-            <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-              <Users className="h-3 w-3" /> No login
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Best for athletes who don't have PINs yet. They scan, pick their name
-            from the team roster, enter bodyweight, and are marked present. The
-            code is unique per team — anyone with the link can see that roster's
-            names, so re-issue it by rotating the team QR if it leaks.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="max-w-xs">
-            <Label className="text-xs">Team</Label>
-            <Select value={activeTeam?.id ?? ""} onValueChange={setTeamId}>
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Select a team" />
-              </SelectTrigger>
-              <SelectContent>
-                {(teams ?? []).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {rosterUrl ? (
-            <>
-              <div className="flex justify-center">
-                <div className="rounded-md bg-white p-4 shadow-sm">
-                  <QRCodeSVG value={rosterUrl} size={size} level="M" includeMargin={false} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Direct link</Label>
-                <div className="flex gap-2">
-                  <Input value={rosterUrl} readOnly className="text-xs" />
-                  <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(rosterUrl); toast.success("Link copied"); }}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Create a team first to generate a roster check-in code.</p>
-          )}
-        </CardContent>
-      </Card>
-
+      {/* The no-PIN roster check-in QR lives on the Attendance page itself
+          (where the coach already is day-of) — no need to duplicate it here. */}
       <Card>
         <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
