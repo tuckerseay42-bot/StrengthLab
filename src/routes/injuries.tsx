@@ -14,8 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SEVERITY_LABEL, SEVERITY_CLASS } from "@/components/athlete-injury-history";
-import { HeartPulse, CheckCircle2 } from "lucide-react";
+import {
+  SEVERITY_LABEL,
+  SEVERITY_CLASS,
+  LogInjuryDialog,
+} from "@/components/athlete-injury-history";
+import { HeartPulse, CheckCircle2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 
@@ -35,9 +39,17 @@ function InjuriesPage() {
   const { data: injuries = [] } = useQuery(athleteInjuriesQO);
   const { data: teams = [] } = useQuery(teamsQO);
   const [teamFilter, setTeamFilter] = useState("all");
+  const [logOpen, setLogOpen] = useState(false);
 
   const athleteById = useMemo(() => new Map(athletes.map((a) => [a.id, a])), [athletes]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const pickerAthletes = useMemo(
+    () =>
+      athletes
+        .map((a) => ({ id: a.id, name: athleteDisplayName(a) }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [athletes],
+  );
 
   const filtered = useMemo(
     () =>
@@ -76,21 +88,26 @@ function InjuriesPage() {
       <PageHeader
         eyebrow="Roster health"
         title="Injuries"
-        description="Who's currently hurt, and the history behind it — logged from each athlete's profile."
+        description="Who's currently hurt, and the history behind it."
         actions={
-          <Select value={teamFilter} onValueChange={setTeamFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All teams</SelectItem>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All teams</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={() => setLogOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Log injury
+            </Button>
+          </div>
         }
       />
 
@@ -105,7 +122,7 @@ function InjuriesPage() {
             <EmptyState
               icon={HeartPulse}
               title="Nobody's currently flagged"
-              description="Log an injury from an athlete's profile page and it'll show up here."
+              description="Log an injury above and it'll show up here."
             />
           ) : (
             <ul className="divide-y divide-border/60">
@@ -194,6 +211,8 @@ function InjuriesPage() {
           )}
         </CardContent>
       </Card>
+
+      <LogInjuryDialog open={logOpen} onOpenChange={setLogOpen} athletes={pickerAthletes} />
     </div>
   );
 }

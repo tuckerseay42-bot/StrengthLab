@@ -2153,7 +2153,7 @@ function AthleteTile(props: {
           {currentMeasurement === "load" &&
             (selfService && !editingValues && form.load !== "" && form.reps !== "" ? (
               <div className="col-span-2 flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
-                <span className="text-2xl font-bold tabular-nums">
+                <span className="text-4xl font-bold tabular-nums">
                   {form.load} lb × {form.reps}
                 </span>
                 <button
@@ -2171,11 +2171,13 @@ function AthleteTile(props: {
                   value={form.load}
                   onChange={(v) => setForm({ ...form, load: v })}
                   suffix="lb"
+                  size="lg"
                 />
                 <NumInput
                   label="Reps"
                   value={form.reps}
                   onChange={(v) => setForm({ ...form, reps: v })}
+                  size="lg"
                 />
               </>
             ))}
@@ -2219,6 +2221,7 @@ function AthleteTile(props: {
                 value={form.time}
                 onChange={(v) => setForm({ ...form, time: v })}
                 suffix={form.timeUnit}
+                size="lg"
               />
             </div>
           )}
@@ -2229,6 +2232,7 @@ function AthleteTile(props: {
                 value={form.distance}
                 onChange={(v) => setForm({ ...form, distance: v })}
                 suffix="in"
+                size="lg"
               />
             </div>
           )}
@@ -2239,12 +2243,14 @@ function AthleteTile(props: {
                 value={form.time}
                 onChange={(v) => setForm({ ...form, time: v })}
                 suffix="mph"
+                size="lg"
               />
               <NumInput
                 label="Dist"
                 value={form.distance}
                 onChange={(v) => setForm({ ...form, distance: v })}
                 suffix="yd"
+                size="lg"
               />
             </>
           )}
@@ -2252,7 +2258,7 @@ function AthleteTile(props: {
             <div className="col-span-2">
               {selfService && !editingValues && form.reps !== "" ? (
                 <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
-                  <span className="text-2xl font-bold tabular-nums">{form.reps} reps</span>
+                  <span className="text-4xl font-bold tabular-nums">{form.reps} reps</span>
                   <button
                     type="button"
                     onClick={() => setEditingValues(true)}
@@ -2266,6 +2272,7 @@ function AthleteTile(props: {
                   label="Reps"
                   value={form.reps}
                   onChange={(v) => setForm({ ...form, reps: v })}
+                  size="lg"
                 />
               )}
             </div>
@@ -2748,15 +2755,25 @@ function NumInput({
   value,
   onChange,
   suffix,
+  size = "md",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   suffix?: string;
+  // "lg" is for the set actually being logged — readable at a glance from a
+  // few feet off the rack. "md" (default) stays compact for the RPE/
+  // velocity extras, which are a coach's own follow-up, not a mid-lift read.
+  size?: "md" | "lg";
 }) {
   return (
     <label className="relative flex min-w-0 flex-col">
-      <span className="mb-0.5 truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span
+        className={cn(
+          "mb-0.5 truncate font-semibold uppercase tracking-wide text-muted-foreground",
+          size === "lg" ? "text-xs" : "text-[10px]",
+        )}
+      >
         {label}
         {suffix && <span className="ml-1 opacity-70">({suffix})</span>}
       </span>
@@ -2765,7 +2782,10 @@ function NumInput({
         onChange={(e) => onChange(sanitizeNumInput(e.target.value))}
         inputMode="decimal"
         placeholder="—"
-        className="h-12 w-full min-w-0 px-1 text-center font-mono text-lg font-bold tabular-nums"
+        className={cn(
+          "w-full min-w-0 px-1 text-center font-mono font-bold tabular-nums",
+          size === "lg" ? "h-20 text-4xl" : "h-12 text-lg",
+        )}
       />
     </label>
   );
