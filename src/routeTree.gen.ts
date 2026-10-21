@@ -22,6 +22,7 @@ import { Route as DashboardSettingsRouteImport } from './routes/dashboard-settin
 import { Route as ExercisesRouteImport } from './routes/exercises'
 import { Route as GpsRouteImport } from './routes/gps'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as InjuriesRouteImport } from './routes/injuries'
 import { Route as LeaderboardsRouteImport } from './routes/leaderboards'
 import { Route as LiftsRouteImport } from './routes/lifts'
 import { Route as LogReviewRouteImport } from './routes/log-review'
@@ -129,6 +130,11 @@ const GpsRoute = GpsRouteImport.update({
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InjuriesRoute = InjuriesRouteImport.update({
+  id: '/injuries',
+  path: '/injuries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LeaderboardsRoute = LeaderboardsRouteImport.update({
@@ -362,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
+  '/injuries': typeof InjuriesRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
   '/log-review': typeof LogReviewRoute
@@ -420,6 +427,7 @@ export interface FileRoutesByTo {
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
+  '/injuries': typeof InjuriesRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
   '/log-review': typeof LogReviewRoute
@@ -478,6 +486,7 @@ export interface FileRoutesById {
   '/exercises': typeof ExercisesRoute
   '/gps': typeof GpsRoute
   '/import': typeof ImportRoute
+  '/injuries': typeof InjuriesRoute
   '/leaderboards': typeof LeaderboardsRoute
   '/lifts': typeof LiftsRoute
   '/log-review': typeof LogReviewRoute
@@ -538,6 +547,7 @@ export interface FileRouteTypes {
     | '/exercises'
     | '/gps'
     | '/import'
+    | '/injuries'
     | '/leaderboards'
     | '/lifts'
     | '/log-review'
@@ -596,6 +606,7 @@ export interface FileRouteTypes {
     | '/exercises'
     | '/gps'
     | '/import'
+    | '/injuries'
     | '/leaderboards'
     | '/lifts'
     | '/log-review'
@@ -653,6 +664,7 @@ export interface FileRouteTypes {
     | '/exercises'
     | '/gps'
     | '/import'
+    | '/injuries'
     | '/leaderboards'
     | '/lifts'
     | '/log-review'
@@ -712,6 +724,7 @@ export interface RootRouteChildren {
   ExercisesRoute: typeof ExercisesRoute
   GpsRoute: typeof GpsRoute
   ImportRoute: typeof ImportRoute
+  InjuriesRoute: typeof InjuriesRoute
   LeaderboardsRoute: typeof LeaderboardsRoute
   LiftsRoute: typeof LiftsRoute
   LogReviewRoute: typeof LogReviewRoute
@@ -836,6 +849,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/injuries': {
+      id: '/injuries'
+      path: '/injuries'
+      fullPath: '/injuries'
+      preLoaderRoute: typeof InjuriesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/leaderboards': {
@@ -1237,6 +1257,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExercisesRoute: ExercisesRoute,
   GpsRoute: GpsRoute,
   ImportRoute: ImportRoute,
+  InjuriesRoute: InjuriesRoute,
   LeaderboardsRoute: LeaderboardsRoute,
   LiftsRoute: LiftsRoute,
   LogReviewRoute: LogReviewRoute,

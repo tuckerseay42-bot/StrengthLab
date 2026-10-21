@@ -127,6 +127,21 @@ export type BodyweightLog = {
   created_at: string;
 };
 
+export type InjurySeverity = "minor" | "moderate" | "severe";
+
+export type AthleteInjury = {
+  id: string;
+  athlete_id: string;
+  description: string;
+  body_part: string | null;
+  severity: InjurySeverity;
+  started_on: string;
+  resolved_on: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Team = {
   id: string;
   name: string;
@@ -381,6 +396,17 @@ export const attendanceQO = queryOptions({
     );
     if (error) throw error;
     return (data ?? []) as AttendanceRow[];
+  },
+});
+
+export const athleteInjuriesQO = queryOptions({
+  queryKey: ["athlete_injuries"],
+  queryFn: async (): Promise<AthleteInjury[]> => {
+    const { data, error } = await scoped(
+      supabase.from("athlete_injuries" as never).select("*"),
+    ).order("started_on", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as unknown as AthleteInjury[];
   },
 });
 

@@ -26,6 +26,7 @@ import {
   Settings as SettingsIcon,
   User,
   LogIn,
+  HeartPulse,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,6 +56,7 @@ const GROUPS: Group[] = [
     items: [
       { to: "/athletes", label: "Athletes", icon: Users },
       { to: "/teams", label: "Teams", icon: UsersRound },
+      { to: "/injuries", label: "Injuries", icon: HeartPulse },
     ],
   },
   {
