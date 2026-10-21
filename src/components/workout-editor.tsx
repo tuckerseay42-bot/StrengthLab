@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { estimate1RM as estimate1RMShared } from "@/lib/one-rm";
+import { predictRepMax } from "@/lib/one-rm";
 import { getOrg1RMFormula } from "@/hooks/use-1rm-formula";
+import { bestE1rm } from "@/lib/prescription";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   workoutExercisesQO, workoutSetsQO, workoutAssignmentsQO,
-  exercisesQO, athletesQO, teamsQO, liftsQO, repMaxesQO,
+  exercisesQO, athletesQO, teamsQO, repMaxesQO,
   athleteDisplayName,
   type Workout, type WorkoutExercise, type WorkoutSet, type RepMax,
 } from "@/lib/queries";
@@ -68,7 +69,6 @@ export function WorkoutEditor({ workout, programContext }: {
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: assignments = [] } = useQuery(workoutAssignmentsQO);
-  const { data: lifts = [] } = useQuery(liftsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
   const workoutOrgId = workout.organization_id;
   const visibleTeams = useMemo(
@@ -331,16 +331,6 @@ export function WorkoutEditor({ workout, programContext }: {
     onSettled: () => qc.invalidateQueries({ queryKey: ["workout_exercises"] }),
   });
 
-
-  const bestLift = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const l of lifts) {
-      if (!l.load) continue;
-      const k = `${l.athlete_id}::${l.exercise.toLowerCase()}`;
-      map.set(k, Math.max(map.get(k) ?? 0, l.load));
-    }
-    return map;
-  }, [lifts]);
 
   // ---- Derived session summary ------------------------------------------
   const totalReps = useMemo(() => {
@@ -655,7 +645,6 @@ export function WorkoutEditor({ workout, programContext }: {
                 exercises={visibleExercises}
                 athletes={athletes}
                 assigns={assigns}
-                bestLift={bestLift}
                 repMaxes={repMaxes}
               />
             ) : (
@@ -1406,57 +1395,39 @@ function AssignmentsPanel({ workoutId, athletes, teams, assigns, exerciseCount }
   );
 }
 
-function estimate1RM(load: number, reps: number) {
-  return estimate1RMShared(load, reps, getOrg1RMFormula()) ?? load;
-}
-
-function lookup1RM(athleteId: string, exName: string, repMaxes: RepMax[], bestLift: Map<string, number>): number | null {
-  const key = exName.toLowerCase();
-  const own = repMaxes.filter((r) => r.athlete_id === athleteId && r.exercise_name.toLowerCase() === key);
-  const rm1 = own.find((r) => r.reps === 1);
-  if (rm1) return Number(rm1.load);
-  if (own.length) return Math.max(...own.map((r) => estimate1RM(Number(r.load), r.reps)));
-  return bestLift.get(`${athleteId}::${key}`) ?? null;
-}
-
-function lookupRM(athleteId: string, exName: string, reps: number, repMaxes: RepMax[]): number | null {
-  const key = exName.toLowerCase();
-  const own = repMaxes.filter((r) => r.athlete_id === athleteId && r.exercise_name.toLowerCase() === key);
-  if (!own.length) return null;
-  const exact = own.find((r) => r.reps === reps);
-  if (exact) return Number(exact.load);
-  return Number(own.slice().sort((a, b) => Math.abs(a.reps - reps) - Math.abs(b.reps - reps))[0].load);
-}
-
 type LoadResolution = { load: number | null; reason?: string };
 
-// Same calculation as before, just reporting *why* it came back blank —
-// "no max on record" and "pick a reference exercise" used to both render
-// as an identical, unexplained "—" in the preview table.
-function resolveLoad(athleteId: string, ex: WorkoutExercise, s: WorkoutSet, exercises: { id: string; name: string }[], repMaxes: RepMax[], bestLift: Map<string, number>): LoadResolution {
+// Routes through the same bestE1rm/predictRepMax used by Rack Console and
+// Athlete Today, so the preview can't show a different weight than what
+// the athlete actually gets prescribed at training time. Only the "why is
+// this blank" reasons are specific to this preview.
+function resolveLoad(athleteId: string, ex: WorkoutExercise, s: WorkoutSet, exercises: { id: string; name: string }[], repMaxes: RepMax[]): LoadResolution {
   if (s.load != null) return { load: Number(s.load) };
-  const refName = s.percent_of_exercise_id ? exercises.find((e) => e.id === s.percent_of_exercise_id)?.name ?? "" : ex.exercise_name;
+  const refExId = s.percent_of_exercise_id ?? ex.exercise_id ?? null;
+  const refName = s.percent_of_exercise_id
+    ? exercises.find((e) => e.id === s.percent_of_exercise_id)?.name ?? ""
+    : ex.exercise_name;
   if (!refName) return { load: null, reason: "Pick a reference exercise for this %1RM/rep-max set" };
+  const formula = getOrg1RMFormula();
+  const best = bestE1rm(repMaxes, athleteId, refExId, refName, formula);
   if (s.rm_reps) {
-    const base = lookupRM(athleteId, refName, s.rm_reps, repMaxes);
-    if (base == null) return { load: null, reason: `No ${s.rm_reps}RM on record for ${refName}` };
-    return { load: base * ((s.percent ?? 100) / 100) };
+    if (!best) return { load: null, reason: `No ${s.rm_reps}RM on record for ${refName}` };
+    const predicted = predictRepMax(best.e1rm, s.rm_reps, formula);
+    return { load: predicted * ((s.percent ?? 100) / 100) };
   }
   if (s.percent != null) {
-    const oneRm = lookup1RM(athleteId, refName, repMaxes, bestLift);
-    if (oneRm == null) return { load: null, reason: `No 1RM on record for ${refName}` };
-    return { load: oneRm * (s.percent / 100) };
+    if (!best) return { load: null, reason: `No 1RM on record for ${refName}` };
+    return { load: best.e1rm * (s.percent / 100) };
   }
   return { load: null, reason: "Set a load, %1RM, or rep-max for this scheme" };
 }
 
-function PrescriptionPreview({ rows, setsByExercise, exercises, athletes, assigns, bestLift, repMaxes }: {
+function PrescriptionPreview({ rows, setsByExercise, exercises, athletes, assigns, repMaxes }: {
   rows: WorkoutExercise[];
   setsByExercise: Map<string, WorkoutSet[]>;
   exercises: { id: string; name: string }[];
   athletes: { id: string; name: string; first_name: string | null; last_name: string | null; preferred_name: string | null; team_id: string | null }[];
   assigns: { athlete_id: string | null; team_id: string | null }[];
-  bestLift: Map<string, number>;
   repMaxes: RepMax[];
 }) {
   const targetIds = new Set<string>();
@@ -1499,7 +1470,7 @@ function PrescriptionPreview({ rows, setsByExercise, exercises, athletes, assign
             <tr key={ath.id} className="hover:bg-muted/40">
               <td className="px-2.5 py-1.5 font-medium">{athleteDisplayName(ath)}</td>
               {cols.map(({ row, set }) => {
-                const resolved = resolveLoad(ath.id, row, set, exercises, repMaxes, bestLift);
+                const resolved = resolveLoad(ath.id, row, set, exercises, repMaxes);
                 const rounded = resolved.load ? Math.round(resolved.load / 5) * 5 : null;
                 return (
                   <td key={set.id} className="mono-number px-2.5 py-1.5">
