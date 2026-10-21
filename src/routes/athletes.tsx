@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, Download, Pencil, Trash2, ExternalLink, Users, Mail, Send, RotateCcw, CheckSquare, Filter } from "lucide-react";
+import { Plus, Download, Pencil, Trash2, ExternalLink, Users, Mail, Send, RotateCcw, CheckSquare, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useServerFn } from "@tanstack/react-start";
 import { sendPinSetupEmails } from "@/lib/pin-invite.functions";
@@ -112,6 +112,11 @@ function AthletesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Athlete | null>(null);
   const [form, setForm] = useState<Form>(emptyForm);
+  // Adding someone new only needs a name and a team to start; everything
+  // else (grade, emails, sports, tags, notes...) is real but rarely needed
+  // in the moment, so it starts tucked away. Editing an existing athlete who
+  // already has some of that filled in opens straight to all of it.
+  const [moreOpen, setMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({
@@ -338,10 +343,12 @@ function AthletesPage() {
   const openNew = () => {
     setEditing(null);
     setForm({ ...emptyForm, team_id: activeTeamId ?? teams[0]?.id ?? "" });
+    setMoreOpen(false);
     setOpen(true);
   };
   const openEdit = (a: Athlete) => {
     setEditing(a);
+    setMoreOpen(true);
     setForm({
       first_name: a.first_name ?? a.name.split(" ")[0] ?? "",
       last_name: a.last_name ?? a.name.split(" ").slice(1).join(" ") ?? "",
@@ -682,115 +689,128 @@ function AthletesPage() {
               </div>
               <div />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="injured">Injured</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Grade</Label>
-                <Select
-                  value={form.grade}
-                  onValueChange={(v) => {
-                    const gy = gradeToGradYear(Number(v));
-                    setForm({ ...form, grade: v, graduation_year: gy ? String(gy) : form.graduation_year });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>{GRADES.map((g) => <SelectItem key={g} value={String(g)}>Grade {g}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Grad. year</Label>
-                <Input
-                  inputMode="numeric"
-                  value={form.graduation_year}
-                  onChange={(e) => {
-                    const yr = e.target.value;
-                    const g = gradYearToGrade(Number(yr));
-                    setForm({ ...form, graduation_year: yr, grade: g ? String(g) : form.grade });
-                  }}
-                  placeholder={`e.g. ${gradeToGradYear(9) ?? 2030}`}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {(["fall", "winter", "spring"] as const).map((season) => {
-                const key = `sport_${season}` as const;
-                return (
-                  <div key={season}>
-                    <Label className="capitalize">{season} sport</Label>
-                    <Select value={form[key]} onValueChange={(v) => setForm({ ...form, [key]: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              {moreOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {moreOpen ? "Hide more details" : "More details (grade, sports, contact, notes…)"}
+            </button>
+
+            {moreOpen && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Status</Label>
+                    <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">—</SelectItem>
-                        {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="injured">Injured</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                );
-              })}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Date of birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} /></div>
-              <div>
-                <Label>Gender</Label>
-                <Select value={form.gender || "__none"} onValueChange={(v) => setForm({ ...form, gender: v === "__none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">—</SelectItem>
-                    {GENDERS.map((g) => <SelectItem key={g} value={g}>{GENDER_LABELS[g]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                  <div />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Grade</Label>
+                    <Select
+                      value={form.grade}
+                      onValueChange={(v) => {
+                        const gy = gradeToGradYear(Number(v));
+                        setForm({ ...form, grade: v, graduation_year: gy ? String(gy) : form.graduation_year });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>{GRADES.map((g) => <SelectItem key={g} value={String(g)}>Grade {g}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Grad. year</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={form.graduation_year}
+                      onChange={(e) => {
+                        const yr = e.target.value;
+                        const g = gradYearToGrade(Number(yr));
+                        setForm({ ...form, graduation_year: yr, grade: g ? String(g) : form.grade });
+                      }}
+                      placeholder={`e.g. ${gradeToGradYear(9) ?? 2030}`}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {(["fall", "winter", "spring"] as const).map((season) => {
+                    const key = `sport_${season}` as const;
+                    return (
+                      <div key={season}>
+                        <Label className="capitalize">{season} sport</Label>
+                        <Select value={form[key]} onValueChange={(v) => setForm({ ...form, [key]: v === "__none" ? "" : v })}>
+                          <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">—</SelectItem>
+                            {SPORTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Date of birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} /></div>
+                  <div>
+                    <Label>Gender</Label>
+                    <Select value={form.gender || "__none"} onValueChange={(v) => setForm({ ...form, gender: v === "__none" ? "" : v })}>
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">—</SelectItem>
+                        {GENDERS.map((g) => <SelectItem key={g} value={g}>{GENDER_LABELS[g]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-            {canAssignProgram && (
-              <div className="grid grid-cols-2 gap-3 rounded-md border bg-muted/30 p-3">
-                <div>
-                  <Label>Assigned program</Label>
-                  <Select value={form.program_id || "__none"} onValueChange={(v) => setForm({ ...form, program_id: v === "__none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">— none —</SelectItem>
-                      {programs.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                {canAssignProgram && (
+                  <div className="grid grid-cols-2 gap-3 rounded-md border bg-muted/30 p-3">
+                    <div>
+                      <Label>Assigned program</Label>
+                      <Select value={form.program_id || "__none"} onValueChange={(v) => setForm({ ...form, program_id: v === "__none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">— none —</SelectItem>
+                          {programs.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Program start</Label>
+                      <Input type="date" value={form.program_start_date} onChange={(e) => setForm({ ...form, program_start_date: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Height ({prefs.distance})</Label><Input inputMode="decimal" value={form.height_in} onChange={(e) => setForm({ ...form, height_in: e.target.value })} /></div>
+                  <div><Label>Bodyweight ({prefs.weight})</Label><Input inputMode="decimal" value={form.bodyweight} onChange={(e) => setForm({ ...form, bodyweight: e.target.value })} /></div>
                 </div>
-                <div>
-                  <Label>Program start</Label>
-                  <Input type="date" value={form.program_start_date} onChange={(e) => setForm({ ...form, program_start_date: e.target.value })} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Athlete email</Label><Input type="email" value={form.athlete_email} onChange={(e) => setForm({ ...form, athlete_email: e.target.value })} /></div>
+                  <div><Label>Parent email</Label><Input type="email" value={form.parent_email} onChange={(e) => setForm({ ...form, parent_email: e.target.value })} /></div>
                 </div>
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Class period</Label><Input value={form.class_period} onChange={(e) => setForm({ ...form, class_period: e.target.value })} placeholder="e.g. 3rd, A Block" /></div>
+                  <div><Label>Photo URL</Label><Input value={form.photo_url} onChange={(e) => setForm({ ...form, photo_url: e.target.value })} placeholder="https://…" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Training group</Label><Input value={form.training_group} onChange={(e) => setForm({ ...form, training_group: e.target.value })} placeholder="e.g. LAFB | Offense" /></div>
+                  <div><Label>Tags</Label><Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Comma-separated, e.g. Captain, Injury watch" /></div>
+                </div>
+                <div><Label>Notes</Label><Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Injuries, goals, etc." /></div>
+              </>
             )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Height ({prefs.distance})</Label><Input inputMode="decimal" value={form.height_in} onChange={(e) => setForm({ ...form, height_in: e.target.value })} /></div>
-              <div><Label>Bodyweight ({prefs.weight})</Label><Input inputMode="decimal" value={form.bodyweight} onChange={(e) => setForm({ ...form, bodyweight: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Athlete email</Label><Input type="email" value={form.athlete_email} onChange={(e) => setForm({ ...form, athlete_email: e.target.value })} /></div>
-              <div><Label>Parent email</Label><Input type="email" value={form.parent_email} onChange={(e) => setForm({ ...form, parent_email: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Class period</Label><Input value={form.class_period} onChange={(e) => setForm({ ...form, class_period: e.target.value })} placeholder="e.g. 3rd, A Block" /></div>
-              <div><Label>Photo URL</Label><Input value={form.photo_url} onChange={(e) => setForm({ ...form, photo_url: e.target.value })} placeholder="https://…" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Training group</Label><Input value={form.training_group} onChange={(e) => setForm({ ...form, training_group: e.target.value })} placeholder="e.g. LAFB | Offense" /></div>
-              <div><Label>Tags</Label><Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Comma-separated, e.g. Captain, Injury watch" /></div>
-            </div>
-            <div><Label>Notes</Label><Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Injuries, goals, etc." /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
