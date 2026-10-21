@@ -35,6 +35,7 @@ import { AthleteQuickStats } from "@/components/athlete-quick-stats";
 import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
 import { AthleteKpiDashboard } from "@/components/athlete-kpi-dashboard";
 import { AthleteInjuryHistory } from "@/components/athlete-injury-history";
+import { AthleteGoals } from "@/components/athlete-goals";
 
 export const Route = createFileRoute("/athletes/$id")({
   head: () => ({ meta: [{ title: "Athlete — Strength Lab" }] }),
@@ -536,6 +537,10 @@ function AthleteCard() {
             )}
           </CardContent>
         </Card>
+
+        <div className="md:col-span-2">
+          <AthleteGoals athleteId={athlete.id} />
+        </div>
 
         <div className="md:col-span-2">
           <AthleteInjuryHistory athleteId={athlete.id} />

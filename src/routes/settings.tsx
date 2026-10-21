@@ -13,7 +13,7 @@ import { useUnitPrefs } from "@/hooks/use-units";
 import type { DistanceUnit, SpeedUnit, WeightUnit } from "@/lib/units";
 import { toast } from "sonner";
 import { useMyPermissions } from "@/hooks/use-permissions";
-import { ChevronRight, Radar, Rocket } from "lucide-react";
+import { ChevronRight, Radar, Rocket, Bell } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { resetSetupDismissed } from "@/hooks/use-onboarding";
 import { useCurrentOrgId } from "@/hooks/use-current-org";
@@ -24,6 +24,8 @@ import { toUserMessage } from "@/lib/db-errors";
 import { useOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { ONE_RM_FORMULAS, ONE_RM_META, type OneRmFormula } from "@/lib/one-rm";
 import { ClassPeriodRosterImport } from "@/components/class-period-roster-import";
+import { Switch } from "@/components/ui/switch";
+import { useParentNotificationSettings } from "@/hooks/use-parent-notifications";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — Strength Lab" }] }),
@@ -153,6 +155,8 @@ function SettingsPage() {
 
       {canOnboard && <OneRmFormulaCard orgId={orgId} />}
 
+      {canOnboard && <ParentNotificationsCard />}
+
       {canOnboard && (
         <Card>
           <CardHeader className="pb-2">
@@ -223,6 +227,63 @@ function OneRmFormulaCard({ orgId }: { orgId: string | null }) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">{ONE_RM_META[formula].citation}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ParentNotificationsCard() {
+  const { settings, update } = useParentNotificationSettings();
+
+  const row = (
+    key: "notify_parent_injury" | "notify_parent_missed_session" | "notify_parent_pr",
+    checked: boolean,
+    label: string,
+    description: string,
+  ) => (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
+      </div>
+      <Switch
+        checked={checked}
+        disabled={update.isPending}
+        onCheckedChange={(v) => update.mutate({ [key]: v })}
+      />
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Bell className="h-4 w-4" /> Parent notifications
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="divide-y">
+        <p className="pb-2 text-xs text-muted-foreground">
+          Off by default. Each one emails a parent at the email on file for that athlete — turn on
+          only what you actually want going out.
+        </p>
+        {row(
+          "notify_parent_injury",
+          settings.injury,
+          "Injury or excused marked",
+          "When you mark an athlete injured or excused for the day.",
+        )}
+        {row(
+          "notify_parent_missed_session",
+          settings.missed_session,
+          "Missed session",
+          'When an athlete is marked absent, or you flag them as never-logged from "End of practice."',
+        )}
+        {row(
+          "notify_parent_pr",
+          settings.pr,
+          "New PR",
+          "When an athlete logs a set that beats their previous best.",
+        )}
       </CardContent>
     </Card>
   );

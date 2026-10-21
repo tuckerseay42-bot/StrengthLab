@@ -20,6 +20,8 @@ import { toUserMessage } from "@/lib/db-errors";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { z } from "zod";
 import { LiftsPanel } from "@/components/lifts-panel";
+import { MOVEMENT_PATTERNS } from "@/lib/movement-patterns";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/exercises")({
   head: () => ({ meta: [{ title: "Exercises & Lifts — Strength Lab" }] }),
@@ -65,7 +67,7 @@ function ExerciseLibraryPanel() {
   const [category, setCategory] = useState("all");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Exercise | null>(null);
-  const [form, setForm] = useState({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load" as "load" | "seconds" | "inches" | "reps" | "mph", is_metric: false });
+  const [form, setForm] = useState({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load" as "load" | "seconds" | "inches" | "reps" | "mph", is_metric: false, movement_patterns: [] as string[] });
   const [linkFor, setLinkFor] = useState<Exercise | null>(null);
   const [mergeFor, setMergeFor] = useState<Exercise | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null);
@@ -90,14 +92,15 @@ function ExerciseLibraryPanel() {
         image_url: form.image_url.trim() || null,
         measurement_type: form.measurement_type,
         is_metric: form.is_metric,
+        movement_patterns: form.movement_patterns,
         is_custom: true,
       };
       if (editing) {
-        const { error } = await supabase.from("exercises").update(payload).eq("id", editing.id);
+        const { error } = await supabase.from("exercises").update(payload as never).eq("id", editing.id);
         if (error) throw error;
       } else {
         const organization_id = await getScopedOrgId();
-        const { error } = await supabase.from("exercises").insert({ ...payload, organization_id });
+        const { error } = await supabase.from("exercises").insert({ ...payload, organization_id } as never);
         if (error) throw error;
       }
     },
@@ -105,7 +108,7 @@ function ExerciseLibraryPanel() {
       qc.invalidateQueries({ queryKey: ["exercises"] });
       toast.success(editing ? "Exercise updated" : "Exercise added");
       setOpen(false); setEditing(null);
-      setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false });
+      setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false, movement_patterns: [] });
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -125,6 +128,7 @@ function ExerciseLibraryPanel() {
       name: e.name, category: e.category ?? "",
       video_url: e.video_url ?? "", image_url: e.image_url ?? "",
       measurement_type: e.measurement_type ?? "load", is_metric: e.is_metric ?? false,
+      movement_patterns: e.movement_patterns ?? [],
     });
     setOpen(true);
   };
@@ -133,7 +137,7 @@ function ExerciseLibraryPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm text-muted-foreground">{filtered.length} of {exercises.length} exercises · {rels.length} relationships</p>
-        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false }); setOpen(true); }}>
+        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false, movement_patterns: [] }); setOpen(true); }}>
           <Plus className="h-4 w-4" /> Custom exercise
         </Button>
       </div>
@@ -165,7 +169,7 @@ function ExerciseLibraryPanel() {
           }
           action={
             exercises.length === 0 ? (
-              <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false }); setOpen(true); }}>
+              <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", category: "", video_url: "", image_url: "", measurement_type: "load", is_metric: false, movement_patterns: [] }); setOpen(true); }}>
                 <Plus className="h-4 w-4" /> Custom exercise
               </Button>
             ) : undefined
@@ -262,6 +266,39 @@ function ExerciseLibraryPanel() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Video URL</Label><Input value={form.video_url} onChange={(e) => setForm({ ...form, video_url: e.target.value })} placeholder="https://…" /></div>
               <div><Label>Image URL</Label><Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://…" /></div>
+            </div>
+            <div>
+              <Label>Movement patterns</Label>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                Tag what this lift involves — Training View flags it when an athlete has an active injury that rules one of these out.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {MOVEMENT_PATTERNS.map((p) => {
+                  const active = form.movement_patterns.includes(p.value);
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          movement_patterns: active
+                            ? form.movement_patterns.filter((v) => v !== p.value)
+                            : [...form.movement_patterns, p.value],
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        active
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <DialogFooter>

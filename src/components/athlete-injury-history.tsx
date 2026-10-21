@@ -6,6 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { athleteInjuriesQO, type InjurySeverity } from "@/lib/queries";
 import { getScopedOrgId } from "@/lib/scoped-insert";
+import { MOVEMENT_PATTERNS, MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +68,7 @@ const emptyForm = {
   severity: "moderate" as InjurySeverity,
   started_on: new Date().toISOString().slice(0, 10),
   notes: "",
+  restricted_patterns: [] as string[],
 };
 
 export function AthleteInjuryHistory({ athleteId }: { athleteId: string }) {
@@ -92,6 +95,7 @@ export function AthleteInjuryHistory({ athleteId }: { athleteId: string }) {
         severity: form.severity,
         started_on: form.started_on,
         notes: form.notes.trim() || null,
+        restricted_patterns: form.restricted_patterns,
       } as never);
       if (error) throw error;
     },
@@ -152,6 +156,15 @@ export function AthleteInjuryHistory({ athleteId }: { athleteId: string }) {
                       </div>
                       <div className="mt-1 text-sm font-medium">{inj.description}</div>
                       <div className="text-xs text-muted-foreground">Since {inj.started_on}</div>
+                      {inj.restricted_patterns.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {inj.restricted_patterns.map((p) => (
+                            <Badge key={p} variant="outline" className="text-[10px]">
+                              No {MOVEMENT_PATTERN_LABEL[p] ?? p}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       {inj.notes && (
                         <div className="mt-1 text-xs text-muted-foreground">{inj.notes}</div>
                       )}
@@ -256,6 +269,40 @@ export function AthleteInjuryHistory({ athleteId }: { athleteId: string }) {
                 value={form.started_on}
                 onChange={(e) => setForm({ ...form, started_on: e.target.value })}
               />
+            </div>
+            <div>
+              <Label>Rules out</Label>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                Training View flags any prescribed exercise tagged with one of these while this
+                injury is open.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {MOVEMENT_PATTERNS.map((p) => {
+                  const active = form.restricted_patterns.includes(p.value);
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          restricted_patterns: active
+                            ? form.restricted_patterns.filter((v) => v !== p.value)
+                            : [...form.restricted_patterns, p.value],
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        active
+                          ? "border-destructive bg-destructive/10 text-destructive"
+                          : "border-border text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div>
               <Label>Notes</Label>

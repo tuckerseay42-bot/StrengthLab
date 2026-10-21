@@ -28,6 +28,7 @@ import { Route as LiftsRouteImport } from './routes/lifts'
 import { Route as LogReviewRouteImport } from './routes/log-review'
 import { Route as MaxesRouteImport } from './routes/maxes'
 import { Route as MetricsRouteImport } from './routes/metrics'
+import { Route as NotifyParentRouteImport } from './routes/notify-parent'
 import { Route as OrgMembersRouteImport } from './routes/org-members'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as PerformanceRouteImport } from './routes/performance'
@@ -160,6 +161,11 @@ const MaxesRoute = MaxesRouteImport.update({
 const MetricsRoute = MetricsRouteImport.update({
   id: '/metrics',
   path: '/metrics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotifyParentRoute = NotifyParentRouteImport.update({
+  id: '/notify-parent',
+  path: '/notify-parent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgMembersRoute = OrgMembersRouteImport.update({
@@ -374,6 +380,7 @@ export interface FileRoutesByFullPath {
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
+  '/notify-parent': typeof NotifyParentRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -433,6 +440,7 @@ export interface FileRoutesByTo {
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
+  '/notify-parent': typeof NotifyParentRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -492,6 +500,7 @@ export interface FileRoutesById {
   '/log-review': typeof LogReviewRoute
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
+  '/notify-parent': typeof NotifyParentRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -553,6 +562,7 @@ export interface FileRouteTypes {
     | '/log-review'
     | '/maxes'
     | '/metrics'
+    | '/notify-parent'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -612,6 +622,7 @@ export interface FileRouteTypes {
     | '/log-review'
     | '/maxes'
     | '/metrics'
+    | '/notify-parent'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -670,6 +681,7 @@ export interface FileRouteTypes {
     | '/log-review'
     | '/maxes'
     | '/metrics'
+    | '/notify-parent'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -730,6 +742,7 @@ export interface RootRouteChildren {
   LogReviewRoute: typeof LogReviewRoute
   MaxesRoute: typeof MaxesRoute
   MetricsRoute: typeof MetricsRoute
+  NotifyParentRoute: typeof NotifyParentRoute
   OrgMembersRoute: typeof OrgMembersRoute
   OrganizationsRoute: typeof OrganizationsRoute
   PerformanceRoute: typeof PerformanceRoute
@@ -891,6 +904,13 @@ declare module '@tanstack/react-router' {
       path: '/metrics'
       fullPath: '/metrics'
       preLoaderRoute: typeof MetricsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notify-parent': {
+      id: '/notify-parent'
+      path: '/notify-parent'
+      fullPath: '/notify-parent'
+      preLoaderRoute: typeof NotifyParentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/org-members': {
@@ -1263,6 +1283,7 @@ const rootRouteChildren: RootRouteChildren = {
   LogReviewRoute: LogReviewRoute,
   MaxesRoute: MaxesRoute,
   MetricsRoute: MetricsRoute,
+  NotifyParentRoute: NotifyParentRoute,
   OrgMembersRoute: OrgMembersRoute,
   OrganizationsRoute: OrganizationsRoute,
   PerformanceRoute: PerformanceRoute,

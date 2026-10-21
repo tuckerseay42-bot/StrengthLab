@@ -138,6 +138,26 @@ export type AthleteInjury = {
   started_on: string;
   resolved_on: string | null;
   notes: string | null;
+  restricted_patterns: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type GoalMetricKind = "exercise_1rm" | "test" | "custom";
+
+export type AthleteGoal = {
+  id: string;
+  athlete_id: string;
+  title: string;
+  metric_kind: GoalMetricKind;
+  exercise_id: string | null;
+  exercise_name: string | null;
+  test_type: string | null;
+  target_value: number | null;
+  target_date: string | null;
+  starting_value: number | null;
+  achieved_on: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -186,6 +206,7 @@ export type Exercise = {
   is_metric: boolean;
   created_at: string;
   organization_id: string;
+  movement_patterns: string[];
 };
 export type ExerciseRelationship = {
   id: string;
@@ -410,6 +431,18 @@ export const athleteInjuriesQO = queryOptions({
   },
 });
 
+export const athleteGoalsQO = queryOptions({
+  queryKey: ["athlete_goals"],
+  queryFn: async (): Promise<AthleteGoal[]> => {
+    const { data, error } = await scoped(supabase.from("athlete_goals" as never).select("*")).order(
+      "target_date",
+      { ascending: true, nullsFirst: false },
+    );
+    if (error) throw error;
+    return (data ?? []) as unknown as AthleteGoal[];
+  },
+});
+
 export const bodyweightLogsQO = queryOptions({
   queryKey: ["bodyweight_logs"],
   queryFn: async (): Promise<BodyweightLog[]> => {
@@ -462,7 +495,7 @@ export const exercisesQO = queryOptions({
   queryFn: async (): Promise<Exercise[]> => {
     const { data, error } = await scoped(supabase.from("exercises").select("*")).order("name");
     if (error) throw error;
-    return (data ?? []) as Exercise[];
+    return (data ?? []) as unknown as Exercise[];
   },
 });
 

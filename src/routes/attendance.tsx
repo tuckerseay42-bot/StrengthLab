@@ -25,6 +25,7 @@ import { publicOrigin } from "@/lib/share-url";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { cn } from "@/lib/utils";
+import { notifyParent } from "@/lib/notify-parent";
 
 export const Route = createFileRoute("/attendance")({
   head: () => ({ meta: [{ title: "Attendance — Strength Lab" }] }),
@@ -438,7 +439,15 @@ function AttendancePage() {
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => set.mutate({ athlete_id: a.id, present: !present })}
+                    onClick={() => {
+                      set.mutate({ athlete_id: a.id, present: !present });
+                      if (present) {
+                        void notifyParent(a.id, "missed_session", {
+                          date: sessionDate,
+                          reason: "Marked absent for today's session.",
+                        });
+                      }
+                    }}
                     className={cn(
                       "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
                       present
@@ -500,7 +509,15 @@ function AttendancePage() {
                           present === false &&
                             "bg-destructive text-destructive-foreground hover:opacity-90",
                         )}
-                        onClick={() => set.mutate({ athlete_id: a.id, present: false })}
+                        onClick={() => {
+                          set.mutate({ athlete_id: a.id, present: false });
+                          if (present !== false) {
+                            void notifyParent(a.id, "missed_session", {
+                              date: sessionDate,
+                              reason: "Marked absent for today's session.",
+                            });
+                          }
+                        }}
                         aria-label="Absent"
                       >
                         <X className="h-4 w-4" />

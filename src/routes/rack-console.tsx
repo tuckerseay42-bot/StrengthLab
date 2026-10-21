@@ -18,6 +18,7 @@ import {
   programPhasesQO,
   programCyclesQO,
   programSessionsQO,
+  athleteInjuriesQO,
   type Athlete,
   type Team,
   type Workout,
@@ -26,6 +27,8 @@ import {
   type RepMax,
   type Program,
 } from "@/lib/queries";
+import { MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
+import { notifyParent } from "@/lib/notify-parent";
 import { resolveAthleteWorkout } from "@/lib/training-resolver";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -643,6 +646,10 @@ function TrainingView() {
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: ["attendance"] });
       toast.success(`Athlete marked ${vars.reason} for today`);
+      void notifyParent(vars.athlete_id, "injury", {
+        description: `Marked ${vars.reason} from Training View`,
+        severity: "moderate",
+      });
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -1377,6 +1384,7 @@ function AthleteStatusList({
     [sorted, status, addedAtById, now, behindMs],
   );
   const [recapOpen, setRecapOpen] = useState(false);
+  const [notifying, setNotifying] = useState(false);
 
   return (
     <div className="flex-1 overflow-y-auto overscroll-contain pb-6 pr-1">
@@ -1426,26 +1434,61 @@ function AthleteStatusList({
             </DialogDescription>
           </DialogHeader>
           {notDone.length > 0 && (
-            <ul className="max-h-80 space-y-1 overflow-y-auto">
-              {notDone.map((a) => {
-                const cat = categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs);
-                const s = status.get(a.id);
-                return (
-                  <li
-                    key={a.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-sm"
-                  >
-                    <span className="font-medium">{athleteDisplayName(a)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {cat === "behind" && "Behind"}
-                      {cat === "not-started" && "Never logged a set"}
-                      {cat === "in-progress" &&
-                        `${s?.completedCount ?? 0}/${s?.totalSets ?? 0} sets`}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <ul className="max-h-80 space-y-1 overflow-y-auto">
+                {notDone.map((a) => {
+                  const cat = categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs);
+                  const s = status.get(a.id);
+                  return (
+                    <li
+                      key={a.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-sm"
+                    >
+                      <span className="font-medium">{athleteDisplayName(a)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {cat === "behind" && "Behind"}
+                        {cat === "not-started" && "Never logged a set"}
+                        {cat === "in-progress" &&
+                          `${s?.completedCount ?? 0}/${s?.totalSets ?? 0} sets`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {notDone.some(
+                (a) =>
+                  categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs) ===
+                  "not-started",
+              ) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={notifying}
+                  onClick={async () => {
+                    setNotifying(true);
+                    const neverLogged = notDone.filter(
+                      (a) =>
+                        categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs) ===
+                        "not-started",
+                    );
+                    await Promise.all(
+                      neverLogged.map((a) =>
+                        notifyParent(a.id, "missed_session", {
+                          date: new Date().toISOString().slice(0, 10),
+                          reason: "No session logged by the end of practice today.",
+                        }),
+                      ),
+                    );
+                    setNotifying(false);
+                    toast.success(
+                      `Checked in with parents of ${neverLogged.length} athlete${neverLogged.length === 1 ? "" : "s"} (only sends if enabled in Settings)`,
+                    );
+                  }}
+                >
+                  {notifying ? "Sending…" : "Notify parents of never-logged athletes"}
+                </Button>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -1664,7 +1707,12 @@ function AthleteTile(props: {
   programs: Program[];
   workoutExercises: WorkoutExercise[];
   workoutSets: WorkoutSet[];
-  exercises: { id: string; name?: string; measurement_type?: string | null }[];
+  exercises: {
+    id: string;
+    name?: string;
+    measurement_type?: string | null;
+    movement_patterns?: string[];
+  }[];
   measurementByExId: Map<string, Measurement>;
   repMaxes: RepMax[];
   logs: RackSetLog[];
@@ -1772,6 +1820,23 @@ function AthleteTile(props: {
         currentOverride?.substitute_exercise_id ?? current.exercise.exercise_id ?? "",
       ) ?? "load")
     : "load";
+
+  // Flag a conflict between the current exercise and any of this athlete's
+  // active (unresolved) injury restrictions — so the coach doesn't have to
+  // remember every athlete's limitations while running the whole rack.
+  const { data: allInjuries = [] } = useQuery(athleteInjuriesQO);
+  const restrictionConflict = useMemo(() => {
+    if (!current) return null;
+    const exId = currentOverride?.substitute_exercise_id ?? current.exercise.exercise_id ?? null;
+    const patterns = exId ? (exerciseLib.find((e) => e.id === exId)?.movement_patterns ?? []) : [];
+    if (patterns.length === 0) return null;
+    for (const inj of allInjuries) {
+      if (inj.athlete_id !== athlete.id || inj.resolved_on) continue;
+      const hit = inj.restricted_patterns.find((p) => patterns.includes(p));
+      if (hit) return { injury: inj, pattern: hit };
+    }
+    return null;
+  }, [current, currentOverride, exerciseLib, allInjuries, athlete.id]);
 
   const prescribedLoad = current?.setRow?.load ?? current?.exercise.load ?? null;
   const prescribedReps = current?.setRow?.reps ?? current?.exercise.reps ?? null;
@@ -1996,6 +2061,13 @@ function AthleteTile(props: {
       active_workout_id: workout.id,
       review_reason: isPr ? "pr" : null,
     });
+    if (isPr && loggedLoad != null) {
+      void notifyParent(athlete.id, "pr", {
+        exercise_name: currentExerciseName,
+        load: loggedLoad,
+        reps: numOrNull(form.reps) ?? 0,
+      });
+    }
     setCursorOverride(null);
   };
 
@@ -2032,6 +2104,21 @@ function AthleteTile(props: {
             </div>
           )}
         </div>
+
+        {restrictionConflict && (
+          <div className="mb-2 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              <strong>
+                {MOVEMENT_PATTERN_LABEL[restrictionConflict.pattern] ?? restrictionConflict.pattern}
+              </strong>{" "}
+              is restricted ({restrictionConflict.injury.description}) —{" "}
+              {selfService
+                ? "check with your coach before doing this set."
+                : "swap this exercise from the ⋮ menu above."}
+            </span>
+          </div>
+        )}
 
         {/* Only say the target weight/reps here if the table row above didn't
             already say it — no need for a third restatement before the
