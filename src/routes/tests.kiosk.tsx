@@ -1,9 +1,10 @@
 // A walk-up station for max-testing days. A coach first locks the station to
 // one metric — that's all it can log until someone exits back to setup — then
 // hands the device to athletes. Each athlete just types their name into one
-// centered search box, taps the match, and enters their number. No roster
-// grid, no per-athlete sign-in: the coach's own session is what's
-// authenticated here.
+// centered search box, taps the match, and enters their number on a big
+// on-screen keypad. No roster grid, no per-athlete sign-in, no native
+// keyboard popping up and eating half the screen: the coach's own session is
+// what's authenticated here.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +30,6 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Gauge, Search } from "lucide-react";
+import { ArrowLeft, Check, Delete, Gauge, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tests/kiosk")({
@@ -59,6 +59,11 @@ type TypeOpt = {
   lowerIsBetter: boolean;
   group: string;
 };
+
+function initialsFor(name: string): string {
+  const p = name.trim().split(/\s+/);
+  return ((p[0]?.[0] ?? "") + (p[p.length - 1]?.[0] ?? "")).toUpperCase() || "?";
+}
 
 function TestKioskPage() {
   const qc = useQueryClient();
@@ -131,9 +136,10 @@ function TestKioskPage() {
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
   const [inputAs, setInputAs] = useState<"native" | "mph">("native");
+  const [sessionCount, setSessionCount] = useState(0);
+  const [justSaved, setJustSaved] = useState(false);
 
   const athlete = athletes.find((a) => a.id === athleteId);
-  const step = meta.unit === "s" ? "0.01" : meta.unit === "in" ? "0.1" : "1";
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const loggedToday = useMemo(() => {
@@ -173,11 +179,16 @@ function TestKioskPage() {
     onSuccess: (val) => {
       qc.invalidateQueries({ queryKey: ["tests"] });
       const name = athlete ? athleteDisplayName(athlete) : "Athlete";
+      setSessionCount((n) => n + 1);
+      setJustSaved(true);
+      setTimeout(() => {
+        setJustSaved(false);
+        setAthleteId("");
+        setValue("");
+        setSearch("");
+        setInputAs("native");
+      }, 700);
       toast.success(`Saved — ${name}: ${val} ${meta.unit}`);
-      setAthleteId("");
-      setValue("");
-      setSearch("");
-      setInputAs("native");
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -188,6 +199,7 @@ function TestKioskPage() {
     setSearch("");
     setAthleteId("");
     setValue("");
+    setSessionCount(0);
     setStage("active");
   };
 
@@ -203,6 +215,12 @@ function TestKioskPage() {
     setSearch("");
   };
 
+  const tapDigit = (d: string) => {
+    if (d === "." && value.includes(".")) return;
+    setValue((v) => (v + d).slice(0, 8));
+  };
+  const backspace = () => setValue((v) => v.slice(0, -1));
+
   if (stage === "setup") {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background p-4">
@@ -212,19 +230,20 @@ function TestKioskPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Exit kiosk
         </Link>
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-1.5">
-              <Gauge className="h-4 w-4 text-primary" /> Start Test Kiosk
-            </CardTitle>
-            <CardDescription>
+        <Card className="w-full max-w-md border-2">
+          <CardHeader className="items-center text-center">
+            <div className="mb-1 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Gauge className="h-7 w-7 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Start Test Kiosk</CardTitle>
+            <CardDescription className="text-base">
               Pick the one metric this station will log. Athletes can only log that metric until you
               exit this kiosk.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Select value={testType} onValueChange={setTestType}>
-              <SelectTrigger className="h-11 text-base font-semibold">
+              <SelectTrigger className="h-14 text-lg font-semibold">
                 <SelectValue placeholder="Choose a metric" />
               </SelectTrigger>
               <SelectContent>
@@ -242,7 +261,7 @@ function TestKioskPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="h-12 w-full text-base" disabled={!testType} onClick={startKiosk}>
+            <Button className="h-16 w-full text-xl" disabled={!testType} onClick={startKiosk}>
               Start Kiosk
             </Button>
           </CardContent>
@@ -251,97 +270,104 @@ function TestKioskPage() {
     );
   }
 
-  // Just the one box: a name search that swaps in place to a value entry
-  // once an athlete is picked — no outer header, no extra cards around it.
-  // The only other thing on screen is a small, unobtrusive way back to
-  // setup, matching the "Exit kiosk" link on the setup screen itself.
   return (
-    <div className="relative flex min-h-[100dvh] items-center justify-center bg-background p-4">
-      <button
-        type="button"
-        onClick={exitToSetup}
-        className="absolute left-4 top-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Change metric
-      </button>
+    <div className="flex min-h-[100dvh] flex-col bg-background">
+      <div className="flex items-center justify-between gap-2 border-b border-primary/20 bg-primary/5 px-4 py-3">
+        <button
+          type="button"
+          onClick={exitToSetup}
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Change metric
+        </button>
+        <div className="text-center">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Now logging
+          </div>
+          <div className="text-lg font-bold leading-tight text-primary">{meta.label}</div>
+        </div>
+        <div className="w-24 shrink-0 text-right text-xs text-muted-foreground">
+          {sessionCount > 0 && <>{sessionCount} logged</>}
+        </div>
+      </div>
 
-      <Card className="w-full max-w-sm">
-        <CardContent className="p-6">
+      <div className="flex flex-1 items-center justify-center p-4">
+        <div className="w-full max-w-sm">
           {!athlete ? (
             <div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   autoFocus
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Search athlete — logging ${meta.label}`}
-                  className="h-12 pl-9 text-base"
+                  placeholder="Search your name"
+                  className="h-16 pl-12 text-xl"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && matches.length === 1) pickMatch(matches[0]);
                   }}
                 />
               </div>
               {matches.length > 0 && (
-                <div className="mt-2 divide-y">
-                  {matches.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => pickMatch(a)}
-                      className="flex w-full items-center justify-between gap-2 px-1 py-2.5 text-left text-sm hover:bg-muted/60 active:bg-muted"
-                    >
-                      <span className="font-medium">{athleteDisplayName(a)}</span>
-                      {loggedToday.has(a.id) && (
-                        <span className="flex items-center gap-1 text-[11px] text-[color:var(--color-success)]">
-                          <Check className="h-3 w-3" /> Logged
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                <div className="mt-3 space-y-1.5">
+                  {matches.map((a) => {
+                    const name = athleteDisplayName(a);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => pickMatch(a)}
+                        className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-3 text-left transition active:scale-[0.98] active:bg-muted"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                          {initialsFor(name)}
+                        </div>
+                        <span className="flex-1 truncate text-lg font-semibold">{name}</span>
+                        {loggedToday.has(a.id) && (
+                          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-[color:var(--color-success)]">
+                            <Check className="h-3.5 w-3.5" /> Logged
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {search.trim() && matches.length === 0 && (
-                <p className="mt-3 text-center text-sm text-muted-foreground">No matches.</p>
+                <p className="mt-4 text-center text-sm text-muted-foreground">No matches.</p>
               )}
+            </div>
+          ) : justSaved ? (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[color:var(--color-success)]/15">
+                <Check className="h-10 w-10 text-[color:var(--color-success)]" />
+              </div>
+              <div className="text-xl font-bold">Saved!</div>
             </div>
           ) : (
             <div className="space-y-4">
-              <div>
-                <div className="text-xs text-muted-foreground">Logging for</div>
-                <div className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-                  {athleteDisplayName(athlete)}
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/15 text-base font-bold text-primary">
+                  {initialsFor(athleteDisplayName(athlete))}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-2xl font-bold tracking-tight">
+                    {athleteDisplayName(athlete)}
+                  </div>
                   {loggedToday.has(athlete.id) && (
-                    <span className="flex items-center gap-1 text-xs font-normal text-[color:var(--color-success)]">
+                    <div className="flex items-center gap-1 text-xs font-medium text-[color:var(--color-success)]">
                       <Check className="h-3.5 w-3.5" /> already logged today
-                    </span>
+                    </div>
                   )}
                 </div>
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">
-                  {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
-                </Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step={step}
-                  autoFocus
-                  className="h-16 text-center text-3xl font-bold"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="0"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && value.trim() && !save.isPending) save.mutate();
-                  }}
-                />
-              </div>
+
               {dist && meta.unit === "s" && (
                 <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
                   <button
                     type="button"
                     className={cn(
-                      "h-9 rounded font-medium transition",
+                      "h-10 rounded font-medium transition",
                       inputAs === "native" ? "bg-background shadow-sm" : "text-muted-foreground",
                     )}
                     onClick={() => setInputAs("native")}
@@ -351,7 +377,7 @@ function TestKioskPage() {
                   <button
                     type="button"
                     className={cn(
-                      "h-9 rounded font-medium transition",
+                      "h-10 rounded font-medium transition",
                       inputAs === "mph" ? "bg-background shadow-sm" : "text-muted-foreground",
                     )}
                     onClick={() => setInputAs("mph")}
@@ -360,10 +386,39 @@ function TestKioskPage() {
                   </button>
                 </div>
               )}
+
+              <div className="rounded-2xl border-2 border-border/60 bg-card p-4 text-center">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {meta.label} {inputAs === "mph" ? "(mph)" : meta.unit ? `(${meta.unit})` : ""}
+                </div>
+                <div className="font-mono text-6xl font-bold tabular-nums">{value || "0"}</div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => tapDigit(d)}
+                    className="h-16 rounded-xl border border-border/60 bg-card text-2xl font-bold transition active:scale-95 active:bg-muted"
+                  >
+                    {d}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={backspace}
+                  className="flex h-16 items-center justify-center rounded-xl border border-border/60 bg-card transition active:scale-95 active:bg-muted"
+                  aria-label="Backspace"
+                >
+                  <Delete className="h-6 w-6" />
+                </button>
+              </div>
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  className="h-14"
+                  className="h-16"
                   onClick={() => {
                     setAthleteId("");
                     setValue("");
@@ -372,7 +427,7 @@ function TestKioskPage() {
                   ← Back
                 </Button>
                 <Button
-                  className="h-14 flex-1 text-lg"
+                  className="h-16 flex-1 text-xl"
                   disabled={save.isPending || !value.trim()}
                   onClick={() => save.mutate()}
                 >
@@ -381,8 +436,8 @@ function TestKioskPage() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
