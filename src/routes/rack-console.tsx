@@ -1284,6 +1284,38 @@ function AddAthleteInline({
   );
 }
 
+type AthleteStatusMap = Map<
+  string,
+  {
+    totalSets: number;
+    completedCount: number;
+    finished: boolean;
+    lastCompletedAt: number | null;
+    workout: Workout | null;
+  }
+>;
+
+type StatusCategory = "no-workout" | "done" | "behind" | "in-progress" | "not-started";
+
+// Shared by the per-row badge and the completion summary — one place that
+// decides what "behind" means so the two can't drift apart.
+function categorizeAthleteStatus(
+  athleteId: string,
+  status: AthleteStatusMap,
+  addedAtById: Record<string, number>,
+  now: number,
+  behindMs: number,
+): StatusCategory {
+  const s = status.get(athleteId);
+  if (!s?.workout) return "no-workout";
+  if (s.finished) return "done";
+  const anchor = s.lastCompletedAt ?? addedAtById[athleteId] ?? now;
+  const behind = s.totalSets > 0 && now - anchor > behindMs;
+  if (behind) return "behind";
+  if (s.completedCount > 0) return "in-progress";
+  return "not-started";
+}
+
 // "Who's up" — the default Live Training view for a shared tablet: a
 // tappable roster instead of several cramped logging forms at once. Tap a
 // name to log full-screen (via the existing focused AthleteTile); the
@@ -1304,16 +1336,7 @@ function AthleteStatusList({
 }: {
   athletes: Athlete[];
   teamById: Map<string, Team>;
-  status: Map<
-    string,
-    {
-      totalSets: number;
-      completedCount: number;
-      finished: boolean;
-      lastCompletedAt: number | null;
-      workout: Workout | null;
-    }
-  >;
+  status: AthleteStatusMap;
   addedAtById: Record<string, number>;
   now: number;
   behindMs: number;
@@ -1336,20 +1359,96 @@ function AthleteStatusList({
     });
   }, [athletes, status]);
 
+  // One place for "how's today going" — glanceable while practice is still
+  // running, and the same numbers answer "did everyone log" once it's done.
+  const counts = useMemo(() => {
+    const c = { done: 0, behind: 0, "in-progress": 0, "not-started": 0, "no-workout": 0 };
+    for (const a of athletes) {
+      c[categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs)]++;
+    }
+    return c;
+  }, [athletes, status, addedAtById, now, behindMs]);
+  const notDone = useMemo(
+    () =>
+      sorted.filter((a) => {
+        const cat = categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs);
+        return cat === "behind" || cat === "not-started" || cat === "in-progress";
+      }),
+    [sorted, status, addedAtById, now, behindMs],
+  );
+  const [recapOpen, setRecapOpen] = useState(false);
+
   return (
     <div className="flex-1 overflow-y-auto overscroll-contain pb-6 pr-1">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {athletes.length} athlete{athletes.length === 1 ? "" : "s"}
-        </span>
-        <AddAthleteInline
-          athletes={allAthletes}
-          teamById={teamById}
-          selectedIds={selectedIds}
-          recentIds={recentIds}
-          onPick={onAdd}
-        />
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {athletes.length} athlete{athletes.length === 1 ? "" : "s"}
+          </span>
+          {athletes.length > 0 && (
+            <span className="flex items-center gap-2 text-xs tabular-nums">
+              <span className="text-emerald-600 dark:text-emerald-400">{counts.done} done</span>
+              {counts.behind > 0 && (
+                <span className="font-semibold text-red-600 dark:text-red-400">
+                  {counts.behind} behind
+                </span>
+              )}
+              {counts["not-started"] > 0 && (
+                <span className="text-muted-foreground">{counts["not-started"]} not started</span>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {athletes.length > 0 && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setRecapOpen(true)}>
+              End of practice
+            </Button>
+          )}
+          <AddAthleteInline
+            athletes={allAthletes}
+            teamById={teamById}
+            selectedIds={selectedIds}
+            recentIds={recentIds}
+            onPick={onAdd}
+          />
+        </div>
       </div>
+
+      <Dialog open={recapOpen} onOpenChange={setRecapOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>End of practice</DialogTitle>
+            <DialogDescription>
+              {notDone.length === 0
+                ? "Everyone logged a complete session today."
+                : `${notDone.length} athlete${notDone.length === 1 ? "" : "s"} to check on before they leave.`}
+            </DialogDescription>
+          </DialogHeader>
+          {notDone.length > 0 && (
+            <ul className="max-h-80 space-y-1 overflow-y-auto">
+              {notDone.map((a) => {
+                const cat = categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs);
+                const s = status.get(a.id);
+                return (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-sm"
+                  >
+                    <span className="font-medium">{athleteDisplayName(a)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {cat === "behind" && "Behind"}
+                      {cat === "not-started" && "Never logged a set"}
+                      {cat === "in-progress" &&
+                        `${s?.completedCount ?? 0}/${s?.totalSets ?? 0} sets`}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {sorted.length === 0 ? (
         <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-muted-foreground">
@@ -1365,26 +1464,28 @@ function AthleteStatusList({
             const totalSets = s?.totalSets ?? 0;
             const completedCount = s?.completedCount ?? 0;
             const finished = s?.finished ?? false;
-            const anchor = s?.lastCompletedAt ?? addedAtById[a.id] ?? now;
-            const behind = !finished && !!s?.workout && totalSets > 0 && now - anchor > behindMs;
+            const cat = categorizeAthleteStatus(a.id, status, addedAtById, now, behindMs);
+            const behind = cat === "behind";
             const pct = totalSets > 0 ? Math.round((completedCount / totalSets) * 100) : 0;
 
-            const statusLabel = !s?.workout
-              ? "No workout"
-              : finished
-                ? "Done"
-                : behind
-                  ? "Behind"
-                  : completedCount > 0
-                    ? "In progress"
-                    : "Not started";
-            const statusClass = finished
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              : behind
-                ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                : completedCount > 0
-                  ? "bg-primary/10 text-primary"
-                  : "bg-muted text-muted-foreground";
+            const statusLabel =
+              cat === "no-workout"
+                ? "No workout"
+                : cat === "done"
+                  ? "Done"
+                  : cat === "behind"
+                    ? "Behind"
+                    : cat === "in-progress"
+                      ? "In progress"
+                      : "Not started";
+            const statusClass =
+              cat === "done"
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : cat === "behind"
+                  ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                  : cat === "in-progress"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground";
 
             return (
               <li
