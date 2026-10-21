@@ -1428,21 +1428,26 @@ function lookupRM(athleteId: string, exName: string, reps: number, repMaxes: Rep
   return Number(own.slice().sort((a, b) => Math.abs(a.reps - reps) - Math.abs(b.reps - reps))[0].load);
 }
 
-function resolveLoad(athleteId: string, ex: WorkoutExercise, s: WorkoutSet, exercises: { id: string; name: string }[], repMaxes: RepMax[], bestLift: Map<string, number>): number | null {
-  if (s.load != null) return Number(s.load);
+type LoadResolution = { load: number | null; reason?: string };
+
+// Same calculation as before, just reporting *why* it came back blank —
+// "no max on record" and "pick a reference exercise" used to both render
+// as an identical, unexplained "—" in the preview table.
+function resolveLoad(athleteId: string, ex: WorkoutExercise, s: WorkoutSet, exercises: { id: string; name: string }[], repMaxes: RepMax[], bestLift: Map<string, number>): LoadResolution {
+  if (s.load != null) return { load: Number(s.load) };
   const refName = s.percent_of_exercise_id ? exercises.find((e) => e.id === s.percent_of_exercise_id)?.name ?? "" : ex.exercise_name;
-  if (!refName) return null;
+  if (!refName) return { load: null, reason: "Pick a reference exercise for this %1RM/rep-max set" };
   if (s.rm_reps) {
     const base = lookupRM(athleteId, refName, s.rm_reps, repMaxes);
-    if (base == null) return null;
-    return base * ((s.percent ?? 100) / 100);
+    if (base == null) return { load: null, reason: `No ${s.rm_reps}RM on record for ${refName}` };
+    return { load: base * ((s.percent ?? 100) / 100) };
   }
   if (s.percent != null) {
     const oneRm = lookup1RM(athleteId, refName, repMaxes, bestLift);
-    if (oneRm == null) return null;
-    return oneRm * (s.percent / 100);
+    if (oneRm == null) return { load: null, reason: `No 1RM on record for ${refName}` };
+    return { load: oneRm * (s.percent / 100) };
   }
-  return null;
+  return { load: null, reason: "Set a load, %1RM, or rep-max for this scheme" };
 }
 
 function PrescriptionPreview({ rows, setsByExercise, exercises, athletes, assigns, bestLift, repMaxes }: {
@@ -1494,11 +1499,23 @@ function PrescriptionPreview({ rows, setsByExercise, exercises, athletes, assign
             <tr key={ath.id} className="hover:bg-muted/40">
               <td className="px-2.5 py-1.5 font-medium">{athleteDisplayName(ath)}</td>
               {cols.map(({ row, set }) => {
-                const load = resolveLoad(ath.id, row, set, exercises, repMaxes, bestLift);
-                const rounded = load ? Math.round(load / 5) * 5 : null;
+                const resolved = resolveLoad(ath.id, row, set, exercises, repMaxes, bestLift);
+                const rounded = resolved.load ? Math.round(resolved.load / 5) * 5 : null;
                 return (
                   <td key={set.id} className="mono-number px-2.5 py-1.5">
-                    {rounded ? `${rounded} lb` : <span className="text-muted-foreground/60">—</span>}
+                    {rounded ? (
+                      `${rounded} lb`
+                    ) : (
+                      <span
+                        className={cn(
+                          "text-muted-foreground/60",
+                          resolved.reason && "cursor-help underline decoration-dotted",
+                        )}
+                        title={resolved.reason}
+                      >
+                        —
+                      </span>
+                    )}
                   </td>
                 );
               })}
