@@ -25,7 +25,18 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Download, Check, X, Users, Copy, QrCode, Radio, Search } from "lucide-react";
+import {
+  Download,
+  Check,
+  X,
+  Users,
+  Copy,
+  QrCode,
+  Radio,
+  Search,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 import { downloadCSV } from "@/lib/domain";
 import { toast } from "sonner";
 import { publicOrigin } from "@/lib/share-url";
@@ -57,6 +68,21 @@ function AttendancePage() {
   const [showQr, setShowQr] = useState(false);
   const [view, setView] = useState<"list" | "board">("list");
   const [boardSearch, setBoardSearch] = useState("");
+
+  // Fullscreen on the check-in card itself — the browser's native
+  // Fullscreen API, scoped to this one element, so nothing but the board
+  // (and its own header controls) is on screen on a mounted/shared device.
+  const checkinCardRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === checkinCardRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void checkinCardRef.current?.requestFullscreen();
+  };
   const qrTeam = useMemo(
     () =>
       teams.find((t) => t.id === qrTeamId) ?? teams.find((t) => t.id === activeTeamId) ?? teams[0],
@@ -403,7 +429,10 @@ function AttendancePage() {
 
       <Filters value={filters} onChange={setFilters} athletes={athletes} />
 
-      <Card>
+      <Card
+        ref={checkinCardRef}
+        className={cn(isFullscreen && "overflow-y-auto rounded-none border-0 bg-background p-4")}
+      >
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -448,6 +477,19 @@ function AttendancePage() {
                   </Button>
                 </>
               )}
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+              </Button>
             </div>
           </div>
           {roster.length > 0 && (
