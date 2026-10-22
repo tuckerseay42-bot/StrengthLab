@@ -171,16 +171,27 @@ export function TeamMetricsTable({
     };
   }, [rowsWithData, prDates]);
 
+  // A date-by-date Team Average is only a fair trend if it's the same kids
+  // in every column — otherwise a date where only half the team tested
+  // (absences, a kid who skipped that metric) silently pulls the average
+  // around for reasons that have nothing to do with performance. Restrict
+  // the footer average to the cohort who tested on every date currently
+  // shown, so each column is comparing the same roster to itself.
+  const consistentCohort = useMemo(
+    () => rowsWithData.filter((r) => dates.every((d) => r.points.some((p) => p.date === d))),
+    [rowsWithData, dates],
+  );
+
   const dateAverages = useMemo(() => {
     const m = new Map<string, number>();
     for (const d of dates) {
-      const values = rowsWithData
+      const values = consistentCohort
         .map((r) => r.points.find((p) => p.date === d)?.value)
         .filter((v): v is number => v != null);
       if (values.length) m.set(d, values.reduce((s, v) => s + v, 0) / values.length);
     }
     return m;
-  }, [dates, rowsWithData]);
+  }, [dates, consistentCohort]);
 
   return (
     <Card className="overflow-hidden border-border/60">
@@ -410,7 +421,12 @@ export function TeamMetricsTable({
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border/60 bg-muted/30 font-semibold">
-                  <td className="sticky left-0 z-10 bg-muted/30 px-3 py-2">Team Average</td>
+                  <td className="sticky left-0 z-10 bg-muted/30 px-3 py-2">
+                    Team Average
+                    <span className="block text-[9px] font-normal normal-case text-muted-foreground/70">
+                      {consistentCohort.length} tested every date shown
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-center text-muted-foreground">—</td>
                   <td className="px-3 py-2 text-center text-muted-foreground">—</td>
                   {dates.map((d) => {
