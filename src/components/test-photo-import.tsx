@@ -11,6 +11,7 @@ import { toUserMessage } from "@/lib/db-errors";
 import { mergedTestTypes } from "@/lib/domain";
 import {
   matchCandidates,
+  splitFullName,
   MATCH_CONFIDENCE_LABEL,
   MATCH_CONFIDENCE_CLASS,
   MATCH_CONFIDENCE_REVIEW_ORDER,
@@ -53,14 +54,6 @@ type ImportRow = {
   matchId: string;
   confidence: RowMatchConfidence;
 };
-
-function splitFullName(name: string): { firstName: string; lastName: string } {
-  const parts = name.trim().split(/\s+/);
-  return {
-    firstName: parts[0] ?? "",
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : (parts[0] ?? ""),
-  };
-}
 
 export function TestPhotoImport({
   open,

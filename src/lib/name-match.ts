@@ -11,6 +11,15 @@ export type NameMatchInput = {
   studentId?: string | null;
 };
 
+/** Splits a single "First Last" string for callers that only have one field. */
+export function splitFullName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : (parts[0] ?? ""),
+  };
+}
+
 export type MatchConfidence = "id" | "exact" | "fuzzy" | "weak";
 
 export type MatchCandidate = {

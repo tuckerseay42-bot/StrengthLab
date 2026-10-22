@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { athletesQO, athleteDisplayName, titleCaseName, type Athlete } from "@/lib/queries";
+import { athletesQO, athleteDisplayName, titleCaseName } from "@/lib/queries";
 import { TEST_TYPES } from "@/lib/domain";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { getScopedOrgId } from "@/lib/scoped-insert";
@@ -24,6 +24,8 @@ import {
   type RosterPdfRow,
 } from "@/lib/roster-pdf-parse";
 import { toRecords } from "@/lib/csv-parse";
+import { matchCandidates, splitFullName, type RowMatchConfidence } from "@/lib/name-match";
+import { AthleteCombobox } from "@/components/athlete-combobox";
 import { toast } from "sonner";
 import { Upload, Download, FileText, FileUp } from "lucide-react";
 
@@ -83,19 +85,19 @@ export const Route = createFileRoute("/import")({
   component: ImportPage,
 });
 
-function findAthlete(athletes: Athlete[], name: string, studentId?: string): Athlete | undefined {
-  const sid = studentId?.trim();
-  if (sid) {
-    const bySid = athletes.find((a) => (a.student_id ?? "").trim() === sid);
-    if (bySid) return bySid;
-  }
-  const key = name.trim().toLowerCase();
-  if (!key) return undefined;
-  return athletes.find((a) => {
-    const full = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim().toLowerCase();
-    return full === key || (a.name ?? "").trim().toLowerCase() === key;
-  });
-}
+// The four kinds below all look up an EXISTING athlete by name (never
+// create one) — every one of them needs the same "didn't match exactly?
+// check last name, then ask" treatment, not just the roster/class-period
+// path, or the same complaint just moves to whichever kind wasn't fixed.
+const NEEDS_MATCH: EntityKind[] = ["class_period", "tests", "lifts", "attendance"];
+
+type MatchRow = {
+  idx: number;
+  rawName: string;
+  matchId: string;
+  suggestedId: string;
+  confidence: RowMatchConfidence;
+};
 
 function downloadTemplate(kind: EntityKind) {
   const t = TEMPLATES[kind];
@@ -135,6 +137,50 @@ function ImportPage() {
 
   const parsed = useMemo(() => (text ? toRecords(text) : { headers: [], records: [] }), [text]);
 
+  // User decisions (confirmed a suggestion, said "no, different", or picked
+  // one by hand) layered on top of the auto-computed suggestions — kept
+  // separate so a background athletes refetch can't silently wipe a
+  // decision the coach already made.
+  const [matchOverrides, setMatchOverrides] = useState<Record<number, Partial<MatchRow>>>({});
+
+  const matchRows = useMemo<MatchRow[] | null>(() => {
+    if (!NEEDS_MATCH.includes(kind) || !parsed.records.length) return null;
+    return parsed.records.map((r, idx) => {
+      const rawName = (r.athlete_name || r.athlete || "").trim();
+      const studentId = kind === "class_period" ? r.student_id : undefined;
+      const { firstName, lastName } = splitFullName(rawName);
+      const candidates =
+        rawName || studentId ? matchCandidates({ firstName, lastName, studentId }, athletes) : [];
+      const top = candidates[0];
+      const confidence: RowMatchConfidence = top?.confidence ?? "none";
+      const autoApply = confidence === "id" || confidence === "exact";
+      const base: MatchRow = {
+        idx,
+        rawName,
+        matchId: autoApply && top ? top.athlete.id : "",
+        suggestedId: !autoApply && top ? top.athlete.id : "",
+        confidence,
+      };
+      return { ...base, ...matchOverrides[idx] };
+    });
+  }, [kind, parsed.records, athletes, matchOverrides]);
+
+  const confirmSuggestion = (idx: number, suggestedId: string) => {
+    setMatchOverrides((prev) => ({
+      ...prev,
+      [idx]: { matchId: suggestedId, suggestedId: "", confidence: "manual" },
+    }));
+  };
+  const dismissSuggestion = (idx: number) => {
+    setMatchOverrides((prev) => ({ ...prev, [idx]: { suggestedId: "" } }));
+  };
+  const setManualMatch = (idx: number, athleteId: string) => {
+    setMatchOverrides((prev) => ({
+      ...prev,
+      [idx]: { matchId: athleteId, suggestedId: "", confidence: athleteId ? "manual" : "none" },
+    }));
+  };
+
   const buildCsvForKind = (rows: RosterPdfRow[], period: string, sport: string) =>
     kind === "athletes"
       ? buildAthleteRosterCsv(rows, { sport, classPeriod: period })
@@ -146,6 +192,7 @@ function ImportPage() {
     setPdfFileName(null);
     setFileName(f.name);
     setResult(null);
+    setMatchOverrides({});
     setText(await f.text());
   };
 
@@ -153,6 +200,7 @@ function ImportPage() {
     if (!f) return;
     setPdfBusy(true);
     setResult(null);
+    setMatchOverrides({});
     try {
       const { rows, periodGuess } = await parseRosterPdf(f);
       if (!rows.length) {
@@ -235,15 +283,15 @@ function ImportPage() {
       } else if (kind === "class_period") {
         const updates: { id: string; class_period: string | null }[] = [];
         parsed.records.forEach((r, idx) => {
-          const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "", r.student_id);
-          if (!athlete) {
+          const m = matchRows?.[idx];
+          if (!m?.matchId) {
             errors.push(
-              `Row ${idx + 2}: athlete "${r.athlete_name || r.student_id || "?"}" not found in your roster — not creating a new athlete`,
+              `Row ${idx + 2}: athlete "${r.athlete_name || r.student_id || "?"}" not matched — not creating a new athlete`,
             );
             skipped++;
             return;
           }
-          updates.push({ id: athlete.id, class_period: r.class_period?.trim() || null });
+          updates.push({ id: m.matchId, class_period: r.class_period?.trim() || null });
         });
         if (updates.length) {
           const results = await Promise.all(
@@ -262,9 +310,9 @@ function ImportPage() {
       } else if (kind === "tests") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
-          const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) {
-            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+          const m = matchRows?.[idx];
+          if (!m?.matchId) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not matched`);
             skipped++;
             return;
           }
@@ -281,7 +329,7 @@ function ImportPage() {
             return;
           }
           rows.push({
-            athlete_id: athlete.id,
+            athlete_id: m.matchId,
             test_type: r.test_type,
             value: val,
             unit: tt.unit,
@@ -299,9 +347,9 @@ function ImportPage() {
       } else if (kind === "lifts") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
-          const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) {
-            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+          const m = matchRows?.[idx];
+          if (!m?.matchId) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not matched`);
             skipped++;
             return;
           }
@@ -311,7 +359,7 @@ function ImportPage() {
             return;
           }
           rows.push({
-            athlete_id: athlete.id,
+            athlete_id: m.matchId,
             exercise: r.exercise,
             load: r.load ? Number(r.load) : null,
             sets: r.sets ? Number(r.sets) : null,
@@ -330,9 +378,9 @@ function ImportPage() {
       } else if (kind === "attendance") {
         const rows: Record<string, unknown>[] = [];
         parsed.records.forEach((r, idx) => {
-          const athlete = findAthlete(athletes, r.athlete_name || r.athlete || "");
-          if (!athlete) {
-            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not found`);
+          const m = matchRows?.[idx];
+          if (!m?.matchId) {
+            errors.push(`Row ${idx + 2}: athlete "${r.athlete_name}" not matched`);
             skipped++;
             return;
           }
@@ -343,7 +391,7 @@ function ImportPage() {
           }
           const present = /^(1|true|yes|y|present|p)$/i.test((r.present || "").trim());
           rows.push({
-            athlete_id: athlete.id,
+            athlete_id: m.matchId,
             session_date: r.session_date,
             present,
             notes: r.notes || null,
@@ -393,6 +441,7 @@ function ImportPage() {
               onValueChange={(v) => {
                 setKind(v as EntityKind);
                 setResult(null);
+                setMatchOverrides({});
                 setPdfRows(null);
                 setPdfFileName(null);
                 setFileName(null);
@@ -529,9 +578,88 @@ function ImportPage() {
         </CardContent>
       </Card>
 
+      {matchRows && matchRows.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">3. Review matches</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const pending = matchRows.filter((m) => !m.matchId);
+              if (pending.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    All {matchRows.length} rows matched an existing athlete.
+                  </p>
+                );
+              }
+              return (
+                <>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {matchRows.length - pending.length} of {matchRows.length} matched automatically.
+                    The rest need a quick check before import.
+                  </p>
+                  <ul className="divide-y divide-border">
+                    {pending.map((m) => {
+                      const suggested = m.suggestedId
+                        ? athletes.find((a) => a.id === m.suggestedId)
+                        : null;
+                      return (
+                        <li key={m.idx} className="py-2.5">
+                          <div className="mb-1 text-xs text-muted-foreground">
+                            Row {m.idx + 2}: "{m.rawName || "?"}"
+                          </div>
+                          {suggested ? (
+                            <div className="space-y-1.5">
+                              <p className="text-sm">
+                                Same last name as{" "}
+                                <span className="font-medium text-foreground">
+                                  {athleteDisplayName(suggested)}
+                                </span>{" "}
+                                — same athlete?
+                              </p>
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => confirmSuggestion(m.idx, m.suggestedId)}
+                                >
+                                  Yes
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => dismissSuggestion(m.idx)}
+                                >
+                                  No, different
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <AthleteCombobox
+                              athletes={athletes}
+                              value={m.matchId}
+                              onChange={(id) => setManualMatch(m.idx, id)}
+                              placeholder="No match — will be skipped"
+                              triggerClassName="h-9 w-64 text-xs"
+                            />
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">3. Import</CardTitle>
+          <CardTitle className="text-base">4. Import</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Button onClick={runImport} disabled={busy || !parsed.records.length}>
