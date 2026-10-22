@@ -16,7 +16,7 @@ import type {
   SpiderComparisonGroup,
   SpiderNormalizationMethod,
 } from "@/lib/queries";
-import { computeSpider, type SpiderRow } from "@/lib/spider";
+import { computeSpider, PROFILE_METRICS, type SpiderRow } from "@/lib/spider";
 import { TEST_TYPES } from "@/lib/domain";
 
 export type QualityKey =
@@ -103,6 +103,12 @@ export function metricOptions(
   customMetrics: CustomMetric[],
   exercises: Exercise[] = [],
 ): MetricOption[] {
+  const fromProfile = Object.entries(PROFILE_METRICS).map(([key, meta]) => ({
+    key: `profile:${key}`,
+    label: meta.label,
+    unit: meta.unit,
+    group: "Size",
+  }));
   const fromBuiltin = TEST_TYPES.map((t) => ({
     key: `test:${t.value}`,
     label: t.label,
@@ -127,7 +133,7 @@ export function metricOptions(
     unit: m.unit ?? "",
     group: "Custom metrics",
   }));
-  return [...fromBuiltin, ...fromCustomTypes, ...fromExercises, ...fromMetrics];
+  return [...fromProfile, ...fromBuiltin, ...fromCustomTypes, ...fromExercises, ...fromMetrics];
 }
 
 export function metricLabelFor(key: string, options: MetricOption[]): string {

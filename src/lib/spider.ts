@@ -122,6 +122,29 @@ function bestLiftPerAthlete(
   return m;
 }
 
+// Size metrics sourced straight from the athlete's profile fields instead
+// of a logged test/lift — "profile:<key>" in the metric_key scheme. No
+// separate test entry needed since height/bodyweight are already collected
+// on the athlete record; bw_per_in is a derived ratio, not a stored field.
+export const PROFILE_METRICS: Record<
+  string,
+  { label: string; unit: string; lowerIsBetter: boolean }
+> = {
+  height_in: { label: "Height", unit: "in", lowerIsBetter: false },
+  bodyweight: { label: "Weight", unit: "lb", lowerIsBetter: false },
+  bw_per_in: { label: "Pounds per Inch (Wt / Ht)", unit: "lb/in", lowerIsBetter: false },
+};
+
+function profileValue(a: Athlete, key: string): number | null {
+  if (key === "height_in") return a.height_in == null ? null : Number(a.height_in);
+  if (key === "bodyweight") return a.bodyweight == null ? null : Number(a.bodyweight);
+  if (key === "bw_per_in") {
+    if (a.bodyweight == null || !a.height_in) return null;
+    return Number(a.bodyweight) / Number(a.height_in);
+  }
+  return null;
+}
+
 function percentileOf(val: number, pool: number[], lowerIsBetter: boolean): number {
   if (!pool.length) return 0;
   const better = lowerIsBetter
@@ -251,6 +274,15 @@ export function computeSpider(input: SpiderInput): SpiderRow[] {
       const bests = bestLiftPerAthlete(lifts, key, ex?.measurement_type, lowerIsBetter, cutoff);
       mine = bests.get(athlete.id) ?? null;
       for (const [id, v] of bests) if (poolIds.has(id)) poolValues.push(v);
+    } else if (kind === "profile") {
+      const meta = PROFILE_METRICS[key] ?? { label: key, unit: "", lowerIsBetter: false };
+      label = m.display_label ?? meta.label;
+      unit = meta.unit;
+      lowerIsBetter = meta.lowerIsBetter;
+      mine = profileValue(athlete, key);
+      poolValues = pool
+        .map((a) => profileValue(a, key))
+        .filter((v): v is number => v != null && Number.isFinite(v));
     } else {
       rows.push({
         key: m.metric_key,

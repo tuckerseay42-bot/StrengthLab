@@ -106,6 +106,7 @@ export const TEST_TYPES = [
     lowerIsBetter: false,
     group: "Strength",
   },
+  { value: "wingspan", label: "Wingspan", unit: "in", lowerIsBetter: false, group: "Size" },
 ] as const;
 
 export type TestTypeValue = (typeof TEST_TYPES)[number]["value"];

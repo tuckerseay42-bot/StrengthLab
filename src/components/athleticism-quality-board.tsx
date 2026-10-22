@@ -8,7 +8,7 @@
 // app's 7 qualities are fixed — every quality always appears in the
 // report, just possibly unconfigured — so only reordering applies here,
 // not adding/removing a quality column.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -41,7 +41,8 @@ import {
   type MetricOption,
 } from "@/lib/athleticism-report";
 import { Badge } from "@/components/ui/badge";
-import { GripVertical, Star, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { GripVertical, Star, X, ChevronUp, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -236,6 +237,13 @@ function QualityColumn({
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: qualityId(qualityKey) });
   const style = { transform: CSS.Translate.toString(transform), transition };
 
+  const [search, setSearch] = useState("");
+  const trayItems = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return available.slice(0, 8);
+    return available.filter((o) => o.label.toLowerCase().includes(term));
+  }, [available, search]);
+
   return (
     <div
       ref={setNodeRef}
@@ -308,16 +316,32 @@ function QualityColumn({
       </SortableContext>
 
       {picked.length < MAX_METRICS_PER_QUALITY && available.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {available.slice(0, 8).map((o) => (
-            <TrayChip
-              key={o.key}
-              qualityKey={qualityKey}
-              metricKey={o.key}
-              label={o.label}
-              onAdd={() => onAddMetric(o.key)}
-            />
-          ))}
+        <div className="mt-2 space-y-1.5">
+          {available.length > 8 && (
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search metrics…"
+                className="h-6 pl-6 text-[11px]"
+              />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {trayItems.map((o) => (
+              <TrayChip
+                key={o.key}
+                qualityKey={qualityKey}
+                metricKey={o.key}
+                label={o.label}
+                onAdd={() => onAddMetric(o.key)}
+              />
+            ))}
+            {trayItems.length === 0 && (
+              <p className="px-1 py-1 text-[11px] text-muted-foreground">No metrics match.</p>
+            )}
+          </div>
         </div>
       )}
     </div>

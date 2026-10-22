@@ -24,6 +24,7 @@ const TEST_BOUNDS: Record<string, { min: number; max: number; label: string }> =
   squat_1rm: { min: 20, max: 1200, label: "Squat 1RM (lb)" },
   deadlift_1rm: { min: 20, max: 1200, label: "Deadlift 1RM (lb)" },
   power_clean_1rm: { min: 20, max: 700, label: "Power clean 1RM (lb)" },
+  wingspan: { min: 40, max: 100, label: "Wingspan (in)" },
 };
 
 export function validateTestValue(testType: string, value: number): string | null {
