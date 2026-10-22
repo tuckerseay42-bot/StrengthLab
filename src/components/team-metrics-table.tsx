@@ -171,16 +171,18 @@ export function TeamMetricsTable({
     };
   }, [rowsWithData, prDates]);
 
-  // A date-by-date Team Average is only a fair trend if it's the same kids
-  // in every column — otherwise a date where only half the team tested
-  // (absences, a kid who skipped that metric) silently pulls the average
-  // around for reasons that have nothing to do with performance. Restrict
-  // the footer average to the cohort who tested on every date currently
-  // shown, so each column is comparing the same roster to itself.
-  const consistentCohort = useMemo(
-    () => rowsWithData.filter((r) => dates.every((d) => r.points.some((p) => p.date === d))),
-    [rowsWithData, dates],
-  );
+  // A date-by-date Team Average is only a fair trend if it isn't dominated
+  // by one-off testers — a kid who shows up once skews the comparison
+  // without giving it anything to actually trend. Restrict the footer
+  // average to athletes with at least 2 results within the dates currently
+  // shown (or all of them, if only one date is in view).
+  const consistentCohort = useMemo(() => {
+    const dateSet = new Set(dates);
+    const threshold = Math.min(2, dates.length);
+    return rowsWithData.filter(
+      (r) => r.points.filter((p) => dateSet.has(p.date)).length >= threshold,
+    );
+  }, [rowsWithData, dates]);
 
   const dateAverages = useMemo(() => {
     const m = new Map<string, number>();
@@ -424,7 +426,7 @@ export function TeamMetricsTable({
                   <td className="sticky left-0 z-10 bg-muted/30 px-3 py-2">
                     Team Average
                     <span className="block text-[9px] font-normal normal-case text-muted-foreground/70">
-                      {consistentCohort.length} tested every date shown
+                      {consistentCohort.length} with 2+ results in this window
                     </span>
                   </td>
                   <td className="px-3 py-2 text-center text-muted-foreground">—</td>
