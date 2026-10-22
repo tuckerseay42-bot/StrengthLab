@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { athletesQO, titleCaseName, type Athlete } from "@/lib/queries";
+import { athletesQO, athleteDisplayName, titleCaseName, type Athlete } from "@/lib/queries";
 import { parseRosterPdf, parseRosterCsv, type RosterPdfRow } from "@/lib/roster-pdf-parse";
 import {
   matchCandidates,
@@ -29,6 +29,11 @@ type Row = {
   id: string;
   pdfRow: RosterPdfRow;
   matchId: string;
+  // The best candidate found for a row that didn't match cleanly (fuzzy or
+  // last-name-only) — held separately from matchId so it's never silently
+  // applied. The coach has to explicitly confirm "yes, same athlete" before
+  // it counts toward the import.
+  suggestedId: string;
   confidence: RowMatchConfidence;
 };
 
@@ -58,18 +63,20 @@ export function ClassPeriodRosterImport() {
       setFileName(file.name);
       setClassPeriod((prev) => prev || periodGuess || "");
       const built = parsed.map((pdfRow, i) => {
-        // Even a "weak" candidate (last name close, first name nothing alike)
-        // is worth surfacing — that's exactly the shape of a legal name vs.
-        // the nickname an athlete actually goes by. Pre-filling it lets the
-        // coach approve with one glance instead of having to re-search a
-        // name that was already found.
+        // A "weak" candidate (last name close, first name nothing alike) is
+        // exactly the shape of two different family members sharing a
+        // surname — it's worth surfacing, but never applying on its own.
+        // Only an id or exact match is safe to pre-fill; fuzzy/weak ones
+        // need an explicit "yes, same athlete" before they count.
         const candidates = matchCandidates(pdfRow, athletes);
         const top = candidates[0];
         const confidence: RowMatchConfidence = top?.confidence ?? "none";
+        const autoApply = confidence === "id" || confidence === "exact";
         return {
           id: `${i}-${pdfRow.studentId || pdfRow.lastName}-${pdfRow.firstName}`,
           pdfRow,
-          matchId: top ? top.athlete.id : "",
+          matchId: autoApply && top ? top.athlete.id : "",
+          suggestedId: !autoApply && top ? top.athlete.id : "",
           confidence,
         };
       });
@@ -91,9 +98,26 @@ export function ClassPeriodRosterImport() {
   const setMatch = (id: string, athleteId: string) => {
     setRows((prev) =>
       prev.map((r) =>
-        r.id === id ? { ...r, matchId: athleteId, confidence: athleteId ? "manual" : "none" } : r,
+        r.id === id
+          ? {
+              ...r,
+              matchId: athleteId,
+              suggestedId: "",
+              confidence: athleteId ? "manual" : "none",
+            }
+          : r,
       ),
     );
+  };
+
+  const confirmSuggestion = (id: string) => {
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, matchId: r.suggestedId, confidence: "manual" } : r)),
+    );
+  };
+
+  const dismissSuggestion = (id: string) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, suggestedId: "" } : r)));
   };
 
   const matchedCount = rows.filter((r) => r.matchId).length;
@@ -203,6 +227,9 @@ export function ClassPeriodRosterImport() {
                       const matchedAthlete = r.matchId
                         ? athletes.find((a) => a.id === r.matchId)
                         : null;
+                      const suggestedAthlete = r.suggestedId
+                        ? athletes.find((a) => a.id === r.suggestedId)
+                        : null;
                       const alreadySet =
                         !!matchedAthlete &&
                         !!classPeriod.trim() &&
@@ -221,13 +248,43 @@ export function ClassPeriodRosterImport() {
                             )}
                           </td>
                           <td className="px-3 py-2">
-                            <AthleteCombobox
-                              athletes={athletes}
-                              value={r.matchId}
-                              onChange={(id) => setMatch(r.id, id)}
-                              placeholder="No match — skip"
-                              triggerClassName="h-9 w-56 text-xs"
-                            />
+                            {!r.matchId && suggestedAthlete ? (
+                              <div className="space-y-1.5">
+                                <p className="text-xs text-muted-foreground">
+                                  Same last name as{" "}
+                                  <span className="font-medium text-foreground">
+                                    {athleteDisplayName(suggestedAthlete)}
+                                  </span>{" "}
+                                  — same athlete?
+                                </p>
+                                <div className="flex gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => confirmSuggestion(r.id)}
+                                  >
+                                    <Check className="h-3 w-3" /> Yes
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => dismissSuggestion(r.id)}
+                                  >
+                                    No, different
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <AthleteCombobox
+                                athletes={athletes}
+                                value={r.matchId}
+                                onChange={(id) => setMatch(r.id, id)}
+                                placeholder="No match — skip"
+                                triggerClassName="h-9 w-56 text-xs"
+                              />
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
@@ -249,6 +306,13 @@ export function ClassPeriodRosterImport() {
                                       <X className="h-3 w-3" /> Failed — try again
                                     </>
                                   )}
+                                </Badge>
+                              ) : !r.matchId && suggestedAthlete ? (
+                                <Badge
+                                  variant="outline"
+                                  className={MATCH_CONFIDENCE_CLASS[r.confidence]}
+                                >
+                                  {MATCH_CONFIDENCE_LABEL[r.confidence]}
                                 </Badge>
                               ) : (
                                 <Badge
