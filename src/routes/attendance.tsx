@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Download, Check, X, Users, Copy, QrCode, Radio } from "lucide-react";
+import { Download, Check, X, Users, Copy, QrCode, Radio, Search } from "lucide-react";
 import { downloadCSV } from "@/lib/domain";
 import { toast } from "sonner";
 import { publicOrigin } from "@/lib/share-url";
@@ -452,8 +452,8 @@ function AttendancePage() {
           </div>
           {roster.length > 0 && (
             <div className="mt-2 flex items-center gap-2">
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-                {presentTodayCount} / {roster.length} present
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {presentTodayCount}/{roster.length} present
               </span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
@@ -472,11 +472,12 @@ function AttendancePage() {
           ) : view === "board" ? (
             <>
               <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={boardSearch}
                   onChange={(e) => setBoardSearch(e.target.value)}
                   placeholder="Find a name…"
-                  className="h-10"
+                  className="pl-9"
                 />
               </div>
               {boardRoster.length === 0 ? (
@@ -526,7 +527,9 @@ function AttendancePage() {
                           </div>
                         )}
                         {checkedInAt && (
-                          <div className="text-[10px] text-muted-foreground">{checkedInAt}</div>
+                          <div className="text-[11px] tabular-nums text-muted-foreground">
+                            {checkedInAt}
+                          </div>
                         )}
                       </button>
                     );
