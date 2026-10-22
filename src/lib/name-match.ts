@@ -67,7 +67,13 @@ export const MATCH_CONFIDENCE_REVIEW_ORDER: Record<RowMatchConfidence, number> =
 
 const SUFFIX_RE = /\b(jr|sr|ii|iii|iv|v)\b\.?/g;
 
-function normalize(s: string): string {
+/**
+ * Lowercases, strips Jr/Sr/II-V suffixes and punctuation, and collapses
+ * whitespace — exported so callers comparing two raw name strings directly
+ * (not through matchCandidates's Athlete-shaped row/candidate API) use the
+ * exact same normalization instead of a second, looser copy.
+ */
+export function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(SUFFIX_RE, "")
@@ -77,7 +83,7 @@ function normalize(s: string): string {
 }
 
 /** Classic edit-distance — small inputs only (first/last name strings). */
-function levenshtein(a: string, b: string): number {
+export function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   const m = a.length;
   const n = b.length;
@@ -98,8 +104,8 @@ function levenshtein(a: string, b: string): number {
   return dp[n];
 }
 
-/** How close two first names are, treating a nickname-style prefix as a near-match. */
-function firstNameDistance(a: string, b: string): number {
+/** How close two first names are, treating a nickname-style prefix as a near-match. Inputs must already be normalize()d. */
+export function firstNameDistance(a: string, b: string): number {
   if (!a || !b) return 99;
   if (a === b) return 0;
   if (a.startsWith(b) || b.startsWith(a)) return 1;

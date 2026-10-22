@@ -35,6 +35,7 @@ const REASON_LABEL: Record<string, string> = {
   name: "Same name",
   student_id: "Same student ID",
   email: "Same email",
+  fuzzy_name: "Likely same person",
 };
 
 /** Returns the set of athlete ids that are part of a non-dismissed duplicate group. */

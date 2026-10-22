@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalize, levenshtein, firstNameDistance, splitFullName } from "@/lib/name-match";
 
 // Athlete input schema — used before insert/update.
 // Sanity ranges use canonical units (lb, in).
@@ -43,23 +44,30 @@ export function findDuplicateAthlete<T extends { id: string; name: string }>(
 }
 
 // ---- Duplicate athlete groups (roster-wide) ----
-export type DuplicateReason = "name" | "student_id" | "email";
+export type DuplicateReason = "name" | "student_id" | "email" | "fuzzy_name";
 export type DuplicateGroup<T> = { key: string; reason: DuplicateReason; members: T[] };
 
 type DupAthlete = {
   id: string;
   name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   student_id?: string | null;
   athlete_email?: string | null;
 };
 
-const normName = (s: string) =>
-  s.toLowerCase().replace(/[.'`’-]/g, "").replace(/\s+/g, " ").trim();
-
 /**
- * Groups athletes that look like the same person: identical normalized name,
- * identical student ID, or identical email. Each athlete appears in at most
- * one group (name matches win, then student ID, then email).
+ * Groups athletes that look like the same person: identical normalized name
+ * (suffix/punctuation-insensitive — "Abreham Evans Jr." and "Abreham Evans"
+ * count as the same), identical student ID, identical email, or — a last
+ * pass over whatever's left — a close-but-not-identical name (last name
+ * within 1 edit, first name within 2 or a nickname-style prefix), which is
+ * exactly the shape a repeated roster import produces when the same kid's
+ * name gets typed or formatted slightly differently each time. Each
+ * athlete appears in at most one group; a whole cluster that's mutually
+ * close groups together in one pass, not just pairs, so an athlete
+ * accidentally imported 3+ times gets offered as one group to merge, not
+ * two separate 2-record groups.
  */
 export function findAthleteDuplicateGroups<T extends DupAthlete>(athletes: T[]): DuplicateGroup<T>[] {
   const groups: DuplicateGroup<T>[] = [];
@@ -81,9 +89,42 @@ export function findAthleteDuplicateGroups<T extends DupAthlete>(athletes: T[]):
     }
   };
 
-  pass("name", (a) => normName(a.name ?? "") || null);
+  pass("name", (a) => normalize(a.name ?? "") || null);
   pass("student_id", (a) => (a.student_id ?? "").trim().toLowerCase() || null);
   pass("email", (a) => (a.athlete_email ?? "").trim().toLowerCase() || null);
+
+  // Fuzzy pass: cluster whatever's left by close last+first name. Greedy —
+  // each unclaimed athlete pulls in every other unclaimed athlete within
+  // tolerance, so a mutually-close trio lands in one group.
+  const names = new Map<string, { last: string; first: string }>();
+  const nameOf = (a: T) => {
+    let n = names.get(a.id);
+    if (!n) {
+      const split = splitFullName(a.name ?? "");
+      n = {
+        last: normalize(a.last_name || split.lastName),
+        first: normalize(a.first_name || split.firstName),
+      };
+      names.set(a.id, n);
+    }
+    return n;
+  };
+  for (const a of athletes) {
+    if (claimed.has(a.id)) continue;
+    const an = nameOf(a);
+    if (!an.last || !an.first) continue;
+    const matches = athletes.filter((b) => {
+      if (b.id === a.id || claimed.has(b.id)) return false;
+      const bn = nameOf(b);
+      if (!bn.last || !bn.first) return false;
+      if (levenshtein(an.last, bn.last) > 1) return false;
+      return firstNameDistance(an.first, bn.first) <= 2;
+    });
+    if (!matches.length) continue;
+    const members = [a, ...matches];
+    members.forEach((m) => claimed.add(m.id));
+    groups.push({ key: `fuzzy_name:${an.last}:${an.first}`, reason: "fuzzy_name", members });
+  }
 
   return groups;
 }
