@@ -51,7 +51,7 @@ import {
   Crown,
   ScanLine,
 } from "lucide-react";
-import { TestPhotoVoiceImport } from "@/components/test-photo-voice-import";
+import { TestPhotoImport } from "@/components/test-photo-import";
 import {
   TEST_TYPES,
   testTypeMeta as baseTestTypeMeta,
@@ -849,7 +849,7 @@ function TestsPage() {
         customTypes={customTypes}
         orgId={orgId}
       />
-      <TestPhotoVoiceImport open={importOpen} onOpenChange={setImportOpen} />
+      <TestPhotoImport open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }

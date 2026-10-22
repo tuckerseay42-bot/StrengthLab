@@ -1,27 +1,25 @@
-// Reads a photo of a handwritten test sheet (name + number per line) or a
-// spoken transcript, and asks Lovable AI Gateway to pull out {name, value}
-// pairs as structured JSON. Returns raw extracted pairs only — matching
-// them to actual athletes and writing to `tests` happens client-side after
-// a coach reviews/corrects each row, so a misread name or number never
-// silently lands in the database.
+// Reads a photo of a handwritten test sheet (name + number per line) and
+// asks Lovable AI Gateway to pull out {name, value} pairs as structured
+// JSON. Returns raw extracted pairs only — matching them to actual
+// athletes and writing to `tests` happens client-side after a coach
+// reviews/corrects each row, so a misread name or number never silently
+// lands in the database.
 import { createClient } from "@supabase/supabase-js";
 import { createFileRoute } from "@tanstack/react-router";
 
-const EXTRACT_PROMPT = `You read handwritten or spoken strength-testing results and extract
+const EXTRACT_PROMPT = `You read a photo of a handwritten strength-testing sheet and extract
 a list of {name, value} pairs — one per athlete.
 
 Rules:
-- "name" is the athlete's name as written/said, as close to verbatim as you can read it.
-- "value" is the numeric test result only — strip units, strip words like "seconds" or "inches".
-- Spoken numbers like "four point five two" become 4.52. "thirty two and a half" becomes 32.5.
-- Skip lines/phrases that aren't clearly a name followed by a number.
+- "name" is the athlete's name as written, as close to verbatim as you can read it.
+- "value" is the numeric test result only — strip units like "sec", "in", "lb".
+- Skip lines that aren't clearly a name followed by a number.
 - If you truly cannot read anything, return an empty array.
 
 Respond with ONLY a JSON array, no markdown fences, no commentary. Example:
 [{"name":"Tristan Dunn","value":4.52},{"name":"Malachi Long","value":4.61}]`;
 
-type ExtractBody =
-  { mode: "image"; imageBase64: string; mimeType: string } | { mode: "transcript"; text: string };
+type ExtractBody = { imageBase64: string; mimeType: string };
 
 type ExtractedEntry = { name: string; value: number };
 
@@ -89,28 +87,18 @@ export const Route = createFileRoute("/tests-import-extract")({
           return Response.json({ error: "Invalid JSON body" }, { status: 400 });
         }
 
+        if (!body.imageBase64 || !body.mimeType) {
+          return Response.json({ error: "imageBase64 and mimeType are required" }, { status: 400 });
+        }
         const content: Array<
           { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
-        > = [{ type: "text", text: EXTRACT_PROMPT }];
-        if (body.mode === "image") {
-          if (!body.imageBase64 || !body.mimeType) {
-            return Response.json(
-              { error: "imageBase64 and mimeType are required" },
-              { status: 400 },
-            );
-          }
-          content.push({
+        > = [
+          { type: "text", text: EXTRACT_PROMPT },
+          {
             type: "image_url",
             image_url: { url: `data:${body.mimeType};base64,${body.imageBase64}` },
-          });
-        } else if (body.mode === "transcript") {
-          if (!body.text?.trim()) {
-            return Response.json({ error: "text is required" }, { status: 400 });
-          }
-          content.push({ type: "text", text: `Transcript:\n${body.text}` });
-        } else {
-          return Response.json({ error: "mode must be 'image' or 'transcript'" }, { status: 400 });
-        }
+          },
+        ];
 
         let aiRes: Response;
         try {

@@ -1,9 +1,8 @@
-// Two ways to bulk-log a clipboard's worth of test results without typing
-// each one by hand: snap a photo of the handwritten sheet, or read the
-// names and numbers out loud while this is listening. Either way, every
-// extracted name gets matched against the roster and shown for review —
-// nothing reaches `tests` until the coach confirms each row.
-import { useMemo, useRef, useState } from "react";
+// Bulk-log a clipboard's worth of test results from a photo instead of
+// typing each one in by hand. Every extracted name gets matched against the
+// roster and shown for review — nothing reaches `tests` until the coach
+// confirms each row.
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { athletesQO, testTypesQO, customMetricsQO, type Athlete } from "@/lib/queries";
@@ -19,11 +18,9 @@ import {
 } from "@/lib/name-match";
 import {
   extractEntriesFromImage,
-  extractEntriesFromTranscript,
   fileToBase64,
   type ExtractedTestEntry,
 } from "@/lib/test-import-extract";
-import { getSpeechRecognitionCtor, type SpeechRecognitionLike } from "@/lib/speech-recognition";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +32,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -46,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AthleteCombobox } from "@/components/athlete-combobox";
-import { Camera, Mic, Square, Loader2 } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -66,7 +62,7 @@ function splitFullName(name: string): { firstName: string; lastName: string } {
   };
 }
 
-export function TestPhotoVoiceImport({
+export function TestPhotoImport({
   open,
   onOpenChange,
 }: {
@@ -90,12 +86,8 @@ export function TestPhotoVoiceImport({
   const [testDate, setTestDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const meta = allTestTypes.find((t) => t.value === testType);
-  const speechSupported = !!getSpeechRecognitionCtor();
 
   const buildRows = (entries: ExtractedTestEntry[]) => {
     const built: ImportRow[] = entries.map((e, i) => {
@@ -124,60 +116,6 @@ export function TestPhotoVoiceImport({
       const entries = await extractEntriesFromImage(base64, file.type || "image/jpeg");
       if (!entries.length) {
         toast.error("Couldn't find any name/number pairs in that photo.");
-        return;
-      }
-      buildRows(entries);
-      toast.success(`Found ${entries.length} entries — review below`);
-    } catch (e) {
-      toast.error(toUserMessage(e as Error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startRecording = () => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      toast.error("Voice input isn't supported in this browser.");
-      return;
-    }
-    setTranscript("");
-    const rec = new Ctor();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    rec.onresult = (event) => {
-      let finalText = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) finalText += r[0].transcript + " ";
-      }
-      if (finalText) setTranscript((t) => (t + " " + finalText).trim());
-    };
-    rec.onerror = (event) => {
-      if (event.error !== "no-speech") toast.error(`Voice input error: ${event.error}`);
-    };
-    rec.onend = () => setRecording(false);
-    recognitionRef.current = rec;
-    rec.start();
-    setRecording(true);
-  };
-
-  const stopRecording = () => {
-    recognitionRef.current?.stop();
-    setRecording(false);
-  };
-
-  const parseTranscript = async () => {
-    if (!transcript.trim()) {
-      toast.error("Nothing recorded yet");
-      return;
-    }
-    setBusy(true);
-    try {
-      const entries = await extractEntriesFromTranscript(transcript);
-      if (!entries.length) {
-        toast.error("Couldn't find any name/number pairs in that recording.");
         return;
       }
       buildRows(entries);
@@ -225,18 +163,11 @@ export function TestPhotoVoiceImport({
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: ["tests"] });
       toast.success(`Logged ${n} test${n === 1 ? "" : "s"}`);
-      resetAll();
+      setRows([]);
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
-
-  const resetAll = () => {
-    setRows([]);
-    setTranscript("");
-    recognitionRef.current?.stop();
-    setRecording(false);
-  };
 
   const athleteById = useMemo(() => new Map(athletes.map((a: Athlete) => [a.id, a])), [athletes]);
 
@@ -245,12 +176,12 @@ export function TestPhotoVoiceImport({
       open={open}
       onOpenChange={(v) => {
         onOpenChange(v);
-        if (!v) resetAll();
+        if (!v) setRows([]);
       }}
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Import from photo or voice</DialogTitle>
+          <DialogTitle>Import from photo</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -284,91 +215,30 @@ export function TestPhotoVoiceImport({
 
         {!testType ? (
           <p className="rounded-md bg-muted/50 px-3 py-6 text-center text-sm text-muted-foreground">
-            Pick a test type above to start a photo or voice import.
+            Pick a test type above to start a photo import.
           </p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label
-              className={cn(
-                "flex h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-sm text-muted-foreground transition hover:bg-muted/50",
-                busy && "pointer-events-none opacity-60",
-              )}
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-              <span>{busy ? "Reading…" : "Take or choose a photo"}</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                disabled={busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void onPhoto(f);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-
-            <div className="flex h-24 flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-sm text-muted-foreground">
-              {!speechSupported ? (
-                <span className="px-3 text-center text-xs">
-                  Voice input isn't supported in this browser.
-                </span>
-              ) : recording ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={stopRecording}
-                  >
-                    <Square className="h-3.5 w-3.5" /> Stop
-                  </Button>
-                  <span className="text-xs">Listening…</span>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    disabled={busy}
-                    onClick={startRecording}
-                  >
-                    <Mic className="h-3.5 w-3.5" /> Record
-                  </Button>
-                  <span className="text-xs">Read names + numbers aloud</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {transcript && (
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Transcript</Label>
-              {!recording && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => void parseTranscript()}
-                >
-                  {busy ? "Parsing…" : "Parse transcript"}
-                </Button>
-              )}
-            </div>
-            <Textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              rows={2}
-              className="text-sm"
+          <label
+            className={cn(
+              "flex h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-sm text-muted-foreground transition hover:bg-muted/50",
+              busy && "pointer-events-none opacity-60",
+            )}
+          >
+            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+            <span>{busy ? "Reading…" : "Take or choose a photo"}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onPhoto(f);
+                e.target.value = "";
+              }}
             />
-          </div>
+          </label>
         )}
 
         {rows.length > 0 && (
@@ -378,7 +248,7 @@ export function TestPhotoVoiceImport({
                 <table className="w-full border-collapse text-sm">
                   <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border/60 bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="px-3 py-2">Heard / read</th>
+                      <th className="px-3 py-2">Read from photo</th>
                       <th className="px-3 py-2">Matched athlete</th>
                       <th className="px-3 py-2">Value</th>
                       <th className="px-3 py-2">Status</th>
