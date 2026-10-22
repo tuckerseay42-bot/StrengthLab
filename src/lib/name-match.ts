@@ -18,6 +18,44 @@ export type MatchCandidate = {
   confidence: MatchConfidence;
 };
 
+// A review-table row's confidence also covers the two states a raw match
+// score can't produce on its own: a coach picked the match by hand, or
+// nothing matched at all. Shared by every import flow (roster CSV/PDF,
+// test-sheet photo/voice) that shows this same "review before applying"
+// table.
+export type RowMatchConfidence = MatchConfidence | "manual" | "none";
+
+export const MATCH_CONFIDENCE_LABEL: Record<RowMatchConfidence, string> = {
+  id: "Matched by student ID",
+  exact: "Exact name match",
+  fuzzy: "Likely match — review",
+  weak: "Last-name match only — please review",
+  manual: "Confirmed",
+  none: "No match found",
+};
+
+export const MATCH_CONFIDENCE_CLASS: Record<RowMatchConfidence, string> = {
+  id: "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
+  exact:
+    "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
+  manual:
+    "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
+  fuzzy: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  weak: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  none: "border-border bg-muted text-muted-foreground",
+};
+
+// Review order: rows needing a closer look float to the top instead of
+// making the coach hunt for them in a long list.
+export const MATCH_CONFIDENCE_REVIEW_ORDER: Record<RowMatchConfidence, number> = {
+  none: 0,
+  weak: 1,
+  fuzzy: 2,
+  manual: 3,
+  exact: 4,
+  id: 5,
+};
+
 const SUFFIX_RE = /\b(jr|sr|ii|iii|iv|v)\b\.?/g;
 
 function normalize(s: string): string {

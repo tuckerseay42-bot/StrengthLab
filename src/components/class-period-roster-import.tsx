@@ -8,7 +8,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { athletesQO, titleCaseName, type Athlete } from "@/lib/queries";
 import { parseRosterPdf, parseRosterCsv, type RosterPdfRow } from "@/lib/roster-pdf-parse";
-import { matchCandidates, type MatchConfidence } from "@/lib/name-match";
+import {
+  matchCandidates,
+  MATCH_CONFIDENCE_LABEL,
+  MATCH_CONFIDENCE_CLASS,
+  MATCH_CONFIDENCE_REVIEW_ORDER,
+  type RowMatchConfidence,
+} from "@/lib/name-match";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,33 +25,11 @@ import { FileUp, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { toUserMessage } from "@/lib/db-errors";
 
-type RowConfidence = MatchConfidence | "manual" | "none";
-
 type Row = {
   id: string;
   pdfRow: RosterPdfRow;
   matchId: string;
-  confidence: RowConfidence;
-};
-
-const CONFIDENCE_LABEL: Record<RowConfidence, string> = {
-  id: "Matched by student ID",
-  exact: "Exact name match",
-  fuzzy: "Likely match — review",
-  weak: "Last-name match only — please review",
-  manual: "Confirmed",
-  none: "No match found",
-};
-
-const CONFIDENCE_CLASS: Record<RowConfidence, string> = {
-  id: "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
-  exact:
-    "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
-  manual:
-    "border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
-  fuzzy: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  weak: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  none: "border-border bg-muted text-muted-foreground",
+  confidence: RowMatchConfidence;
 };
 
 export function ClassPeriodRosterImport() {
@@ -81,7 +65,7 @@ export function ClassPeriodRosterImport() {
         // name that was already found.
         const candidates = matchCandidates(pdfRow, athletes);
         const top = candidates[0];
-        const confidence: RowConfidence = top?.confidence ?? "none";
+        const confidence: RowMatchConfidence = top?.confidence ?? "none";
         return {
           id: `${i}-${pdfRow.studentId || pdfRow.lastName}-${pdfRow.firstName}`,
           pdfRow,
@@ -91,15 +75,10 @@ export function ClassPeriodRosterImport() {
       });
       // Rows that need a closer look float to the top so the coach reviews
       // those first instead of hunting for them in a 40-row list.
-      const reviewOrder: Record<RowConfidence, number> = {
-        none: 0,
-        weak: 1,
-        fuzzy: 2,
-        manual: 3,
-        exact: 4,
-        id: 5,
-      };
-      built.sort((a, b) => reviewOrder[a.confidence] - reviewOrder[b.confidence]);
+      built.sort(
+        (a, b) =>
+          MATCH_CONFIDENCE_REVIEW_ORDER[a.confidence] - MATCH_CONFIDENCE_REVIEW_ORDER[b.confidence],
+      );
       setRows(built);
       setResults({});
     } catch (e) {
@@ -274,9 +253,11 @@ export function ClassPeriodRosterImport() {
                               ) : (
                                 <Badge
                                   variant="outline"
-                                  className={CONFIDENCE_CLASS[r.matchId ? r.confidence : "none"]}
+                                  className={
+                                    MATCH_CONFIDENCE_CLASS[r.matchId ? r.confidence : "none"]
+                                  }
                                 >
-                                  {r.matchId ? CONFIDENCE_LABEL[r.confidence] : "Skipped"}
+                                  {r.matchId ? MATCH_CONFIDENCE_LABEL[r.confidence] : "Skipped"}
                                 </Badge>
                               )}
                               {!result && alreadySet && (

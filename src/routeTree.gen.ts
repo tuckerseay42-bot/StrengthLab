@@ -43,6 +43,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TestsRouteImport } from './routes/tests'
+import { Route as TestsImportExtractRouteImport } from './routes/tests-import-extract'
 import { Route as TrainingRouteImport } from './routes/training'
 import { Route as WorkoutsRouteImport } from './routes/workouts'
 import { Route as AthleteJoinTokenRouteImport } from './routes/athlete-join.$token'
@@ -238,6 +239,11 @@ const TestsRoute = TestsRouteImport.update({
   path: '/tests',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TestsImportExtractRoute = TestsImportExtractRouteImport.update({
+  id: '/tests-import-extract',
+  path: '/tests-import-extract',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrainingRoute = TrainingRouteImport.update({
   id: '/training',
   path: '/training',
@@ -395,6 +401,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
   '/tests': typeof TestsRouteWithChildren
+  '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
@@ -455,6 +462,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
   '/tests': typeof TestsRouteWithChildren
+  '/tests-import-extract': typeof TestsImportExtractRoute
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
@@ -515,6 +523,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
   '/tests': typeof TestsRouteWithChildren
+  '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
@@ -577,6 +586,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/teams'
     | '/tests'
+    | '/tests-import-extract'
     | '/training'
     | '/workouts'
     | '/athlete-join/$token'
@@ -637,6 +647,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/teams'
     | '/tests'
+    | '/tests-import-extract'
     | '/workouts'
     | '/athlete-join/$token'
     | '/athlete/today'
@@ -696,6 +707,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/teams'
     | '/tests'
+    | '/tests-import-extract'
     | '/training'
     | '/workouts'
     | '/athlete-join/$token'
@@ -757,6 +769,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TeamsRoute: typeof TeamsRoute
   TestsRoute: typeof TestsRouteWithChildren
+  TestsImportExtractRoute: typeof TestsImportExtractRoute
   TrainingRoute: typeof TrainingRouteWithChildren
   WorkoutsRoute: typeof WorkoutsRouteWithChildren
   AthleteJoinTokenRoute: typeof AthleteJoinTokenRoute
@@ -1009,6 +1022,13 @@ declare module '@tanstack/react-router' {
       path: '/tests'
       fullPath: '/tests'
       preLoaderRoute: typeof TestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tests-import-extract': {
+      id: '/tests-import-extract'
+      path: '/tests-import-extract'
+      fullPath: '/tests-import-extract'
+      preLoaderRoute: typeof TestsImportExtractRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/training': {
@@ -1298,6 +1318,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TeamsRoute: TeamsRoute,
   TestsRoute: TestsRouteWithChildren,
+  TestsImportExtractRoute: TestsImportExtractRoute,
   TrainingRoute: TrainingRouteWithChildren,
   WorkoutsRoute: WorkoutsRouteWithChildren,
   AthleteJoinTokenRoute: AthleteJoinTokenRoute,

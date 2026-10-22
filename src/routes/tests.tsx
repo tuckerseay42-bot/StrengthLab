@@ -10,7 +10,6 @@ import {
   customMetricsQO,
   athleteTeamsQO,
   athleteDisplayName,
-  type CustomMetric,
   type CustomTestType,
 } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,7 +49,9 @@ import {
   ChevronUp,
   Monitor,
   Crown,
+  ScanLine,
 } from "lucide-react";
+import { TestPhotoVoiceImport } from "@/components/test-photo-voice-import";
 import {
   TEST_TYPES,
   testTypeMeta as baseTestTypeMeta,
@@ -60,7 +61,7 @@ import {
   sprintDistanceIn,
   mphToSeconds,
   secondsToMph,
-  customMetricTestTypeValue,
+  mergedTestTypes,
 } from "@/lib/domain";
 import { toast } from "sonner";
 import { AthleteCombobox } from "@/components/athlete-combobox";
@@ -84,59 +85,15 @@ function TestsPage() {
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null);
   const [attemptsDraft, setAttemptsDraft] = useState<Record<string, [string, string, string]>>({});
-  const allTestTypes = useMemo(() => {
-    type TypeOpt = {
-      value: string;
-      label: string;
-      unit: string;
-      lowerIsBetter: boolean;
-      group: string;
-    };
-    const base: TypeOpt[] = TEST_TYPES.map((t) => ({
-      value: t.value as string,
-      label: t.label as string,
-      unit: t.unit as string,
-      lowerIsBetter: t.lowerIsBetter,
-      group: t.group as string,
-    }));
-    const custom = customTypes.map((c) => ({
-      value: c.value,
-      label: c.label,
-      unit: c.unit,
-      lowerIsBetter: c.lower_is_better,
-      group: c.group_name,
-    }));
-    // Metrics created on the Metrics page are testable too — surface them here
-    // so coaches don't have to re-create the same thing as a test type.
-    const metricUnit = (m: CustomMetric) =>
-      m.unit ||
-      (m.measurement === "time"
-        ? "s"
-        : m.measurement === "height"
-          ? "in"
-          : m.measurement === "speed"
-            ? "mph"
-            : "lb");
-    const fromMetrics = customMetrics.map((m: CustomMetric) => ({
-      value: customMetricTestTypeValue(m),
-      label: m.name,
-      unit: metricUnit(m),
-      lowerIsBetter: m.lower_is_better,
-      group: "Metrics",
-    }));
-    const seen = new Set(base.map((t) => t.value));
-    const merged = [...base];
-    for (const t of [...custom, ...fromMetrics]) {
-      if (seen.has(t.value)) continue;
-      seen.add(t.value);
-      merged.push(t);
-    }
-    return merged;
-  }, [customTypes, customMetrics]);
+  const allTestTypes = useMemo(
+    () => mergedTestTypes(customTypes, customMetrics),
+    [customTypes, customMetrics],
+  );
 
   const testTypeMeta = (v: string) =>
     allTestTypes.find((t) => t.value === v) ?? baseTestTypeMeta(v);
   const [manageOpen, setManageOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [filters, setFilters] = useState(emptyFilters);
   const [testTypeFilter, setTestTypeFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
@@ -399,6 +356,14 @@ function TestsPage() {
             <Link to="/tests/kiosk">
               <Monitor className="h-4 w-4" /> Kiosk
             </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            disabled={!athletes.length}
+          >
+            <ScanLine className="h-4 w-4" /> Import
           </Button>
           <Button size="sm" onClick={() => setOpen(true)} disabled={!athletes.length}>
             <Plus className="h-4 w-4" /> Log test
@@ -884,6 +849,7 @@ function TestsPage() {
         customTypes={customTypes}
         orgId={orgId}
       />
+      <TestPhotoVoiceImport open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }

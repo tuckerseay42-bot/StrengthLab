@@ -16,16 +16,14 @@ import {
   customMetricsQO,
   athleteDisplayName,
   type Athlete,
-  type CustomMetric,
 } from "@/lib/queries";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import {
-  TEST_TYPES,
   testTypeMeta as baseTestTypeMeta,
   sprintDistanceIn,
   mphToSeconds,
-  customMetricTestTypeValue,
+  mergedTestTypes,
 } from "@/lib/domain";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,14 +50,6 @@ export const Route = createFileRoute("/tests/kiosk")({
 
 const KIOSK_METRIC_KEY = "sl.testKiosk.metric";
 
-type TypeOpt = {
-  value: string;
-  label: string;
-  unit: string;
-  lowerIsBetter: boolean;
-  group: string;
-};
-
 function initialsFor(name: string): string {
   const p = name.trim().split(/\s+/);
   return ((p[0]?.[0] ?? "") + (p[p.length - 1]?.[0] ?? "")).toUpperCase() || "?";
@@ -74,46 +64,10 @@ function TestKioskPage() {
 
   // Same test-type merge as the main Tests page: built-ins + org-defined
   // test types + Custom Metrics page entries, deduped by value.
-  const allTestTypes = useMemo(() => {
-    const base: TypeOpt[] = TEST_TYPES.map((t) => ({
-      value: t.value as string,
-      label: t.label as string,
-      unit: t.unit as string,
-      lowerIsBetter: t.lowerIsBetter,
-      group: t.group as string,
-    }));
-    const custom: TypeOpt[] = customTypes.map((c) => ({
-      value: c.value,
-      label: c.label,
-      unit: c.unit,
-      lowerIsBetter: c.lower_is_better,
-      group: c.group_name,
-    }));
-    const metricUnit = (m: CustomMetric) =>
-      m.unit ||
-      (m.measurement === "time"
-        ? "s"
-        : m.measurement === "height"
-          ? "in"
-          : m.measurement === "speed"
-            ? "mph"
-            : "lb");
-    const fromMetrics: TypeOpt[] = customMetrics.map((m: CustomMetric) => ({
-      value: customMetricTestTypeValue(m),
-      label: m.name,
-      unit: metricUnit(m),
-      lowerIsBetter: m.lower_is_better,
-      group: "Metrics",
-    }));
-    const seen = new Set(base.map((t) => t.value));
-    const merged = [...base];
-    for (const t of [...custom, ...fromMetrics]) {
-      if (seen.has(t.value)) continue;
-      seen.add(t.value);
-      merged.push(t);
-    }
-    return merged;
-  }, [customTypes, customMetrics]);
+  const allTestTypes = useMemo(
+    () => mergedTestTypes(customTypes, customMetrics),
+    [customTypes, customMetrics],
+  );
 
   const groups = useMemo(
     () => Array.from(new Set(allTestTypes.map((t) => t.group))),

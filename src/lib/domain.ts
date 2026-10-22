@@ -144,6 +144,81 @@ export function customMetricTestTypeValue(m: { test_type: string | null; name: s
   return m.test_type || slugifyMetricName(m.name);
 }
 
+export type TestTypeOption = {
+  value: string;
+  label: string;
+  unit: string;
+  lowerIsBetter: boolean;
+  group: string;
+};
+
+type CustomTestTypeRow = {
+  value: string;
+  label: string;
+  unit: string;
+  lower_is_better: boolean;
+  group_name: string;
+};
+
+type CustomMetricRow = {
+  test_type: string | null;
+  name: string;
+  unit: string | null;
+  measurement: string;
+  lower_is_better: boolean;
+};
+
+/**
+ * Every picker that lets a coach choose which test/metric to log against
+ * (the Tests page, Test Kiosk, the photo/voice import) needs the same merged
+ * list — built-in TEST_TYPES, plus org-defined test types, plus Custom
+ * Metrics, deduped by value — or a pick made in one place silently won't
+ * match what another place expects.
+ */
+export function mergedTestTypes(
+  customTypes: CustomTestTypeRow[],
+  customMetrics: CustomMetricRow[],
+): TestTypeOption[] {
+  const base: TestTypeOption[] = TEST_TYPES.map((t) => ({
+    value: t.value as string,
+    label: t.label as string,
+    unit: t.unit as string,
+    lowerIsBetter: t.lowerIsBetter,
+    group: t.group as string,
+  }));
+  const custom: TestTypeOption[] = customTypes.map((c) => ({
+    value: c.value,
+    label: c.label,
+    unit: c.unit,
+    lowerIsBetter: c.lower_is_better,
+    group: c.group_name,
+  }));
+  const metricUnit = (m: CustomMetricRow) =>
+    m.unit ||
+    (m.measurement === "time"
+      ? "s"
+      : m.measurement === "height"
+        ? "in"
+        : m.measurement === "speed"
+          ? "mph"
+          : "lb");
+  const fromMetrics: TestTypeOption[] = customMetrics.map((m) => ({
+    value: customMetricTestTypeValue(m),
+    label: m.name,
+    unit: metricUnit(m),
+    lowerIsBetter: m.lower_is_better,
+    group: "Metrics",
+  }));
+  const seen = new Set(base.map((t) => t.value));
+  const merged = [...base];
+  for (const t of [...custom, ...fromMetrics]) {
+    if (seen.has(t.value)) continue;
+    seen.add(t.value);
+    merged.push(t);
+  }
+  return merged;
+}
+
 // Known sprint distances in inches, keyed by test_type. Used to convert between
 // seconds and mph so coaches can enter either.
 const SPRINT_DISTANCE_IN: Record<string, number> = {
