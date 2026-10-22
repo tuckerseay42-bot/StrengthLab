@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Radar,
@@ -17,6 +17,7 @@ import {
   testTypesQO,
   exercisesQO,
   athleteDisplayName,
+  type Athlete,
 } from "@/lib/queries";
 import type { SpiderComparisonGroup, SpiderNormalizationMethod } from "@/lib/queries";
 import {
@@ -31,8 +32,10 @@ import {
   UNMAPPED_QUALITY_HINT,
   type ReportConfig,
   type QualityKey,
+  type AthleticismReport,
 } from "@/lib/athleticism-report";
 import { buildReportPdf, captureSvgAsPng, type PdfSection } from "@/lib/report-export";
+import { useActiveTeamId } from "@/hooks/use-active-team";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,9 +50,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Star, Plus, X, Download, RotateCcw, Radar as RadarIcon } from "lucide-react";
+import {
+  Star,
+  Plus,
+  X,
+  Download,
+  RotateCcw,
+  Radar as RadarIcon,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+type RankKey = QualityKey | "overall";
+const RANK_OPTIONS: { key: RankKey; label: string }[] = [
+  { key: "overall", label: "Overall" },
+  ...QUALITIES.map((q) => ({ key: q.key as RankKey, label: q.label })),
+];
 
 export const Route = createFileRoute("/athleticism-report")({
   head: () => ({ meta: [{ title: "Athleticism Report — Strength Lab" }] }),
@@ -108,6 +126,9 @@ function AthleticismReportPage() {
   const [config, setConfig] = useState<ReportConfig>(() => loadConfig());
   const [note, setNote] = useState<string | null>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<"single" | "team">("single");
+  const [rankBy, setRankBy] = useState<RankKey>("overall");
+  const [activeTeamId] = useActiveTeamId();
 
   useEffect(() => {
     if (!athleteId && athletes.length) setAthleteId(athletes[0].id);
@@ -140,6 +161,70 @@ function AthleticismReportPage() {
       config,
     });
   }, [athlete, athletes, tests, lifts, customMetrics, customTypes, exercises, config]);
+
+  // Team mode: the same quality→metric mapping used for one athlete, run
+  // across the active team's whole roster, so a coach can rank everyone by
+  // a quality or flip straight to any athlete's full report.
+  const rosterForTeam = useMemo(
+    () => (activeTeamId ? athletes.filter((a) => a.team_id === activeTeamId) : athletes),
+    [athletes, activeTeamId],
+  );
+  const teamReports = useMemo(() => {
+    if (mode !== "team") return [];
+    return rosterForTeam.map((a) => ({
+      athlete: a,
+      report: computeAthleticismReport({
+        athlete: a,
+        athletes,
+        tests,
+        lifts,
+        customMetrics,
+        customTypes,
+        exercises,
+        config,
+      }),
+    }));
+  }, [mode, rosterForTeam, athletes, tests, lifts, customMetrics, customTypes, exercises, config]);
+
+  const rankValue = useCallback(
+    (r: AthleticismReport): number | null => {
+      if (rankBy !== "overall")
+        return r.qualities.find((q) => q.key === rankBy)?.avgNormalized ?? null;
+      const present = r.qualities.filter((q) => q.avgNormalized != null);
+      return present.length
+        ? present.reduce((a, q) => a + (q.avgNormalized ?? 0), 0) / present.length
+        : null;
+    },
+    [rankBy],
+  );
+
+  const sortedTeam = useMemo(
+    () =>
+      [...teamReports].sort((a, b) => {
+        const av = rankValue(a.report);
+        const bv = rankValue(b.report);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return bv - av;
+      }),
+    [teamReports, rankValue],
+  );
+
+  const teamRadarData = useMemo(
+    () =>
+      QUALITIES.map((q) => {
+        const vals = teamReports
+          .map((t) => t.report.qualities.find((x) => x.key === q.key)?.avgNormalized)
+          .filter((v): v is number => v != null);
+        return {
+          axis: q.label,
+          value: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0,
+          missing: vals.length === 0,
+        };
+      }),
+    [teamReports],
+  );
 
   const autoNote = report?.autoNote ?? "";
   const noteText = note ?? autoNote;
@@ -302,19 +387,45 @@ function AthleticismReportPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Athleticism Report</h1>
-          <p className="text-sm text-muted-foreground">
-            Build an 8-quality athlete report from real test data and export a printable PDF.
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-bold tracking-tight">Athleticism Report</h1>
+            <p className="text-sm text-muted-foreground">
+              Build an 8-quality athlete report from real test data and export a printable PDF.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-md bg-muted p-0.5 text-xs">
+            <button
+              type="button"
+              className={cn(
+                "rounded px-2.5 py-1.5 font-medium transition-colors",
+                mode === "single" ? "bg-background shadow-sm" : "text-muted-foreground",
+              )}
+              onClick={() => setMode("single")}
+            >
+              Single
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "flex items-center gap-1 rounded px-2.5 py-1.5 font-medium transition-colors",
+                mode === "team" ? "bg-background shadow-sm" : "text-muted-foreground",
+              )}
+              onClick={() => setMode("team")}
+            >
+              <Users className="h-3.5 w-3.5" /> Team
+            </button>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={resetDefaults}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset mapping
           </Button>
-          <Button size="sm" onClick={downloadPdf} disabled={!athlete}>
-            <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
-          </Button>
+          {mode === "single" && (
+            <Button size="sm" onClick={downloadPdf} disabled={!athlete}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+            </Button>
+          )}
         </div>
       </div>
 
@@ -323,10 +434,35 @@ function AthleticismReportPage() {
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Athlete</CardTitle>
+              <CardTitle className="text-sm">{mode === "team" ? "Team" : "Athlete"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AthleteCombobox athletes={athletes} value={athleteId} onChange={setAthleteId} />
+              {mode === "team" ? (
+                <div>
+                  <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Rank by
+                  </Label>
+                  <Select value={rankBy} onValueChange={(v) => setRankBy(v as RankKey)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RANK_OPTIONS.map((o) => (
+                        <SelectItem key={o.key} value={o.key} className="text-xs">
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {activeTeamId
+                      ? `Scoped to the active team — ${rosterForTeam.length} athlete${rosterForTeam.length === 1 ? "" : "s"}.`
+                      : `No active team set — ranking all ${rosterForTeam.length} athletes.`}
+                  </p>
+                </div>
+              ) : (
+                <AthleteCombobox athletes={athletes} value={athleteId} onChange={setAthleteId} />
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -379,30 +515,32 @@ function AthleticismReportPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Report sections</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {(
-                [
-                  ["spider", "Spider chart"],
-                  ["gainBoard", "Gain board"],
-                  ["physicalProfile", "Physical profile"],
-                ] as const
-              ).map(([k, label]) => (
-                <div key={k} className="flex items-center justify-between">
-                  <Label className="text-sm font-normal">{label}</Label>
-                  <Switch
-                    checked={config.sections[k]}
-                    onCheckedChange={(v) =>
-                      setConfig((c) => ({ ...c, sections: { ...c.sections, [k]: v } }))
-                    }
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          {mode === "single" && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Report sections</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {(
+                  [
+                    ["spider", "Spider chart"],
+                    ["gainBoard", "Gain board"],
+                    ["physicalProfile", "Physical profile"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <div key={k} className="flex items-center justify-between">
+                    <Label className="text-sm font-normal">{label}</Label>
+                    <Switch
+                      checked={config.sections[k]}
+                      onCheckedChange={(v) =>
+                        setConfig((c) => ({ ...c, sections: { ...c.sections, [k]: v } }))
+                      }
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
@@ -486,7 +624,116 @@ function AthleticismReportPage() {
 
         {/* PREVIEW */}
         <div className="space-y-4">
-          {!athlete || !report ? (
+          {mode === "team" ? (
+            rosterForTeam.length === 0 ? (
+              <Card className="flex min-h-[320px] items-center justify-center text-sm text-muted-foreground">
+                No athletes on the active team.
+              </Card>
+            ) : (
+              <>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <RadarIcon className="h-4 w-4" /> Team average
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart
+                          data={teamRadarData}
+                          outerRadius="70%"
+                          margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
+                        >
+                          <PolarGrid stroke="color-mix(in oklab, var(--foreground) 12%, transparent)" />
+                          <PolarAngleAxis
+                            dataKey="axis"
+                            tick={{
+                              fill: "var(--color-muted-foreground)",
+                              fontSize: 11,
+                              fontWeight: 500,
+                            }}
+                            tickLine={false}
+                          />
+                          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                          <Radar
+                            dataKey="value"
+                            stroke="oklch(0.6 0.16 280)"
+                            strokeWidth={2.4}
+                            fill="oklch(0.6 0.16 280)"
+                            fillOpacity={0.16}
+                            isAnimationActive={false}
+                          />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Trophy className="h-4 w-4" />
+                      Leaderboard · {RANK_OPTIONS.find((o) => o.key === rankBy)?.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <ul className="divide-y divide-border">
+                      {sortedTeam.map((t, i) => {
+                        const q =
+                          rankBy === "overall"
+                            ? null
+                            : t.report.qualities.find((x) => x.key === rankBy);
+                        const level =
+                          rankBy === "overall" ? t.report.overallLevel : (q?.level ?? null);
+                        const levelLabel =
+                          rankBy === "overall"
+                            ? t.report.overallLevelLabel
+                            : (q?.levelLabel ?? "No data");
+                        return (
+                          <li key={t.athlete.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAthleteId(t.athlete.id);
+                                setMode("single");
+                              }}
+                              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-muted/40"
+                            >
+                              <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
+                                {i + 1}
+                              </span>
+                              {t.athlete.photo_url ? (
+                                <img
+                                  src={t.athlete.photo_url}
+                                  alt=""
+                                  className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
+                                />
+                              ) : (
+                                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-dashed border-border text-[9px] text-muted-foreground">
+                                  —
+                                </div>
+                              )}
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                {athleteDisplayName(t.athlete)}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="shrink-0"
+                                style={{ borderColor: levelColor(level), color: levelColor(level) }}
+                              >
+                                {levelLabel}
+                              </Badge>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </>
+            )
+          ) : !athlete || !report ? (
             <Card className="flex min-h-[320px] items-center justify-center text-sm text-muted-foreground">
               Add athletes to your roster to build a report.
             </Card>
