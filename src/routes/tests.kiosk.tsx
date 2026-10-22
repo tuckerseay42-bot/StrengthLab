@@ -57,6 +57,7 @@ import { AthleteCombobox } from "@/components/athlete-combobox";
 import { ArrowLeft, Check, Search, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { fullscreenApiSupported } from "@/lib/fullscreen";
 
 export const Route = createFileRoute("/tests/kiosk")({
   head: () => ({
@@ -242,11 +243,16 @@ function TestKioskPage() {
   const boardCardRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
+    if (!fullscreenApiSupported()) return;
     const onChange = () => setIsFullscreen(document.fullscreenElement === boardCardRef.current);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
   const toggleFullscreen = () => {
+    if (!fullscreenApiSupported()) {
+      setIsFullscreen((v) => !v);
+      return;
+    }
     if (document.fullscreenElement) void document.exitFullscreen();
     else void boardCardRef.current?.requestFullscreen();
   };
@@ -419,7 +425,8 @@ function TestKioskPage() {
           <Card
             ref={boardCardRef}
             className={cn(
-              isFullscreen && "overflow-y-auto rounded-none border-0 bg-background p-4",
+              isFullscreen &&
+                "fixed inset-0 z-50 m-0 overflow-y-auto rounded-none border-0 bg-background p-4",
             )}
           >
             <CardHeader className="pb-2">

@@ -44,6 +44,7 @@ import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { cn } from "@/lib/utils";
 import { notifyParent } from "@/lib/notify-parent";
+import { fullscreenApiSupported } from "@/lib/fullscreen";
 
 function lastNameOf(a: Athlete): string {
   return (a.last_name || a.name.trim().split(/\s+/).slice(-1)[0] || "").toLowerCase();
@@ -69,17 +70,22 @@ function AttendancePage() {
   const [view, setView] = useState<"list" | "board">("list");
   const [boardSearch, setBoardSearch] = useState("");
 
-  // Fullscreen on the check-in card itself — the browser's native
-  // Fullscreen API, scoped to this one element, so nothing but the board
-  // (and its own header controls) is on screen on a mounted/shared device.
+  // Fullscreen on the check-in card itself. iOS Safari has no Fullscreen
+  // API for ordinary elements, so on a phone/iPad this falls back to a
+  // CSS-only "cover the viewport" treatment instead of silently no-oping.
   const checkinCardRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
+    if (!fullscreenApiSupported()) return;
     const onChange = () => setIsFullscreen(document.fullscreenElement === checkinCardRef.current);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
   const toggleFullscreen = () => {
+    if (!fullscreenApiSupported()) {
+      setIsFullscreen((v) => !v);
+      return;
+    }
     if (document.fullscreenElement) void document.exitFullscreen();
     else void checkinCardRef.current?.requestFullscreen();
   };
@@ -431,7 +437,10 @@ function AttendancePage() {
 
       <Card
         ref={checkinCardRef}
-        className={cn(isFullscreen && "overflow-y-auto rounded-none border-0 bg-background p-4")}
+        className={cn(
+          isFullscreen &&
+            "fixed inset-0 z-50 m-0 overflow-y-auto rounded-none border-0 bg-background p-4",
+        )}
       >
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
