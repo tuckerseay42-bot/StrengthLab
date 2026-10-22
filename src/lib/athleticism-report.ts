@@ -51,6 +51,10 @@ export const MAX_HIGHLIGHTS = 3;
 export type ReportConfig = {
   qualityMetrics: Record<QualityKey, string[]>; // metric_key strings ("test:x" / "metric:id")
   starred: string[]; // metric_key list, capped at MAX_HIGHLIGHTS across the whole report
+  // Display/print order of the 7 fixed qualities — reorderable in the
+  // builder, but every quality always appears (possibly unconfigured),
+  // unlike a variable add/remove set.
+  qualityOrder: QualityKey[];
   comparisonGroup: SpiderComparisonGroup;
   normalizationMethod: SpiderNormalizationMethod;
   sections: { spider: boolean; gainBoard: boolean; physicalProfile: boolean };
@@ -67,6 +71,7 @@ export const DEFAULT_CONFIG: ReportConfig = {
     speed: ["test:sprint_40y"],
   },
   starred: [],
+  qualityOrder: QUALITIES.map((q) => q.key),
   comparisonGroup: "team",
   normalizationMethod: "percentile",
   sections: { spider: true, gainBoard: true, physicalProfile: true },
@@ -209,8 +214,13 @@ export function computeAthleticismReport(input: {
     updated_at: "",
   };
 
+  const orderedQualities =
+    config.qualityOrder?.length === QUALITIES.length
+      ? config.qualityOrder.map((key) => QUALITIES.find((q) => q.key === key)!).filter(Boolean)
+      : QUALITIES;
+
   let seq = 0;
-  const qualities: QualityResult[] = QUALITIES.map((q) => {
+  const qualities: QualityResult[] = orderedQualities.map((q) => {
     const keys = config.qualityMetrics[q.key] ?? [];
     const spiderMetrics: SpiderMetric[] = keys.map((k) => ({
       id: `q-${q.key}-${seq++}`,

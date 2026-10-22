@@ -27,14 +27,13 @@ import {
   MAX_HIGHLIGHTS,
   LEVEL_LABELS,
   metricOptions,
-  metricLabelFor,
   computeAthleticismReport,
-  UNMAPPED_QUALITY_HINT,
   type ReportConfig,
   type QualityKey,
   type AthleticismReport,
 } from "@/lib/athleticism-report";
 import { AthleticismPrintReport } from "@/components/athleticism-print-report";
+import { AthleticismQualityBoard } from "@/components/athleticism-quality-board";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,16 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Star,
-  Plus,
-  X,
-  Download,
-  RotateCcw,
-  Radar as RadarIcon,
-  Trophy,
-  Users,
-} from "lucide-react";
+import { Star, Download, RotateCcw, Radar as RadarIcon, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -227,38 +217,6 @@ function AthleticismReportPage() {
 
   const autoNote = report?.autoNote ?? "";
   const noteText = note ?? autoNote;
-
-  function updateQuality(key: QualityKey, next: string[]) {
-    setConfig((c) => ({ ...c, qualityMetrics: { ...c.qualityMetrics, [key]: next } }));
-  }
-
-  function addMetric(key: QualityKey, metricKey: string) {
-    const cur = config.qualityMetrics[key] ?? [];
-    if (cur.includes(metricKey) || cur.length >= MAX_METRICS_PER_QUALITY) return;
-    updateQuality(key, [...cur, metricKey]);
-  }
-
-  function removeMetric(key: QualityKey, metricKey: string) {
-    updateQuality(
-      key,
-      (config.qualityMetrics[key] ?? []).filter((k) => k !== metricKey),
-    );
-    if (config.starred.includes(metricKey)) {
-      setConfig((c) => ({ ...c, starred: c.starred.filter((k) => k !== metricKey) }));
-    }
-  }
-
-  function toggleStar(metricKey: string) {
-    setConfig((c) => {
-      if (c.starred.includes(metricKey))
-        return { ...c, starred: c.starred.filter((k) => k !== metricKey) };
-      if (c.starred.length >= MAX_HIGHLIGHTS) {
-        toast.error(`Only ${MAX_HIGHLIGHTS} highlighted stats allowed — remove one first`);
-        return c;
-      }
-      return { ...c, starred: [...c.starred, metricKey] };
-    });
-  }
 
   function resetDefaults() {
     setConfig(DEFAULT_CONFIG);
@@ -440,78 +398,19 @@ function AthleticismReportPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Athletic qualities</CardTitle>
               <p className="text-[11px] text-muted-foreground">
-                Up to {MAX_METRICS_PER_QUALITY} tests per quality. Star up to {MAX_HIGHLIGHTS}{" "}
-                across the whole report to highlight them.
+                Drag to reorder qualities or tests, or drag a test in from the tray. Up to{" "}
+                {MAX_METRICS_PER_QUALITY} tests per quality; star up to {MAX_HIGHLIGHTS} across the
+                whole report to highlight them.
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {QUALITIES.map((q) => {
-                const picked = config.qualityMetrics[q.key] ?? [];
-                const available = options.filter((o) => !picked.includes(o.key));
-                return (
-                  <div key={q.key} className="rounded-lg border border-border/60 p-2.5">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {q.label}
-                    </div>
-                    <div className="mt-2 space-y-1.5">
-                      {picked.map((k) => (
-                        <div
-                          key={k}
-                          className="flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleStar(k)}
-                            aria-pressed={config.starred.includes(k)}
-                            aria-label={config.starred.includes(k) ? "Unstar" : "Star to highlight"}
-                            className="shrink-0"
-                          >
-                            <Star
-                              className={cn(
-                                "h-3.5 w-3.5",
-                                config.starred.includes(k)
-                                  ? "fill-[oklch(0.82_0.17_85)] text-[oklch(0.82_0.17_85)]"
-                                  : "text-muted-foreground",
-                              )}
-                            />
-                          </button>
-                          <span className="min-w-0 flex-1 truncate text-xs">
-                            {metricLabelFor(k, options)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeMetric(q.key, k)}
-                            aria-label="Remove"
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      {picked.length < MAX_METRICS_PER_QUALITY && (
-                        <Select value="" onValueChange={(v) => addMetric(q.key, v)}>
-                          <SelectTrigger className="h-8 text-xs text-muted-foreground">
-                            <Plus className="mr-1 h-3 w-3" />{" "}
-                            <SelectValue placeholder="Add a test or metric" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {available.map((o) => (
-                              <SelectItem key={o.key} value={o.key} className="text-xs">
-                                {o.label} <span className="text-muted-foreground">· {o.group}</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {picked.length === 0 && UNMAPPED_QUALITY_HINT[q.key] && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {UNMAPPED_QUALITY_HINT[q.key]}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <CardContent>
+              <AthleticismQualityBoard
+                config={config}
+                setConfig={setConfig}
+                options={options}
+                qualityOrder={config.qualityOrder}
+                setQualityOrder={(order) => setConfig((c) => ({ ...c, qualityOrder: order }))}
+              />
             </CardContent>
           </Card>
         </div>
