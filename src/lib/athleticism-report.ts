@@ -31,6 +31,20 @@ export const QUALITIES: { key: QualityKey; label: string }[] = [
   { key: "acceleration", label: "Acceleration" },
   { key: "speed", label: "Speed" },
 ];
+
+// One flat accent color per quality — used by the spider chart axes and the
+// printable report's quality-row chips, where each quality needs its own
+// color rather than the shared level/score coloring used elsewhere.
+export const QUALITY_COLORS: Record<QualityKey, string> = {
+  size: "#9CA3AF",
+  upper_body: "#F87171",
+  lower_body: "#FB923C",
+  power: "#34D399",
+  agility: "#A78BFA",
+  acceleration: "#22D3EE",
+  speed: "#FBBF24",
+};
+
 export const MAX_METRICS_PER_QUALITY = 3;
 export const MAX_HIGHLIGHTS = 3;
 
@@ -155,6 +169,7 @@ export type GainRow = {
   after: number | null;
   delta: number | null;
   improved: boolean | null;
+  lowerIsBetter: boolean;
 };
 
 export type AthleticismReport = {
@@ -278,6 +293,7 @@ export function computeAthleticismReport(input: {
           after,
           delta,
           improved,
+          lowerIsBetter: m.lowerIsBetter,
         });
       } else if (m.key.startsWith("lift:")) {
         seenKeys.add(m.key);
@@ -309,6 +325,7 @@ export function computeAthleticismReport(input: {
           after,
           delta,
           improved,
+          lowerIsBetter: m.lowerIsBetter,
         });
       }
     }

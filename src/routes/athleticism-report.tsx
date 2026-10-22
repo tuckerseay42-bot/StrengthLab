@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Radar,
@@ -34,7 +34,7 @@ import {
   type QualityKey,
   type AthleticismReport,
 } from "@/lib/athleticism-report";
-import { buildReportPdf, captureSvgAsPng, type PdfSection } from "@/lib/report-export";
+import { AthleticismPrintReport } from "@/components/athleticism-print-report";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,7 +125,6 @@ function AthleticismReportPage() {
   const [athleteId, setAthleteId] = useState<string>("");
   const [config, setConfig] = useState<ReportConfig>(() => loadConfig());
   const [note, setNote] = useState<string | null>(null);
-  const chartWrapRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"single" | "team">("single");
   const [rankBy, setRankBy] = useState<RankKey>("overall");
   const [activeTeamId] = useActiveTeamId();
@@ -277,112 +276,7 @@ function AthleticismReportPage() {
     [report],
   );
 
-  async function downloadPdf() {
-    if (!athlete || !report) return;
-    const sections: PdfSection[] = [];
-    sections.push({ kind: "heading", text: athleteDisplayName(athlete), level: 1 });
-    sections.push({
-      kind: "kv",
-      rows: [
-        ["Sport", [athlete.sport, athlete.position].filter(Boolean).join(" · ") || "—"],
-        ["Grade", athlete.grade != null ? String(athlete.grade) : "—"],
-        ["Team", athlete.team_id ? "Assigned" : "—"],
-        [
-          "Athleticism Level",
-          `${report.overallLevelLabel}${report.overallLevel != null ? ` (${report.overallLevel}/4)` : ""}`,
-        ],
-      ],
-    });
-
-    if (report.highlighted.length) {
-      sections.push({ kind: "heading", text: "Highlighted stats", level: 2 });
-      sections.push({
-        kind: "table",
-        head: ["Stat", "Quality", "Result"],
-        body: report.highlighted.map((h) => [
-          h.label,
-          h.qualityLabel,
-          h.raw != null ? `${h.raw}${h.unit}` : "—",
-        ]),
-      });
-    }
-
-    if (config.sections.spider) {
-      const svg = chartWrapRef.current?.querySelector("svg");
-      if (svg) {
-        const captured = await captureSvgAsPng(svg as unknown as SVGSVGElement, 2);
-        if (captured) {
-          sections.push({ kind: "heading", text: "Athletic quality spider", level: 2 });
-          const maxW = 520;
-          const scale = Math.min(1, maxW / captured.w);
-          sections.push({
-            kind: "image",
-            dataUrl: captured.dataUrl,
-            w: captured.w * scale,
-            h: captured.h * scale,
-          });
-        }
-      }
-    }
-
-    sections.push({ kind: "heading", text: "Quality breakdown", level: 2 });
-    sections.push({
-      kind: "table",
-      head: ["Quality", "Level", "Tests used"],
-      body: report.qualities.map((q) => [
-        q.label,
-        q.avgNormalized == null ? "No data" : `${q.levelLabel} (${q.level}/4)`,
-        q.metrics.length ? q.metrics.map((m) => m.label).join(", ") : "Not configured",
-      ]),
-    });
-
-    if (config.sections.gainBoard && report.gainBoard.length) {
-      sections.push({ kind: "heading", text: "Gain board", level: 2 });
-      sections.push({
-        kind: "table",
-        head: ["Test", "Before", "After", "Change"],
-        body: report.gainBoard.map((g) => [
-          g.label,
-          g.before != null ? `${g.before}${g.unit}` : "—",
-          g.after != null ? `${g.after}${g.unit}` : "—",
-          g.delta != null ? `${g.delta > 0 ? "+" : ""}${g.delta.toFixed(2)}${g.unit}` : "—",
-        ]),
-      });
-    }
-
-    if (config.sections.physicalProfile) {
-      sections.push({ kind: "heading", text: "Physical profile", level: 2 });
-      sections.push({
-        kind: "kv",
-        rows: [
-          [
-            "Height",
-            athlete.height_in
-              ? `${Math.floor(athlete.height_in / 12)}'${athlete.height_in % 12}"`
-              : "—",
-          ],
-          ["Bodyweight", athlete.bodyweight ? `${athlete.bodyweight} lb` : "—"],
-        ],
-      });
-    }
-
-    sections.push({ kind: "heading", text: "Coach's note", level: 2 });
-    sections.push({ kind: "kv", rows: [["Note", noteText]] });
-    sections.push({ kind: "spacer", h: 16 });
-    sections.push({
-      kind: "kv",
-      rows: [
-        ["Disclaimer", "This is a coaching discussion tool, not a medical or scouting evaluation."],
-      ],
-    });
-
-    buildReportPdf({
-      title: "Athleticism Report",
-      subtitle: athleteDisplayName(athlete),
-      sections,
-      filename: `athleticism-report-${athlete.name.replace(/\s+/g, "-").toLowerCase()}.pdf`,
-    });
-  }
+  const [printOpen, setPrintOpen] = useState(false);
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
@@ -422,8 +316,8 @@ function AthleticismReportPage() {
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset mapping
           </Button>
           {mode === "single" && (
-            <Button size="sm" onClick={downloadPdf} disabled={!athlete}>
-              <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+            <Button size="sm" onClick={() => setPrintOpen(true)} disabled={!athlete || !report}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Preview / Print report
             </Button>
           )}
         </div>
@@ -812,7 +706,7 @@ function AthleticismReportPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div ref={chartWrapRef} className="h-[340px]">
+                    <div className="h-[340px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <RadarChart
                           data={radarData}
@@ -971,6 +865,16 @@ function AthleticismReportPage() {
           )}
         </div>
       </div>
+
+      {printOpen && athlete && report && (
+        <AthleticismPrintReport
+          athlete={athlete}
+          report={report}
+          config={config}
+          note={noteText}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
     </div>
   );
 }
