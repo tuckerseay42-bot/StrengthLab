@@ -36,6 +36,33 @@ export function validateTestValue(testType: string, value: number): string | nul
   return null;
 }
 
+// A same-session jump this large (e.g. a 10-yard fly dropping from 1.0s to
+// 0.3s on one entry) is essentially always a typo, not a real improvement —
+// catches it for ANY test type, including org-defined custom ones that
+// TEST_BOUNDS has no fixed min/max for, by comparing against the athlete's
+// own prior best instead of a hardcoded range.
+export const IMPLAUSIBLE_JUMP_PCT = 0.3;
+
+/**
+ * Flags a newly entered value as an implausible swing from the athlete's
+ * current best for that test — only fires when there's a real prior best
+ * to compare against (never blocks a first-ever entry) and the change
+ * exceeds IMPLAUSIBLE_JUMP_PCT in either direction. Returns the percent
+ * swing (positive = better, negative = worse) for the confirm prompt, or
+ * null when nothing looks off.
+ */
+export function implausibleJump(
+  newValue: number,
+  priorBest: number | null,
+  lowerIsBetter: boolean,
+): number | null {
+  if (priorBest == null || priorBest === 0 || !Number.isFinite(newValue)) return null;
+  const rawPct = (newValue - priorBest) / priorBest;
+  const improvementPct = lowerIsBetter ? -rawPct : rawPct;
+  if (Math.abs(improvementPct) < IMPLAUSIBLE_JUMP_PCT) return null;
+  return improvementPct;
+}
+
 // Duplicate athlete check — case/whitespace insensitive on full name.
 export function findDuplicateAthlete<T extends { id: string; name: string }>(
   existing: T[], name: string, excludeId?: string,

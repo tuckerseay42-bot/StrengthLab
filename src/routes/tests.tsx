@@ -35,6 +35,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -69,6 +79,7 @@ import { toast } from "sonner";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
+import { validateTestValue, implausibleJump } from "@/lib/validation";
 
 export const Route = createFileRoute("/tests")({
   head: () => ({ meta: [{ title: "Tests — Strength Lab" }] }),
@@ -120,6 +131,16 @@ function TestsPage() {
   });
   // Per-assignment input mode for the attempts grid (seconds vs mph).
   const [attemptsMode, setAttemptsMode] = useState<Record<string, "seconds" | "mph">>({});
+  // A same-session jump this large (e.g. a typo'd 0.3s "10-yard fly") is
+  // almost always a mistake, not a real PR — held here so both the single
+  // Log-a-test save and the attempts grid can route through one confirm.
+  const [confirmJump, setConfirmJump] = useState<{
+    pct: number;
+    priorBest: number;
+    unit: string;
+    name: string;
+    proceed: () => void;
+  } | null>(null);
 
   const [activeTeamId] = useActiveTeamId();
   const teamsByAthlete = useMemo(() => {
@@ -132,6 +153,16 @@ function TestsPage() {
     return m;
   }, [athleteTeams]);
   const byId = useMemo(() => new Map(athletes.map((a) => [a.id, a])), [athletes]);
+  const priorBestFor = (athleteId: string, testType: string): number | null => {
+    const meta = testTypeMeta(testType);
+    let best: number | null = null;
+    for (const t of tests) {
+      if (t.athlete_id !== athleteId || t.test_type !== testType) continue;
+      const v = Number(t.value);
+      if (best == null || (meta.lowerIsBetter ? v < best : v > best)) best = v;
+    }
+    return best;
+  };
   const scopedAthletes = useMemo(
     () => filterAthletes(athletes, filters, activeTeamId, teamsByAthlete),
     [athletes, filters, activeTeamId, teamsByAthlete],
@@ -179,6 +210,34 @@ function TestsPage() {
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
+
+  const attemptSingleSave = () => {
+    if (!form.athlete_id) {
+      toast.error("Select an athlete");
+      return;
+    }
+    let val = Number(form.value);
+    if (!val || Number.isNaN(val)) {
+      toast.error("Enter a valid value");
+      return;
+    }
+    const meta = testTypeMeta(form.test_type);
+    const dist = sprintDistanceIn(form.test_type);
+    if (form.input_as === "mph" && meta.unit === "s" && dist) val = mphToSeconds(val, dist);
+    const boundsError = validateTestValue(form.test_type, val);
+    if (boundsError) {
+      toast.error(boundsError);
+      return;
+    }
+    const priorBest = priorBestFor(form.athlete_id, form.test_type);
+    const pct = implausibleJump(val, priorBest, meta.lowerIsBetter);
+    if (pct != null && priorBest != null) {
+      const name = byId.get(form.athlete_id)?.name ?? "This athlete";
+      setConfirmJump({ pct, priorBest, unit: meta.unit, name, proceed: () => save.mutate() });
+      return;
+    }
+    save.mutate();
+  };
 
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -280,6 +339,47 @@ function TestsPage() {
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
+
+  const attemptLogAttempts = (
+    assignment: (typeof assignments)[number],
+    athlete: { id: string; name: string },
+    attempts: [string, string, string],
+    mode: "seconds" | "mph",
+  ) => {
+    const meta = testTypeMeta(assignment.test_type);
+    const dist = sprintDistanceIn(assignment.test_type);
+    const shouldConvert = mode === "mph" && meta.unit === "s" && !!dist;
+    const values = attempts
+      .map((v) => Number(v))
+      .filter((v) => !Number.isNaN(v) && v > 0)
+      .map((v) => (shouldConvert ? mphToSeconds(v, dist as number) : v));
+    if (!values.length) {
+      toast.error("Enter at least one attempt");
+      return;
+    }
+    for (const v of values) {
+      const boundsError = validateTestValue(assignment.test_type, v);
+      if (boundsError) {
+        toast.error(boundsError);
+        return;
+      }
+    }
+    const payload = { assignment, athleteId: athlete.id, attempts, mode };
+    const priorBest = priorBestFor(athlete.id, assignment.test_type);
+    const best = values.reduce((b, v) => (meta.lowerIsBetter ? Math.min(b, v) : Math.max(b, v)));
+    const pct = implausibleJump(best, priorBest, meta.lowerIsBetter);
+    if (pct != null && priorBest != null) {
+      setConfirmJump({
+        pct,
+        priorBest,
+        unit: meta.unit,
+        name: athlete.name,
+        proceed: () => logAttempts.mutate(payload),
+      });
+      return;
+    }
+    logAttempts.mutate(payload);
+  };
 
   // For each test row, compute improvement vs first result for that athlete/test type
   const rows = useMemo(
@@ -574,14 +674,7 @@ function TestsPage() {
                                   ))}
                                   <Button
                                     size="sm"
-                                    onClick={() =>
-                                      logAttempts.mutate({
-                                        assignment: a,
-                                        athleteId: ath.id,
-                                        attempts: draft,
-                                        mode,
-                                      })
-                                    }
+                                    onClick={() => attemptLogAttempts(a, ath, draft, mode)}
                                     disabled={logAttempts.isPending || !draft.some((v) => v.trim())}
                                   >
                                     Save
@@ -815,7 +908,7 @@ function TestsPage() {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            <Button onClick={attemptSingleSave} disabled={save.isPending}>
               Save test
             </Button>
           </DialogFooter>
@@ -956,6 +1049,34 @@ function TestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!confirmJump} onOpenChange={(v) => !v && setConfirmJump(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Double-check this score</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmJump && (
+                <>
+                  {confirmJump.name}'s previous best was {confirmJump.priorBest} {confirmJump.unit}.
+                  This entry is a {Math.round(Math.abs(confirmJump.pct) * 100)}%{" "}
+                  {confirmJump.pct > 0 ? "improvement" : "drop"} in one go — unusual enough that
+                  it's often a typo. Save it anyway?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Re-check</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmJump?.proceed();
+                setConfirmJump(null);
+              }}
+            >
+              Save anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ManageTestTypesDialog
         open={manageOpen}
         onOpenChange={setManageOpen}

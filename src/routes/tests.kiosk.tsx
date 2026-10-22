@@ -6,10 +6,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { athletesQO, testTypesQO, customMetricsQO } from "@/lib/queries";
+import { athletesQO, testTypesQO, customMetricsQO, testsQO } from "@/lib/queries";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { mergedTestTypes } from "@/lib/domain";
+import { validateTestValue, implausibleJump } from "@/lib/validation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +52,7 @@ function TestKioskPage() {
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
   const { data: customMetrics = [] } = useQuery(customMetricsQO);
+  const { data: tests = [] } = useQuery(testsQO);
 
   const allTestTypes = useMemo(
     () => mergedTestTypes(customTypes, customMetrics),
@@ -57,8 +69,25 @@ function TestKioskPage() {
   );
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
+  const [confirmJump, setConfirmJump] = useState<{
+    pct: number;
+    priorBest: number;
+    name: string;
+  } | null>(null);
 
   const meta = allTestTypes.find((t) => t.value === testType);
+
+  const priorBestFor = (aId: string, tType: string): number | null => {
+    const typeMeta = allTestTypes.find((t) => t.value === tType);
+    if (!typeMeta) return null;
+    let best: number | null = null;
+    for (const t of tests) {
+      if (t.athlete_id !== aId || t.test_type !== tType) continue;
+      const v = Number(t.value);
+      if (best == null || (typeMeta.lowerIsBetter ? v < best : v > best)) best = v;
+    }
+    return best;
+  };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -90,6 +119,30 @@ function TestKioskPage() {
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
+
+  // A typo (one digit off, or a seconds/mph mix-up) reads as a wild PR when
+  // it's really a mistake — catch it before it hits the table, not after.
+  const attemptSave = () => {
+    if (!athleteId || !testType || !value.trim()) return;
+    const val = Number(value);
+    if (!val || Number.isNaN(val)) {
+      toast.error("Enter a valid score");
+      return;
+    }
+    const boundsError = validateTestValue(testType, val);
+    if (boundsError) {
+      toast.error(boundsError);
+      return;
+    }
+    const priorBest = priorBestFor(athleteId, testType);
+    const pct = implausibleJump(val, priorBest, meta?.lowerIsBetter ?? false);
+    if (pct != null && priorBest != null) {
+      const name = athletes.find((a) => a.id === athleteId)?.name ?? "This athlete";
+      setConfirmJump({ pct, priorBest, name });
+      return;
+    }
+    save.mutate();
+  };
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center bg-background p-4">
@@ -149,19 +202,48 @@ function TestKioskPage() {
               onChange={(e) => setValue(e.target.value)}
               className="h-12 text-base"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !save.isPending) save.mutate();
+                if (e.key === "Enter" && !save.isPending) attemptSave();
               }}
             />
           </div>
           <Button
             className="h-12 w-full text-base"
             disabled={save.isPending || !athleteId || !testType || !value.trim()}
-            onClick={() => save.mutate()}
+            onClick={attemptSave}
           >
             {save.isPending ? "Saving…" : "Log test"}
           </Button>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!confirmJump} onOpenChange={(v) => !v && setConfirmJump(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Double-check this score</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmJump && (
+                <>
+                  {confirmJump.name}'s previous best was {confirmJump.priorBest} {meta?.unit}. This
+                  entry is a {Math.round(Math.abs(confirmJump.pct) * 100)}%{" "}
+                  {confirmJump.pct > 0 ? "improvement" : "drop"} in one go — unusual enough that
+                  it's often a typo. Save it anyway?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Re-check</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmJump(null);
+                save.mutate();
+              }}
+            >
+              Save anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
