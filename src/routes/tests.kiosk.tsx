@@ -90,7 +90,6 @@ function TestKioskPage() {
   const [athleteId, setAthleteId] = useState("");
   const [value, setValue] = useState("");
   const [inputAs, setInputAs] = useState<"native" | "mph">("native");
-  const [sessionCount, setSessionCount] = useState(0);
   const [justSaved, setJustSaved] = useState(false);
 
   const athlete = athletes.find((a) => a.id === athleteId);
@@ -133,7 +132,6 @@ function TestKioskPage() {
     onSuccess: (val) => {
       qc.invalidateQueries({ queryKey: ["tests"] });
       const name = athlete ? athleteDisplayName(athlete) : "Athlete";
-      setSessionCount((n) => n + 1);
       setJustSaved(true);
       setTimeout(() => {
         setJustSaved(false);
@@ -153,7 +151,6 @@ function TestKioskPage() {
     setSearch("");
     setAthleteId("");
     setValue("");
-    setSessionCount(0);
     setStage("active");
   };
 
@@ -225,25 +222,19 @@ function TestKioskPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-background">
-      <div className="flex items-center justify-between gap-2 border-b border-primary/20 bg-primary/5 px-4 py-3">
-        <button
-          type="button"
-          onClick={exitToSetup}
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Change metric
-        </button>
-        <div className="text-center">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Now logging
-          </div>
-          <div className="text-lg font-bold leading-tight text-primary">{meta.label}</div>
-        </div>
-        <div className="w-24 shrink-0 text-right text-xs text-muted-foreground">
-          {sessionCount > 0 && <>{sessionCount} logged</>}
-        </div>
-      </div>
+    <div className="relative flex min-h-[100dvh] flex-col bg-background">
+      {/* Nothing on this screen but the log-test flow — no metric banner, no
+          session counter. Exiting is a coach action, not something athletes
+          need in front of them, so it's a small icon tucked in the corner
+          rather than a header bar competing with the actual task. */}
+      <button
+        type="button"
+        onClick={exitToSetup}
+        className="absolute left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label="Exit kiosk"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </button>
 
       <div className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-sm">
