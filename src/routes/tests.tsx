@@ -12,6 +12,7 @@ import {
   athleteDisplayName,
   type CustomTestType,
 } from "@/lib/queries";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrgId } from "@/hooks/use-current-org";
 import { Filters, emptyFilters, filterAthletes, inDateRange } from "@/components/filters";
@@ -50,6 +51,7 @@ import {
   Monitor,
   Crown,
   ScanLine,
+  FileSpreadsheet,
 } from "lucide-react";
 import { TestPhotoImport } from "@/components/test-photo-import";
 import {
@@ -94,6 +96,8 @@ function TestsPage() {
     allTestTypes.find((t) => t.value === v) ?? baseTestTypeMeta(v);
   const [manageOpen, setManageOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetTestType, setSheetTestType] = useState("");
   const [filters, setFilters] = useState(emptyFilters);
   const [testTypeFilter, setTestTypeFilter] = useState<string>("all");
   const [open, setOpen] = useState(false);
@@ -330,6 +334,65 @@ function TestsPage() {
       })),
     );
 
+  // Printable test-day sheet: the roster scoped by the Filters bar above,
+  // each athlete's current PR for the chosen test, and blank Attempt 1-3
+  // columns to write down at the rack before transcribing results back in.
+  const downloadTestingSheet = () => {
+    if (!sheetTestType) return;
+    const meta = testTypeMeta(sheetTestType);
+    const best = new Map<string, number>();
+    for (const t of tests) {
+      if (t.test_type !== sheetTestType) continue;
+      const cur = best.get(t.athlete_id);
+      if (cur == null || (meta.lowerIsBetter ? t.value < cur : t.value > cur)) {
+        best.set(t.athlete_id, t.value);
+      }
+    }
+    const roster = scopedAthletes.slice().sort((a, b) => {
+      const an = (a.last_name || a.name).toLowerCase();
+      const bn = (b.last_name || b.name).toLowerCase();
+      return an.localeCompare(bn) || (a.first_name ?? "").localeCompare(b.first_name ?? "");
+    });
+    const aoa: (string | number | null)[][] = [
+      [`${meta.label} — Testing Sheet — ${new Date().toLocaleDateString()}`],
+      [],
+      [null, "Athlete", "Personal Best", null, "Attempt 1", "Attempt 2", "Attempt 3"],
+      ...roster.map((a) => {
+        const pr = best.get(a.id);
+        return [
+          null,
+          athleteDisplayName(a),
+          pr != null ? `${pr} ${meta.unit}` : "",
+          null,
+          null,
+          null,
+          null,
+        ];
+      }),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [
+      { wch: 2 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 2 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Testing Sheet");
+    const slug = meta.label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    XLSX.writeFile(wb, `${slug || "testing"}-sheet.xlsx`);
+    setSheetOpen(false);
+    toast.success(
+      `Testing sheet downloaded — ${roster.length} athlete${roster.length === 1 ? "" : "s"}`,
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -340,6 +403,19 @@ function TestsPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!rows.length}>
             <Download className="h-4 w-4" /> CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSheetTestType(
+                testTypeFilter !== "all" ? testTypeFilter : (allTestTypes[0]?.value ?? ""),
+              );
+              setSheetOpen(true);
+            }}
+            disabled={!scopedAthletes.length}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> Testing sheet
           </Button>
           <Button variant="outline" size="sm" onClick={() => setManageOpen(true)}>
             <Settings2 className="h-4 w-4" /> Manage tests
@@ -839,6 +915,43 @@ function TestsPage() {
             </Button>
             <Button onClick={() => schedule.mutate()} disabled={schedule.isPending}>
               Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download testing sheet</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>Test type</Label>
+              <Select value={sheetTestType} onValueChange={setSheetTestType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {allTestTypes.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {scopedAthletes.length} athlete{scopedAthletes.length === 1 ? "" : "s"} from your
+              filters above, each with their personal best and blank Attempt 1–3 columns to fill in
+              at the rack.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={downloadTestingSheet} disabled={!sheetTestType}>
+              Download
             </Button>
           </DialogFooter>
         </DialogContent>
