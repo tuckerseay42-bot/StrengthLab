@@ -34,6 +34,7 @@ import {
 } from "@/lib/athleticism-report";
 import { AthleticismPrintReport } from "@/components/athleticism-print-report";
 import { AthleticismQualityBoard } from "@/components/athleticism-quality-board";
+import { AthleticismRosterTable } from "@/components/athleticism-roster-table";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { AthleteCombobox } from "@/components/athlete-combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -507,9 +508,20 @@ function AthleticismReportPage() {
                                   —
                                 </div>
                               )}
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                                {athleteDisplayName(t.athlete)}
-                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium">
+                                  {athleteDisplayName(t.athlete)}
+                                </div>
+                                <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{
+                                      width: `${Math.max(2, rankValue(t.report) ?? 0)}%`,
+                                      background: levelColor(level),
+                                    }}
+                                  />
+                                </div>
+                              </div>
                               <Badge
                                 variant="outline"
                                 className="shrink-0"
@@ -522,6 +534,21 @@ function AthleticismReportPage() {
                         );
                       })}
                     </ul>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Full roster</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <AthleticismRosterTable
+                      rows={teamReports}
+                      onSelectAthlete={(id) => {
+                        setAthleteId(id);
+                        setMode("single");
+                      }}
+                    />
                   </CardContent>
                 </Card>
               </>
