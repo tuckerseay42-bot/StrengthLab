@@ -2,7 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
-import { athletesQO, attendanceQO, bodyweightLogsQO, athleteTeamsQO, teamsQO } from "@/lib/queries";
+import {
+  athletesQO,
+  attendanceQO,
+  bodyweightLogsQO,
+  athleteTeamsQO,
+  teamsQO,
+  type Athlete,
+} from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { Filters, emptyFilters, filterAthletes, inDateRange } from "@/components/filters";
@@ -27,6 +34,10 @@ import { toUserMessage } from "@/lib/db-errors";
 import { cn } from "@/lib/utils";
 import { notifyParent } from "@/lib/notify-parent";
 
+function lastNameOf(a: Athlete): string {
+  return (a.last_name || a.name.trim().split(/\s+/).slice(-1)[0] || "").toLowerCase();
+}
+
 export const Route = createFileRoute("/attendance")({
   head: () => ({ meta: [{ title: "Attendance — Strength Lab" }] }),
   component: AttendancePage,
@@ -45,6 +56,7 @@ function AttendancePage() {
   const [qrTeamId, setQrTeamId] = useState<string>("");
   const [showQr, setShowQr] = useState(false);
   const [view, setView] = useState<"list" | "board">("list");
+  const [boardSearch, setBoardSearch] = useState("");
   const qrTeam = useMemo(
     () =>
       teams.find((t) => t.id === qrTeamId) ?? teams.find((t) => t.id === activeTeamId) ?? teams[0],
@@ -69,10 +81,25 @@ function AttendancePage() {
   const rosterIds = useMemo(() => new Set(roster.map((a) => a.id)), [roster]);
 
   const todayMap = useMemo(() => {
-    const m = new Map<string, boolean>();
-    for (const r of attendance) if (r.session_date === sessionDate) m.set(r.athlete_id, r.present);
+    const m = new Map<string, (typeof attendance)[number]>();
+    for (const r of attendance) if (r.session_date === sessionDate) m.set(r.athlete_id, r);
     return m;
   }, [attendance, sessionDate]);
+
+  const formatCheckInTime = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+
+  const boardRoster = useMemo(() => {
+    const q = boardSearch.trim().toLowerCase();
+    return [...roster]
+      .filter((a) => !q || a.name.toLowerCase().includes(q))
+      .sort((a, b) => lastNameOf(a).localeCompare(lastNameOf(b)));
+  }, [roster, boardSearch]);
+
+  const presentTodayCount = useMemo(
+    () => roster.filter((a) => todayMap.get(a.id)?.present).length,
+    [roster, todayMap],
+  );
 
   const bwByAthleteDate = useMemo(() => {
     const m = new Map<string, number>();
@@ -423,6 +450,19 @@ function AttendancePage() {
               )}
             </div>
           </div>
+          {roster.length > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+                {presentTodayCount} / {roster.length} present
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-[color:var(--color-success)] transition-all"
+                  style={{ width: `${(presentTodayCount / roster.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {roster.length === 0 ? (
@@ -430,49 +470,74 @@ function AttendancePage() {
               No athletes match your filters.
             </div>
           ) : view === "board" ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {roster.map((a) => {
-                const present = todayMap.get(a.id) === true;
-                const bw = todayBwMap.get(a.id);
-                const justIn = justInAthleteIds.includes(a.id);
-                return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => {
-                      set.mutate({ athlete_id: a.id, present: !present });
-                      if (present) {
-                        void notifyParent(a.id, "missed_session", {
-                          date: sessionDate,
-                          reason: "Marked absent for today's session.",
-                        });
-                      }
-                    }}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
-                      present
-                        ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
-                        : "border-border/50 bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
-                      justIn && "scale-[1.04] ring-2 ring-[color:var(--color-success)]",
-                    )}
-                  >
-                    {present ? (
-                      <Check className="h-5 w-5 text-[color:var(--color-success)]" />
-                    ) : (
-                      <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
-                    )}
-                    <div className="w-full truncate text-sm font-semibold">{a.name}</div>
-                    {bw != null && (
-                      <div className="text-[11px] tabular-nums text-muted-foreground">{bw} lb</div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              <div className="relative mb-3">
+                <Input
+                  value={boardSearch}
+                  onChange={(e) => setBoardSearch(e.target.value)}
+                  placeholder="Find a name…"
+                  className="h-10"
+                />
+              </div>
+              {boardRoster.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No athletes match "{boardSearch}".
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {boardRoster.map((a) => {
+                    const row = todayMap.get(a.id);
+                    const present = row?.present === true;
+                    const checkedInAt = present
+                      ? formatCheckInTime(row?.updated_at ?? row?.created_at)
+                      : "";
+                    const bw = todayBwMap.get(a.id);
+                    const justIn = justInAthleteIds.includes(a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => {
+                          set.mutate({ athlete_id: a.id, present: !present });
+                          if (present) {
+                            void notifyParent(a.id, "missed_session", {
+                              date: sessionDate,
+                              reason: "Marked absent for today's session.",
+                            });
+                          }
+                        }}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
+                          present
+                            ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
+                            : "border-border/50 bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
+                          justIn && "scale-[1.04] ring-2 ring-[color:var(--color-success)]",
+                        )}
+                      >
+                        {present ? (
+                          <Check className="h-5 w-5 text-[color:var(--color-success)]" />
+                        ) : (
+                          <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
+                        )}
+                        <div className="w-full truncate text-sm font-semibold">{a.name}</div>
+                        {bw != null && (
+                          <div className="text-[11px] tabular-nums text-muted-foreground">
+                            {bw} lb
+                          </div>
+                        )}
+                        {checkedInAt && (
+                          <div className="text-[10px] text-muted-foreground">{checkedInAt}</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           ) : (
             <ul className="divide-y divide-border">
               {roster.map((a) => {
-                const present = todayMap.get(a.id);
+                const present = todayMap.get(a.id)?.present;
                 const bw = todayBwMap.get(a.id);
                 return (
                   <li key={a.id} className="flex items-center gap-3 py-2">
