@@ -239,7 +239,7 @@ export function TeamMetricsTable({
               <span className="mono-number text-sm font-bold text-foreground">{prStats.count}</span> PR{prStats.count === 1 ? "" : "s"}
             </span>
             <span className="text-muted-foreground">
-              Avg increase{" "}
+              Avg improvement{" "}
               <span className="mono-number text-sm font-bold text-[color:var(--status-pr)]">
                 {prStats.avgIncrease == null
                   ? "—"
