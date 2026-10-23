@@ -32,17 +32,29 @@ import {
   type QualityKey,
   type AthleticismReport,
 } from "@/lib/athleticism-report";
-import { AthleticismPrintReport } from "@/components/athleticism-print-report";
+import {
+  AthleticismPrintReport,
+  AthleticismBatchPrintReport,
+} from "@/components/athleticism-print-report";
 import { AthleticismQualityBoard } from "@/components/athleticism-quality-board";
 import { AthleticismRosterTable } from "@/components/athleticism-roster-table";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { AthleteCombobox } from "@/components/athlete-combobox";
+import { Filters, emptyFilters, filterAthletes } from "@/components/filters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -50,7 +62,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Star, Download, RotateCcw, Radar as RadarIcon, Trophy, Users } from "lucide-react";
+import {
+  Star,
+  Download,
+  RotateCcw,
+  Radar as RadarIcon,
+  Trophy,
+  Users,
+  Printer,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -237,6 +257,59 @@ function AthleticismReportPage() {
 
   const [printOpen, setPrintOpen] = useState(false);
 
+  // Batch print: filter the roster down (sport, class period, grade,
+  // position, gender), review who matched, then print every one of their
+  // 2-page reports as one combined job so they come off pre-separated.
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchFilters, setBatchFilters] = useState(emptyFilters);
+  const [batchExcluded, setBatchExcluded] = useState<Set<string>>(new Set());
+  const [batchEntries, setBatchEntries] = useState<
+    { athlete: Athlete; report: AthleticismReport; note: string }[] | null
+  >(null);
+
+  const batchCandidates = useMemo(
+    () => filterAthletes(athletes, batchFilters, activeTeamId),
+    [athletes, batchFilters, activeTeamId],
+  );
+  const batchSelected = useMemo(
+    () => batchCandidates.filter((a) => !batchExcluded.has(a.id)),
+    [batchCandidates, batchExcluded],
+  );
+
+  function openBatchDialog() {
+    setBatchFilters(emptyFilters);
+    setBatchExcluded(new Set());
+    setBatchOpen(true);
+  }
+
+  function toggleBatchAthlete(id: string) {
+    setBatchExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function printBatch() {
+    if (!batchSelected.length) return;
+    const entries = batchSelected.map((a) => {
+      const r = computeAthleticismReport({
+        athlete: a,
+        athletes,
+        tests,
+        lifts,
+        customMetrics,
+        customTypes,
+        exercises,
+        config,
+      });
+      return { athlete: a, report: r, note: r.autoNote };
+    });
+    setBatchEntries(entries);
+    setBatchOpen(false);
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -273,6 +346,9 @@ function AthleticismReportPage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={resetDefaults}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset mapping
+          </Button>
+          <Button variant="outline" size="sm" onClick={openBatchDialog} disabled={!athletes.length}>
+            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print multiple
           </Button>
           {mode === "single" && (
             <Button size="sm" onClick={() => setPrintOpen(true)} disabled={!athlete || !report}>
@@ -799,6 +875,67 @@ function AthleticismReportPage() {
           config={config}
           note={noteText}
           onClose={() => setPrintOpen(false)}
+        />
+      )}
+
+      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Print multiple reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Filters
+              value={batchFilters}
+              onChange={setBatchFilters}
+              athletes={athletes}
+              showDates={false}
+            />
+            <p className="text-xs text-muted-foreground">
+              {batchSelected.length} of {batchCandidates.length} match
+              {batchCandidates.length === 1 ? "es" : ""} will print. Uncheck anyone to skip them.
+            </p>
+            <div className="max-h-72 overflow-y-auto rounded-md border">
+              {batchCandidates.length === 0 ? (
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No athletes match these filters.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {batchCandidates.map((a) => (
+                    <li key={a.id}>
+                      <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-muted/40">
+                        <Checkbox
+                          checked={!batchExcluded.has(a.id)}
+                          onCheckedChange={() => toggleBatchAthlete(a.id)}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{athleteDisplayName(a)}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {[a.sport, a.class_period].filter(Boolean).join(" · ") || "—"}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBatchOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={printBatch} disabled={!batchSelected.length}>
+              <Printer className="mr-1.5 h-3.5 w-3.5" /> Print {batchSelected.length} report
+              {batchSelected.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {batchEntries && batchEntries.length > 0 && (
+        <AthleticismBatchPrintReport
+          entries={batchEntries}
+          config={config}
+          onClose={() => setBatchEntries(null)}
         />
       )}
     </div>
