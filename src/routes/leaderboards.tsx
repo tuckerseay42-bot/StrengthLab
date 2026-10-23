@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -9,7 +9,7 @@ import {
   type LiftRow, type AttendanceRow, type CustomTestType, type AthleteTeam,
 } from "@/lib/queries";
 import { SPORTS, GRADES, GENDERS, GENDER_LABELS, downloadCSV } from "@/lib/domain";
-import { computeMetric } from "@/lib/metrics";
+import { boardRangeLabel, formatLeaderValue, computeBoardRows } from "@/lib/leaderboard-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,11 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Trophy, Download, Pencil, Crown } from "lucide-react";
+import { Plus, Trash2, Trophy, Download, Pencil, Crown, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { LeaderboardLiveView } from "@/components/leaderboard-live-view";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/leaderboards")({
@@ -54,31 +55,6 @@ function rangeToWindow(f: { range: RangeKind; date_from: string; date_to: string
   return { since_days: null, date_from: f.date_from || null, date_to: f.date_to || null };
 }
 
-function boardToWindow(b: Leaderboard): { from: string | null; to: string | null } {
-  if (b.since_days) {
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - b.since_days);
-    return { from: cutoff.toISOString().slice(0, 10), to: null };
-  }
-  return { from: b.date_from, to: b.date_to };
-}
-
-function boardRangeLabel(b: Leaderboard): string {
-  if (b.since_days === 1) return "Today";
-  if (b.since_days === 7) return "Last 7d";
-  if (b.since_days === 30) return "Last 30d";
-  if (b.since_days === 90) return "Last 90d";
-  if (b.since_days) return `Last ${b.since_days}d`;
-  if (b.date_from || b.date_to) return `${b.date_from ?? "…"} → ${b.date_to ?? "…"}`;
-  return "All time";
-}
-
-function formatLeaderValue(v: number, unit: string | null | undefined): string {
-  if (unit === "reps") return String(Math.round(v));
-  if (unit === "lb") return String(Math.round(v / 5) * 5);
-  return v.toFixed(2);
-}
-
-
 function LeaderboardsPage() {
   const qc = useQueryClient();
   const { data: boards = [], isLoading: boardsLoading } = useQuery(leaderboardsQO);
@@ -104,6 +80,52 @@ function LeaderboardsPage() {
   const [editing, setEditing] = useState<Leaderboard | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<Leaderboard | null>(null);
+  const [liveBoardId, setLiveBoardId] = useState<string | null>(null);
+
+  // Every leaderboard already recomputes from whatever's in the query cache
+  // — this is the push side: a realtime subscription on the tables that
+  // feed a leaderboard's numbers, so a score logged anywhere (Kiosk, Log a
+  // test, attendance) shows up here within the second, no refresh needed.
+  // Also tracks which athlete just moved, for a brief highlight on the row.
+  const [recentIds, setRecentIds] = useState<Set<string>>(new Set());
+  const flashTimers = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const timers = flashTimers.current;
+    const flash = (id?: string) => {
+      if (!id) return;
+      setRecentIds((prev) => new Set(prev).add(id));
+      const prevTimer = timers.get(id);
+      if (prevTimer) window.clearTimeout(prevTimer);
+      const timer = window.setTimeout(() => {
+        setRecentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        timers.delete(id);
+      }, 6000);
+      timers.set(id, timer);
+    };
+    const channel = supabase
+      .channel("leaderboards-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tests" }, (payload) => {
+        qc.invalidateQueries({ queryKey: ["tests"] });
+        flash((payload.new as { athlete_id?: string } | null)?.athlete_id);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "lifts" }, (payload) => {
+        qc.invalidateQueries({ queryKey: ["lifts"] });
+        flash((payload.new as { athlete_id?: string } | null)?.athlete_id);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => {
+        qc.invalidateQueries({ queryKey: ["attendance"] });
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+      timers.forEach((t) => window.clearTimeout(t));
+      timers.clear();
+    };
+  }, [qc]);
 
   const metricById = useMemo(() => new Map(metrics.map((m) => [m.id, m])), [metrics]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
@@ -214,8 +236,10 @@ function LeaderboardsPage() {
               athletes={athletes} tests={tests} lifts={lifts} attendance={attendance}
               customTypes={customTypes}
               teamsByAthlete={teamsByAthlete}
+              recentIds={recentIds}
               onEdit={() => openEdit(b)}
               onDelete={() => setDeleteTarget(b)}
+              onGoLive={() => setLiveBoardId(b.id)}
             />
           );
         })}
@@ -315,12 +339,32 @@ function LeaderboardsPage() {
         onConfirm={() => { if (deleteTarget) del.mutate(deleteTarget.id); setDeleteTarget(null); }}
         pending={del.isPending}
       />
+
+      {(() => {
+        const liveBoard = liveBoardId ? boards.find((b) => b.id === liveBoardId) : undefined;
+        if (!liveBoard) return null;
+        const liveMetric = metricById.get(liveBoard.metric_id);
+        const { rows: liveRows, teamAverage: liveAverage } = computeBoardRows(
+          liveBoard, liveMetric, athletes, tests, lifts, attendance, customTypes, teamsByAthlete,
+        );
+        return (
+          <LeaderboardLiveView
+            board={liveBoard}
+            metric={liveMetric}
+            teamName={liveBoard.team_id ? teamById.get(liveBoard.team_id)?.name : undefined}
+            rows={liveRows}
+            teamAverage={liveAverage}
+            recentIds={recentIds}
+            onClose={() => setLiveBoardId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
 
 function BoardCard({
-  board, metric, teamName, athletes, tests, lifts, attendance, customTypes, teamsByAthlete, onEdit, onDelete,
+  board, metric, teamName, athletes, tests, lifts, attendance, customTypes, teamsByAthlete, recentIds, onEdit, onDelete, onGoLive,
 }: {
   board: Leaderboard;
   metric: CustomMetric | undefined;
@@ -331,34 +375,16 @@ function BoardCard({
   attendance: AttendanceRow[];
   customTypes: CustomTestType[];
   teamsByAthlete: Map<string, Set<string>>;
+  recentIds: Set<string>;
   onEdit: () => void;
   onDelete: () => void;
+  onGoLive: () => void;
 }) {
-  const allRows = useMemo(() => {
-    if (!metric) return [];
-    const filtered = (athletes as any[]).filter((a) => {
-      if (board.team_id) {
-        const extras = teamsByAthlete.get(a.id);
-        const belongs = a.team_id === board.team_id || (extras?.has(board.team_id) ?? false);
-        if (!belongs) return false;
-      }
-      if (board.sport) {
-        const sports = [a.sport, a.sport_fall, a.sport_winter, a.sport_spring].filter(Boolean);
-        if (!sports.includes(board.sport)) return false;
-      }
-      if (board.grade != null && a.grade !== board.grade) return false;
-      if (board.position && (a.position ?? "").toLowerCase() !== board.position.toLowerCase()) return false;
-      if (board.gender && a.gender !== board.gender) return false;
-      return true;
-    });
-    const w = boardToWindow(board);
-    return computeMetric(metric, filtered, tests, lifts, attendance, w, customTypes);
-  }, [board, metric, athletes, tests, lifts, attendance, customTypes, teamsByAthlete]);
-  const rows = useMemo(() => allRows.slice(0, board.row_limit), [allRows, board.row_limit]);
-  const teamAverage = useMemo(() => {
-    if (!allRows.length) return null;
-    return allRows.reduce((s, r) => s + r.value, 0) / allRows.length;
-  }, [allRows]);
+  const { allRows, rows, teamAverage } = useMemo(
+    () =>
+      computeBoardRows(board, metric, athletes, tests, lifts, attendance, customTypes, teamsByAthlete),
+    [board, metric, athletes, tests, lifts, attendance, customTypes, teamsByAthlete],
+  );
 
   const filterBadges = [
     boardRangeLabel(board),
@@ -386,6 +412,9 @@ function BoardCard({
           )}
         </div>
         <div className="flex shrink-0 gap-1">
+          <Button size="icon" variant="ghost" onClick={onGoLive} title="Go live" aria-label="Go live">
+            <Radio className="h-4 w-4" />
+          </Button>
           <Button size="icon" variant="ghost" onClick={() => downloadCSV(
             `${board.name}.csv`,
             rows.map((r, i) => ({ rank: i + 1, athlete: athleteDisplayName(r.athlete), value: r.value, breakdown: r.breakdown ?? "", date: r.date })),
@@ -405,6 +434,7 @@ function BoardCard({
                 className={cn(
                   "flex items-center justify-between gap-2 rounded border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-muted/40",
                   i === 0 && "border-primary/30 bg-primary/5",
+                  recentIds.has(r.athlete.id) && "ring-2 ring-[color:var(--color-success)]",
                 )}
               >
                 <div className="flex min-w-0 items-center gap-2">
