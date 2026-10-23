@@ -22,12 +22,14 @@ import {
   athleteTeamsQO,
   teamsQO,
   repMaxesQO,
+  attendanceQO,
   athleteDisplayName,
   type Athlete,
+  type RepMax,
 } from "@/lib/queries";
 import { rosterForTeam } from "@/lib/program-delivery";
 import { useActiveTeamId } from "@/hooks/use-active-team";
-import { estimate1RM } from "@/lib/one-rm";
+import { estimate1RM, type OneRmFormula } from "@/lib/one-rm";
 import { getOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { getScopedOrgId } from "@/lib/scoped-insert";
 import { toUserMessage } from "@/lib/db-errors";
@@ -51,8 +53,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/page-header";
-import { ArrowDownWideNarrow, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { ArrowDownWideNarrow, Plus, Search, Shuffle, Trash2, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const RACK_CAPACITY = 4;
@@ -62,6 +71,82 @@ type RackRow = { id: string; team_id: string; rack_number: number };
 type RackMember = { rack_session_id: string; athlete_id: string; quadrant: number };
 type RackGroup = RackRow & { athletes: Athlete[] };
 
+// Ranks a pool of athletes by strength across one or more selected lifts, so
+// Auto-group can cut them into racks of similarly-loaded people instead of a
+// coach dragging one at a time. "Balanced" divides each athlete's estimated
+// 1RM by the pool's average for that lift before averaging across lifts, so
+// a naturally heavier lift (deadlift) doesn't drown out a lighter one
+// (power clean); "Total" is just the plain sum. An athlete missing a max on
+// any selected lift is reported separately rather than silently dropped.
+function scoreForAutoGroup(
+  pool: Athlete[],
+  lifts: string[],
+  method: "balanced" | "total",
+  repMaxes: RepMax[],
+  formula: OneRmFormula,
+): { ranked: Athlete[]; skipped: Athlete[] } {
+  if (!lifts.length) return { ranked: [], skipped: pool };
+  const byLift = new Map<string, Map<string, number>>();
+  for (const lift of lifts) byLift.set(lift, new Map());
+  for (const r of repMaxes) {
+    const m = byLift.get(r.exercise_name);
+    if (!m) continue;
+    const est = estimate1RM(r.load, r.reps, formula) ?? r.load;
+    const cur = m.get(r.athlete_id);
+    if (cur == null || est > cur) m.set(r.athlete_id, est);
+  }
+  const scored: { athlete: Athlete; maxes: Record<string, number>; score: number }[] = [];
+  const skipped: Athlete[] = [];
+  for (const a of pool) {
+    const maxes: Record<string, number> = {};
+    let complete = true;
+    for (const lift of lifts) {
+      const v = byLift.get(lift)?.get(a.id);
+      if (v == null) {
+        complete = false;
+        break;
+      }
+      maxes[lift] = v;
+    }
+    if (!complete) {
+      skipped.push(a);
+      continue;
+    }
+    scored.push({ athlete: a, maxes, score: 0 });
+  }
+  if (method === "total") {
+    for (const s of scored) s.score = lifts.reduce((sum, l) => sum + s.maxes[l], 0);
+  } else {
+    const avg: Record<string, number> = {};
+    for (const lift of lifts) {
+      const vals = scored.map((s) => s.maxes[lift]);
+      avg[lift] = vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 1;
+    }
+    for (const s of scored) {
+      s.score = lifts.reduce((sum, l) => sum + s.maxes[l] / (avg[l] || 1), 0) / lifts.length;
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return { ranked: scored.map((s) => s.athlete), skipped };
+}
+
+// Splits a ranked list into N contiguous, near-equal-size chunks (one per
+// rack) so each rack ends up with people of similar strength rather than
+// cramming the whole top end into rack 1.
+function chunkIntoRacks<T>(ranked: T[], rackCount: number): T[][] {
+  if (rackCount <= 0) return [];
+  const base = Math.floor(ranked.length / rackCount);
+  const extra = ranked.length % rackCount;
+  const chunks: T[][] = [];
+  let i = 0;
+  for (let r = 0; r < rackCount; r++) {
+    const size = base + (r < extra ? 1 : 0);
+    chunks.push(ranked.slice(i, i + size));
+    i += size;
+  }
+  return chunks;
+}
+
 export function RackAssignmentBoard() {
   const qc = useQueryClient();
   const [activeTeamId, setActiveTeamId] = useActiveTeamId();
@@ -70,10 +155,15 @@ export function RackAssignmentBoard() {
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
+  const { data: attendance = [] } = useQuery(attendanceQO);
   const [search, setSearch] = useState("");
   const [dragAthleteId, setDragAthleteId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RackRow | null>(null);
   const [sortExercise, setSortExercise] = useState<string>("");
+  const [autoGroupOpen, setAutoGroupOpen] = useState(false);
+  const [autoLifts, setAutoLifts] = useState<string[]>([]);
+  const [autoMethod, setAutoMethod] = useState<"balanced" | "total">("balanced");
+  const [autoCheckedInOnly, setAutoCheckedInOnly] = useState(false);
 
   useEffect(() => { setSortExercise(""); }, [teamId]);
 
@@ -184,6 +274,69 @@ export function RackAssignmentBoard() {
     void qc.invalidateQueries({ queryKey: ["rack-assignment-racks"] });
     void qc.invalidateQueries({ queryKey: ["rack-assignment-members"] });
   };
+
+  const presentTodayIds = useMemo(() => {
+    const todayStr = today();
+    const s = new Set<string>();
+    for (const r of attendance) if (r.session_date === todayStr && r.present) s.add(r.athlete_id);
+    return s;
+  }, [attendance]);
+
+  // The pool Auto-group would act on right now, given the current dialog
+  // picks — recomputed live so the dialog can show "N ready, M missing a
+  // max" before the coach commits to it.
+  const autoGroupPreview = useMemo(() => {
+    const pool = autoCheckedInOnly
+      ? unassigned.filter((a) => presentTodayIds.has(a.id))
+      : unassigned;
+    return scoreForAutoGroup(pool, autoLifts, autoMethod, repMaxes, getOrg1RMFormula());
+  }, [unassigned, autoCheckedInOnly, presentTodayIds, autoLifts, autoMethod, repMaxes]);
+
+  const autoGroup = useMutation({
+    mutationFn: async () => {
+      const { ranked } = autoGroupPreview;
+      if (!ranked.length) throw new Error("No eligible athletes to group");
+      const team = teams.find((t) => t.id === teamId);
+      const organization_id = team?.organization_id ?? (await getScopedOrgId());
+      const nextNumber = racks.reduce((max, r) => Math.max(max, r.rack_number), 0) + 1;
+      const racksNeeded = Math.ceil(ranked.length / RACK_CAPACITY);
+      const newRackRows = Array.from({ length: racksNeeded }, (_, i) => ({
+        organization_id,
+        team_id: teamId,
+        rack_number: nextNumber + i,
+        session_date: today(),
+        athlete_ids: [],
+      }));
+      const { data: inserted, error: insertErr } = await supabase
+        .from("rack_sessions")
+        .insert(newRackRows)
+        .select("id, rack_number");
+      if (insertErr) throw insertErr;
+      const newRacks = [...(inserted ?? [])].sort((a, b) => a.rack_number - b.rack_number);
+      const groups = chunkIntoRacks(ranked, newRacks.length);
+      const memberRows = groups.flatMap((group, i) =>
+        group.map((a, q) => ({
+          rack_session_id: newRacks[i].id,
+          athlete_id: a.id,
+          quadrant: q + 1,
+          override_reason: "auto-grouped",
+        })),
+      );
+      const { error: memberErr } = await supabase
+        .from("rack_session_athletes")
+        .upsert(memberRows, { onConflict: "rack_session_id,athlete_id" });
+      if (memberErr) throw memberErr;
+      return { placed: ranked.length, racksCreated: newRacks.length };
+    },
+    onSuccess: ({ placed, racksCreated }) => {
+      invalidate();
+      toast.success(
+        `Grouped ${placed} athlete${placed === 1 ? "" : "s"} into ${racksCreated} rack${racksCreated === 1 ? "" : "s"}`,
+      );
+      setAutoGroupOpen(false);
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
 
   const addRack = useMutation({
     mutationFn: async () => {
@@ -340,6 +493,17 @@ export function RackAssignmentBoard() {
                 )}
               </div>
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setAutoLifts(liftOptions.length ? [liftOptions[0]] : []);
+                setAutoGroupOpen(true);
+              }}
+              disabled={!liftOptions.length || unassigned.length === 0}
+            >
+              <Shuffle className="mr-1.5 h-3.5 w-3.5" /> Auto-group
+            </Button>
             <Button size="sm" onClick={() => addRack.mutate()} disabled={addRack.isPending}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Add rack
             </Button>
@@ -413,6 +577,95 @@ export function RackAssignmentBoard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={autoGroupOpen} onOpenChange={setAutoGroupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Auto-group by strength</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Group by
+              </label>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {liftOptions.map((name) => {
+                  const active = autoLifts.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() =>
+                        setAutoLifts((prev) =>
+                          active ? prev.filter((l) => l !== name) : [...prev, name],
+                        )
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/60 bg-transparent text-foreground hover:bg-muted/60",
+                      )}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Match on
+                </label>
+                <Select
+                  value={autoMethod}
+                  onValueChange={(v) => setAutoMethod(v as "balanced" | "total")}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="balanced">Balanced strength</SelectItem>
+                    <SelectItem value="total">Total of maxes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="flex items-end gap-2 pb-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={autoCheckedInOnly}
+                  onChange={(e) => setAutoCheckedInOnly(e.target.checked)}
+                />
+                Checked-in only
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {autoLifts.length === 0
+                ? "Pick at least one lift to group by."
+                : `${autoGroupPreview.ranked.length} unassigned athlete${autoGroupPreview.ranked.length === 1 ? "" : "s"} ready · will fill ${Math.ceil(autoGroupPreview.ranked.length / RACK_CAPACITY) || 0} new rack(s).`}
+              {autoGroupPreview.skipped.length > 0 &&
+                ` ${autoGroupPreview.skipped.length} left out (missing a max on a selected lift): ${autoGroupPreview.skipped
+                  .map((a) => athleteDisplayName(a))
+                  .join(", ")}`}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAutoGroupOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => autoGroup.mutate()}
+              disabled={
+                autoGroup.isPending || autoLifts.length === 0 || !autoGroupPreview.ranked.length
+              }
+            >
+              {autoGroup.isPending ? "Grouping…" : "Group into racks"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
