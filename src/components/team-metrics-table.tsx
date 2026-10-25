@@ -4,7 +4,8 @@
 // metric was tested, and a Team Average footer row per date for group
 // comparison — a real spreadsheet, not a chart.
 import { useEffect, useMemo, useState } from "react";
-import { Flame } from "lucide-react";
+import { Flame, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -195,17 +196,44 @@ export function TeamMetricsTable({
     return m;
   }, [dates, consistentCohort]);
 
+  // The on-screen filter pickers don't print (they're inputs, not data), so
+  // this renders as a plain text line on the printed page instead — the
+  // only way a printout communicates what it's actually scoped to.
+  const printSummary = useMemo(() => {
+    const parts = [
+      metric ? metric.label : null,
+      `Table window: ${DATE_RANGE_OPTIONS.find((o) => o.value === tableDateRange)?.label ?? tableDateRange}`,
+      teamId !== "all" ? `Team: ${teams.find((t) => t.id === teamId)?.name ?? teamId}` : null,
+      position !== "all" ? `Position: ${position}` : null,
+      sport !== "all" ? `Sport: ${sport}` : null,
+      gender !== "all"
+        ? `Gender: ${GENDER_LABELS[gender as keyof typeof GENDER_LABELS] ?? gender}`
+        : null,
+      grade !== "all" ? `Grade ${grade}` : null,
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }, [metric, tableDateRange, teamId, position, sport, gender, grade, teams]);
+
   return (
-    <Card className="overflow-hidden border-border/60">
+    <Card className="print-sheet overflow-hidden border-border/60">
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <CardTitle className="text-base">Team Metrics Table</CardTitle>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground print:hidden">
               Every athlete, one metric, tested-date by tested-date, against the team.
             </p>
+            <p className="hidden text-xs text-muted-foreground print:block">{printSummary}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => window.print()}
+            >
+              <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
+            </Button>
             <Select value={metricKey || (allMetrics[0]?.key ?? "")} onValueChange={setMetricKey}>
               <SelectTrigger className="h-8 w-[180px] text-xs">
                 <SelectValue placeholder="Metric" />
@@ -262,7 +290,7 @@ export function TeamMetricsTable({
           </div>
         )}
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2 print:hidden">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Table window
