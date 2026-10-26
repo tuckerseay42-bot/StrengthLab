@@ -10,15 +10,27 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/page-header";
 import { Filters, emptyFilters, filterAthletes, type FilterState } from "@/components/filters";
+import { AthleteCombobox } from "@/components/athlete-combobox";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { useOrg1RMFormula } from "@/hooks/use-1rm-formula";
 import { estimate1RM, ONE_RM_META } from "@/lib/one-rm";
+import { implausibleJump } from "@/lib/validation";
 import { toUserMessage } from "@/lib/db-errors";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ChevronDown, Dumbbell, Trash2 } from "lucide-react";
+import { ChevronDown, Dumbbell, Trash2, UserRoundCog } from "lucide-react";
 
 const REPS = [1, 2, 3, 4, 5] as const;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -39,6 +51,15 @@ export function RepMaxGrid() {
   const [exercise, setExercise] = useState<string | null>(null);
   const [exSearch, setExSearch] = useState("");
   const [draft, setDraft] = useState<Draft>({});
+  const [confirmJump, setConfirmJump] = useState<{
+    athlete: Athlete;
+    reps: number;
+    value: string;
+    priorBest: number;
+    pct: number;
+  } | null>(null);
+  const [moveFrom, setMoveFrom] = useState<Athlete | null>(null);
+  const [moveToId, setMoveToId] = useState("");
 
   // Every lift we could hold a rep max for: library load exercises + anything
   // already recorded.
@@ -120,6 +141,10 @@ export function RepMaxGrid() {
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
+  // A rep max this far off the same box's last value is almost always a
+  // typo — most often the sign a coach was still on the wrong athlete's row
+  // when they typed it, which is exactly the kind of misattribution an
+  // editable grid like this needs to catch before it's saved, not after.
   const commit = (athlete: Athlete, reps: number) => {
     const k = key(athlete.id, reps);
     if (!(k in draft)) return;
@@ -132,6 +157,15 @@ export function RepMaxGrid() {
       return next;
     });
     if (value.trim() === currentStr) return;
+    const load = Number(value.trim());
+    const priorBest = current ? Number(current.load) : null;
+    if (value.trim() && Number.isFinite(load) && load > 0 && priorBest != null) {
+      const pct = implausibleJump(load, priorBest, false);
+      if (pct != null) {
+        setConfirmJump({ athlete, reps, value, priorBest, pct });
+        return;
+      }
+    }
     saveCell.mutate({ athlete, reps, value });
   };
 
@@ -145,6 +179,30 @@ export function RepMaxGrid() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rep_maxes"] });
       toast.success("Rep maxes cleared");
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
+  // Fixes a row logged under the wrong kid outright — reassigns every rep
+  // max this athlete has for the current lift to a different athlete,
+  // instead of losing the tested date by deleting and retyping it.
+  const moveRow = useMutation({
+    mutationFn: async (input: { athlete: Athlete; toAthleteId: string }) => {
+      const ids = REPS.map((r) => grid.get(key(input.athlete.id, r))?.id).filter(
+        Boolean,
+      ) as string[];
+      if (!ids.length) throw new Error("Nothing to move for this athlete");
+      const { error } = await supabase
+        .from("rep_maxes")
+        .update({ athlete_id: input.toAthleteId })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rep_maxes"] });
+      toast.success("Moved to the correct athlete");
+      setMoveFrom(null);
+      setMoveToId("");
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
@@ -238,7 +296,7 @@ export function RepMaxGrid() {
                     <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Best e1RM
                     </th>
-                    <th className="w-10" />
+                    <th className="w-16" />
                   </tr>
                 </thead>
                 <tbody>
@@ -293,15 +351,61 @@ export function RepMaxGrid() {
                           )}
                         </td>
                         <td className="px-2 py-1.5 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            title="Clear this athlete's rep maxes for this lift"
-                            onClick={() => clearRow.mutate(a)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-0.5">
+                            <Popover
+                              open={moveFrom?.id === a.id}
+                              onOpenChange={(open) => {
+                                if (!open) setMoveFrom(null);
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  title="Logged under the wrong athlete? Move this row."
+                                  disabled={!cells.some(Boolean)}
+                                  onClick={() => {
+                                    setMoveFrom(a);
+                                    setMoveToId("");
+                                  }}
+                                >
+                                  <UserRoundCog className="h-3.5 w-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="end" className="w-72 space-y-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Move {athleteDisplayName(a)}'s {activeExercise} rep maxes to the
+                                  athlete they actually belong to.
+                                </p>
+                                <AthleteCombobox
+                                  athletes={athletes.filter((x) => x.id !== a.id)}
+                                  value={moveToId}
+                                  onChange={setMoveToId}
+                                  placeholder="Correct athlete…"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="w-full"
+                                  disabled={!moveToId || moveRow.isPending}
+                                  onClick={() =>
+                                    moveRow.mutate({ athlete: a, toAthleteId: moveToId })
+                                  }
+                                >
+                                  Move
+                                </Button>
+                              </PopoverContent>
+                            </Popover>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="Clear this athlete's rep maxes for this lift"
+                              onClick={() => clearRow.mutate(a)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -317,6 +421,42 @@ export function RepMaxGrid() {
         Best e1RM uses {ONE_RM_META[formula].label} — {ONE_RM_META[formula].expression}. These rep maxes are exactly what the
         program builder and Training View use to price %-of-1RM sets, so an edit here changes prescribed weights immediately.
       </p>
+
+      <AlertDialog open={!!confirmJump} onOpenChange={(v) => !v && setConfirmJump(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Double-check this weight</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmJump && (
+                <>
+                  {athleteDisplayName(confirmJump.athlete)}'s previous {confirmJump.reps}RM was{" "}
+                  {confirmJump.priorBest} lb. This entry is a{" "}
+                  {Math.round(Math.abs(confirmJump.pct) * 100)}%{" "}
+                  {confirmJump.pct > 0 ? "increase" : "drop"} in one go — unusual enough that it's
+                  often a typo, or a weight meant for a different athlete's row. Save it anyway?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Re-check</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmJump) {
+                  saveCell.mutate({
+                    athlete: confirmJump.athlete,
+                    reps: confirmJump.reps,
+                    value: confirmJump.value,
+                  });
+                }
+                setConfirmJump(null);
+              }}
+            >
+              Save anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
