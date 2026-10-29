@@ -12,7 +12,6 @@ import {
   athleteDisplayName,
   type CustomTestType,
 } from "@/lib/queries";
-import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrgId } from "@/hooks/use-current-org";
 import { Filters, emptyFilters, filterAthletes, inDateRange } from "@/components/filters";
@@ -437,8 +436,9 @@ function TestsPage() {
   // Printable test-day sheet: the roster scoped by the Filters bar above,
   // each athlete's current PR for the chosen test, and blank Attempt 1-3
   // columns to write down at the rack before transcribing results back in.
-  const downloadTestingSheet = () => {
+  const downloadTestingSheet = async () => {
     if (!sheetTestType) return;
+    const ExcelJS = await import("exceljs");
     const meta = testTypeMeta(sheetTestType);
     const best = new Map<string, number>();
     for (const t of tests) {
@@ -453,40 +453,98 @@ function TestsPage() {
       const bn = (b.last_name || b.name).toLowerCase();
       return an.localeCompare(bn) || (a.first_name ?? "").localeCompare(b.first_name ?? "");
     });
-    const aoa: (string | number | null)[][] = [
-      [`${meta.label} — Testing Sheet — ${new Date().toLocaleDateString()}`],
-      [],
-      [null, "Athlete", "Personal Best", null, "Attempt 1", "Attempt 2", "Attempt 3"],
-      ...roster.map((a) => {
-        const pr = best.get(a.id);
-        return [
-          null,
-          athleteDisplayName(a),
-          pr != null ? `${pr} ${meta.unit}` : "",
-          null,
-          null,
-          null,
-          null,
-        ];
-      }),
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Testing Sheet");
+    ws.columns = [
+      { width: 2 },
+      { width: 24 },
+      { width: 14 },
+      { width: 2 },
+      { width: 12 },
+      { width: 12 },
+      { width: 12 },
     ];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [
-      { wch: 2 },
-      { wch: 24 },
-      { wch: 14 },
-      { wch: 2 },
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 12 },
+
+    const HEADER_FILL = "FF1F4E78";
+    const HEADER_FONT = "FFFFFFFF";
+    const ALT_FILL = "FFF2F2F2";
+    const thinBorder = { style: "thin" as const, color: { argb: "FFBFBFBF" } };
+    const mediumBorder = { style: "medium" as const, color: { argb: "FF1F4E78" } };
+    // Columns B, C, D(spacer), E, F, G — the full table width so the grid lines run edge to edge.
+    const tableCols = [2, 3, 4, 5, 6, 7];
+
+    const titleCell = ws.getCell("B1");
+    titleCell.value = `${meta.label} — Testing Sheet — ${new Date().toLocaleDateString()}`;
+    titleCell.font = { bold: true, size: 14 };
+    ws.getRow(1).height = 22;
+
+    const headerRow = ws.getRow(3);
+    const headerLabels: (string | null)[] = [
+      "Athlete",
+      "Personal Best",
+      null,
+      "Attempt 1",
+      "Attempt 2",
+      "Attempt 3",
     ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Testing Sheet");
+    tableCols.forEach((col, i) => {
+      const cell = headerRow.getCell(col);
+      cell.value = headerLabels[i];
+      cell.font = { bold: true, color: { argb: HEADER_FONT } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
+      cell.alignment = { vertical: "middle", horizontal: col === 2 ? "left" : "center" };
+      cell.border = {
+        top: mediumBorder,
+        bottom: mediumBorder,
+        left: mediumBorder,
+        right: mediumBorder,
+      };
+    });
+    headerRow.height = 20;
+
+    roster.forEach((a, idx) => {
+      const row = ws.getRow(4 + idx);
+      const pr = best.get(a.id);
+      const values: (string | null)[] = [
+        athleteDisplayName(a),
+        pr != null ? `${pr} ${meta.unit}` : "",
+        null,
+        null,
+        null,
+        null,
+      ];
+      const isAlt = idx % 2 === 1;
+      tableCols.forEach((col, i) => {
+        const cell = row.getCell(col);
+        cell.value = values[i];
+        cell.alignment = { vertical: "middle", horizontal: col === 2 ? "left" : "center" };
+        cell.border = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+        if (isAlt) {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ALT_FILL } };
+        }
+      });
+      row.height = 18;
+    });
+
     const slug = meta.label
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
-    XLSX.writeFile(wb, `${slug || "testing"}-sheet.xlsx`);
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${slug || "testing"}-sheet.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
     setSheetOpen(false);
     toast.success(
       `Testing sheet downloaded — ${roster.length} athlete${roster.length === 1 ? "" : "s"}`,
