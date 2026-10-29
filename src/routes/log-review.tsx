@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  athletesQO, teamsQO, workoutsQO, workoutExercisesQO,
+  athletesQO, teamsQO, workoutExercisesQO,
   athleteDisplayName, type Athlete,
 } from "@/lib/queries";
 import { Card, CardContent } from "@/components/ui/card";
@@ -89,7 +89,6 @@ function LogReview() {
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: teams = [] } = useQuery(teamsQO);
-  const { data: workouts = [] } = useQuery(workoutsQO);
   const { data: workoutExercises = [] } = useQuery(workoutExercisesQO);
 
   const [rangeMode, setRangeMode] = useState<RangeMode>("day");
@@ -106,7 +105,7 @@ function LogReview() {
   const [f, setF] = useState({
     team: activeTeamId ?? "all", sport: "all", group: "all",
     athlete: "all", exercise: "all", liftType: "all",
-    coach: "all", statusFilter: "all",
+    statusFilter: "all",
   });
   useEffect(() => {
     setF((prev) => ({ ...prev, team: activeTeamId ?? "all" }));
@@ -170,8 +169,6 @@ function LogReview() {
   const athleteMap = useMemo(() => new Map(athletes.map((a) => [a.id, a])), [athletes]);
   const teamMap = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const exMap = useMemo(() => new Map(workoutExercises.map((e) => [e.id, e])), [workoutExercises]);
-  const workoutMap = useMemo(() => new Map(workouts.map((w) => [w.id, w])), [workouts]);
-  const sessionMap = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
 
   const trainingGroups = useMemo(() => {
     const s = new Set<string>();
@@ -187,14 +184,6 @@ function LogReview() {
     workoutExercises.forEach((e) => s.add(e.exercise_name));
     return Array.from(s).sort();
   }, [workoutExercises]);
-
-  const coaches = useMemo(() => {
-    const s = new Set<string>();
-    for (const w of workouts as unknown as Array<{ created_by?: string | null }>) {
-      if (w.created_by) s.add(w.created_by);
-    }
-    return Array.from(s);
-  }, [workouts]);
 
   // Client-side auto-classification for rows still marked 'normal' — coach override always wins.
   // Thresholds (loose): ±30% yellow, ±60% red vs baseline e1RM.
@@ -227,14 +216,12 @@ function LogReview() {
       .map((l) => {
         const athlete = athleteMap.get(l.athlete_id);
         const ex = exMap.get(l.workout_exercise_id);
-        const session = sessionMap.get(l.rack_session_id);
         const team = athlete?.team_id ? teamMap.get(athlete.team_id) : undefined;
-        const workout = session?.workout_id ? workoutMap.get(session.workout_id) : undefined;
         const status = classify(l);
         const est = l.estimated_1rm ?? e1rm(l.load, l.reps);
-        return { l, athlete, ex, session, team, workout, status, est };
+        return { l, athlete, ex, team, status, est };
       })
-      .filter(({ l, athlete, ex, workout, status }) => {
+      .filter(({ l, athlete, ex, status }) => {
         if (!athlete) return false;
         if (f.team !== "all" && athlete.team_id !== f.team) return false;
         if (f.sport !== "all" && athlete.sport !== f.sport) return false;
@@ -245,10 +232,6 @@ function LogReview() {
         if (f.athlete !== "all" && athlete.id !== f.athlete) return false;
         if (f.exercise !== "all" && ex?.exercise_name !== f.exercise) return false;
         if (f.liftType !== "all" && l.status !== f.liftType) return false;
-        if (f.coach !== "all") {
-          const cb = (workout as unknown as { created_by?: string | null } | undefined)?.created_by;
-          if (cb !== f.coach) return false;
-        }
         if (f.statusFilter !== "all") {
           if (f.statusFilter === "pending" && l.approval_status !== "pending" && status !== "red" && status !== "yellow") return false;
           if (f.statusFilter === "approved" && l.approval_status !== "approved") return false;
@@ -259,7 +242,7 @@ function LogReview() {
         }
         return true;
       });
-  }, [logs, f, athleteMap, exMap, sessionMap, teamMap, workoutMap, baselines]);
+  }, [logs, f, athleteMap, exMap, teamMap, baselines]);
 
   // Collapse to one row per athlete × exercise × day — the "best" set only.
   // Best = lowest time / highest jump-height / highest e1RM (load).
@@ -374,134 +357,162 @@ function LogReview() {
         </p>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-        <Stat label="Sets logged" value={summary.total} />
-        <Stat label="Athletes" value={summary.athletes} />
-        <Stat label="Green" value={summary.green} tone="green" />
-        <Stat label="Yellow" value={summary.yellow} tone="yellow" />
-        <Stat label="Red" value={summary.red} tone="red" />
-        <Stat label="Approved" value={summary.approved} />
-        <Stat label="Rejected" value={summary.rejected} />
+      {/* Summary — one row instead of seven separate cards, so a glance at
+          the top tells the whole story: what came in, how it's split by
+          color, and how much of it is still waiting on a decision. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2.5 text-sm">
+        <span className="text-muted-foreground">
+          <span className="font-semibold text-foreground">{summary.total}</span>
+          {` set${summary.total === 1 ? "" : "s"} · `}
+          <span className="font-semibold text-foreground">{summary.athletes}</span>
+          {` athlete${summary.athletes === 1 ? "" : "s"}`}
+        </span>
+        <span className="h-4 w-px bg-border" aria-hidden />
+        <StatPill label="green" value={summary.green} tone="green" />
+        <StatPill label="yellow" value={summary.yellow} tone="yellow" />
+        <StatPill label="red" value={summary.red} tone="red" />
+        <span className="ml-auto text-muted-foreground">
+          <span className="font-semibold text-foreground">{summary.approved}</span>
+          {" approved · "}
+          <span className="font-semibold text-foreground">{summary.rejected}</span>
+          {" rejected"}
+        </span>
       </div>
 
       {/* Date range */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-2 p-3">
-          <div className="flex items-center gap-1">
-            {(["day", "week", "month"] as RangeMode[]).map((m) => (
-              <Button key={m} size="sm" variant={rangeMode === m ? "default" : "outline"} onClick={() => setRangeMode(m)}>
-                {m[0].toUpperCase() + m.slice(1)}
-              </Button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="outline" onClick={() => shiftAnchor(-1)} aria-label="Previous">‹</Button>
-            <Input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} className="w-40" />
-            <Button size="icon" variant="outline" onClick={() => shiftAnchor(1)} aria-label="Next">›</Button>
-            <Button size="sm" variant="ghost" onClick={() => setAnchor(today())}>Today</Button>
-          </div>
-          <div className="ml-auto text-xs text-muted-foreground">{from} → {to}</div>
-        </CardContent>
-      </Card>
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Date range
+        </div>
+        <Card>
+          <CardContent className="flex flex-wrap items-end gap-2 p-3">
+            <div className="flex items-center gap-1">
+              {(["day", "week", "month"] as RangeMode[]).map((m) => (
+                <Button key={m} size="sm" variant={rangeMode === m ? "default" : "outline"} onClick={() => setRangeMode(m)}>
+                  {m[0].toUpperCase() + m.slice(1)}
+                </Button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="outline" onClick={() => shiftAnchor(-1)} aria-label="Previous">‹</Button>
+              <Input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} className="w-40" />
+              <Button size="icon" variant="outline" onClick={() => shiftAnchor(1)} aria-label="Next">›</Button>
+              <Button size="sm" variant="ghost" onClick={() => setAnchor(today())}>Today</Button>
+            </div>
+            <div className="ml-auto text-xs text-muted-foreground">{from} → {to}</div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 lg:grid-cols-8">
-          <FilterSelect label="Team" value={f.team} onChange={(v) => setF({ ...f, team: v })}
-            options={[{ v: "all", l: "All teams" }, ...teams.map((t) => ({ v: t.id, l: t.name }))]} />
-          <FilterSelect label="Sport" value={f.sport} onChange={(v) => setF({ ...f, sport: v })}
-            options={[{ v: "all", l: "All sports" }, ...SPORTS.map((s) => ({ v: s, l: s }))]} />
-          <FilterSelect label="Group" value={f.group} onChange={(v) => setF({ ...f, group: v })}
-            options={[{ v: "all", l: "All groups" }, ...trainingGroups.map((g) => ({ v: g, l: g }))]} />
-          <FilterSelect label="Athlete" value={f.athlete} onChange={(v) => setF({ ...f, athlete: v })}
-            options={[{ v: "all", l: "All athletes" }, ...athletes.map((a: Athlete) => ({ v: a.id, l: athleteDisplayName(a) }))]} />
-          <FilterSelect label="Exercise" value={f.exercise} onChange={(v) => setF({ ...f, exercise: v })}
-            options={[{ v: "all", l: "All exercises" }, ...exerciseNames.map((n) => ({ v: n, l: n }))]} />
-          <FilterSelect label="Lift type" value={f.liftType} onChange={(v) => setF({ ...f, liftType: v })}
-            options={[{ v: "all", l: "All" }, { v: "completed", l: "Completed" }, { v: "skipped", l: "Skipped" }]} />
-          <FilterSelect label="Coach" value={f.coach} onChange={(v) => setF({ ...f, coach: v })}
-            options={[{ v: "all", l: "All coaches" }, ...coaches.map((c) => ({ v: c, l: c.slice(0, 8) }))]} />
-          <FilterSelect label="Status" value={f.statusFilter} onChange={(v) => setF({ ...f, statusFilter: v })}
-            options={[
-              { v: "all", l: "All statuses" },
-              { v: "green", l: "Green" },
-              { v: "yellow", l: "Yellow" },
-              { v: "red", l: "Red" },
-              { v: "pending", l: "Needs review" },
-              { v: "approved", l: "Approved" },
-              { v: "rejected", l: "Rejected" },
-            ]} />
-        </CardContent>
-      </Card>
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Filters
+        </div>
+        <Card>
+          <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 lg:grid-cols-7">
+            <FilterSelect label="Team" value={f.team} onChange={(v) => setF({ ...f, team: v })}
+              options={[{ v: "all", l: "All teams" }, ...teams.map((t) => ({ v: t.id, l: t.name }))]} />
+            <FilterSelect label="Sport" value={f.sport} onChange={(v) => setF({ ...f, sport: v })}
+              options={[{ v: "all", l: "All sports" }, ...SPORTS.map((s) => ({ v: s, l: s }))]} />
+            <FilterSelect label="Group" value={f.group} onChange={(v) => setF({ ...f, group: v })}
+              options={[{ v: "all", l: "All groups" }, ...trainingGroups.map((g) => ({ v: g, l: g }))]} />
+            <FilterSelect label="Athlete" value={f.athlete} onChange={(v) => setF({ ...f, athlete: v })}
+              options={[{ v: "all", l: "All athletes" }, ...athletes.map((a: Athlete) => ({ v: a.id, l: athleteDisplayName(a) }))]} />
+            <FilterSelect label="Exercise" value={f.exercise} onChange={(v) => setF({ ...f, exercise: v })}
+              options={[{ v: "all", l: "All exercises" }, ...exerciseNames.map((n) => ({ v: n, l: n }))]} />
+            <FilterSelect label="Lift type" value={f.liftType} onChange={(v) => setF({ ...f, liftType: v })}
+              options={[{ v: "all", l: "All" }, { v: "completed", l: "Completed" }, { v: "skipped", l: "Skipped" }]} />
+            <FilterSelect label="Status" value={f.statusFilter} onChange={(v) => setF({ ...f, statusFilter: v })}
+              options={[
+                { v: "all", l: "All statuses" },
+                { v: "green", l: "Green" },
+                { v: "yellow", l: "Yellow" },
+                { v: "red", l: "Red" },
+                { v: "pending", l: "Needs review" },
+                { v: "approved", l: "Approved" },
+                { v: "rejected", l: "Rejected" },
+              ]} />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Athlete</TableHead>
-                <TableHead>Team</TableHead>
-                <TableHead>Exercise</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Set</TableHead>
-                <TableHead className="text-right">Weight</TableHead>
-                <TableHead className="text-right">Reps</TableHead>
-                <TableHead className="text-right">Prescribed</TableHead>
-                <TableHead className="text-right">Δ</TableHead>
-                <TableHead className="text-right">e1RM</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bestRows.length === 0 ? (
-                <TableRow><TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
-                  {logsQ.isLoading ? "Loading…" : "No logged sets in this range."}
-                </TableCell></TableRow>
-              ) : bestRows.map(({ l, athlete, ex, team, status, est }) => {
-                const diff = l.prescribed_load && l.load ? l.load - l.prescribed_load : null;
-                const tone = status === "red" ? "border-l-4 border-red-500"
-                  : status === "yellow" ? "border-l-4 border-amber-500"
-                  : "border-l-4 border-emerald-500";
-                return (
-                  <TableRow key={l.id} className={tone}>
-                    <TableCell className="font-medium">{athlete ? athleteDisplayName(athlete) : "—"}</TableCell>
-                    <TableCell className="text-xs">{team?.name ?? "—"}</TableCell>
-                    <TableCell>{ex?.exercise_name ?? "—"}</TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{l.completed_at.slice(0, 10)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{l.set_position}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {l.time_seconds != null
-                        ? `${Number(l.time_seconds).toFixed(3)}s`
-                        : l.distance_in != null
-                          ? `${Number(l.distance_in).toFixed(2)}in`
-                          : (l.load ?? "—")}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{l.reps ?? "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-                      {l.prescribed_load ?? "—"} × {l.prescribed_reps ?? "—"}
-                    </TableCell>
-                    <TableCell className={`text-right tabular-nums text-xs ${diff && diff > 0 ? "text-emerald-600" : diff && diff < 0 ? "text-red-600" : ""}`}>
-                      {diff == null ? "—" : diff > 0 ? `+${diff}` : diff}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-semibold">{est == null ? "—" : Math.round(est / 5) * 5}</TableCell>
-                    <TableCell>{statusBadge(l, status)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => { setEdit({ load: String(l.load ?? ""), reps: String(l.reps ?? ""), note: l.review_note ?? "", reason: l.review_reason ?? "" }); setDialog({ row: l, action: "edit" }); }}>Edit</Button>
-                        <Button size="sm" variant="outline" onClick={() => act.mutate({ row: l, action: "approve", patch: {} })}>Approve</Button>
-                        <Button size="sm" variant="destructive" onClick={() => { setEdit({ load: "", reps: "", note: "", reason: "data_entry_error" }); setDialog({ row: l, action: "reject" }); }}>Reject</Button>
-                      </div>
-                    </TableCell>
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Log entries
+        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Athlete</TableHead>
+                    <TableHead>Exercise</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Set</TableHead>
+                    <TableHead className="text-right">Weight</TableHead>
+                    <TableHead className="text-right">Reps</TableHead>
+                    <TableHead className="text-right">Vs. prescribed</TableHead>
+                    <TableHead className="text-right">e1RM</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {bestRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
+                      {logsQ.isLoading ? "Loading…" : "No logged sets in this range."}
+                    </TableCell></TableRow>
+                  ) : bestRows.map(({ l, athlete, ex, team, status, est }) => {
+                    const diff = l.prescribed_load && l.load ? l.load - l.prescribed_load : null;
+                    const tone = status === "red" ? "border-l-4 border-red-500"
+                      : status === "yellow" ? "border-l-4 border-amber-500"
+                      : "border-l-4 border-emerald-500";
+                    return (
+                      <TableRow key={l.id} className={tone}>
+                        <TableCell className="font-medium">
+                          {athlete ? athleteDisplayName(athlete) : "—"}
+                          {team && <div className="text-[10px] font-normal text-muted-foreground">{team.name}</div>}
+                        </TableCell>
+                        <TableCell>{ex?.exercise_name ?? "—"}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{l.completed_at.slice(0, 10)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{l.set_position}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {l.time_seconds != null
+                            ? `${Number(l.time_seconds).toFixed(3)}s`
+                            : l.distance_in != null
+                              ? `${Number(l.distance_in).toFixed(2)}in`
+                              : (l.load ?? "—")}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{l.reps ?? "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">
+                          <span className="text-muted-foreground">{l.prescribed_load ?? "—"} × {l.prescribed_reps ?? "—"}</span>
+                          {diff != null && (
+                            <span className={diff > 0 ? "ml-1 text-emerald-600" : diff < 0 ? "ml-1 text-red-600" : "ml-1 text-muted-foreground"}>
+                              ({diff > 0 ? "+" : ""}{diff})
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{est == null ? "—" : Math.round(est / 5) * 5}</TableCell>
+                        <TableCell>{statusBadge(l, status)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => { setEdit({ load: String(l.load ?? ""), reps: String(l.reps ?? ""), note: l.review_note ?? "", reason: l.review_reason ?? "" }); setDialog({ row: l, action: "edit" }); }}>Edit</Button>
+                            <Button size="sm" variant="outline" onClick={() => act.mutate({ row: l, action: "approve", patch: {} })}>Approve</Button>
+                            <Button size="sm" variant="destructive" onClick={() => { setEdit({ load: "", reps: "", note: "", reason: "data_entry_error" }); setDialog({ row: l, action: "reject" }); }}>Reject</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Dialog for edit/reject */}
       <Dialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}>
@@ -559,15 +570,21 @@ function LogReview() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "green" | "yellow" | "red" }) {
-  const color = tone === "green" ? "text-emerald-600" : tone === "yellow" ? "text-amber-600" : tone === "red" ? "text-red-600" : "";
+function StatPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "green" | "yellow" | "red";
+}) {
+  const color =
+    tone === "green" ? "text-emerald-600" : tone === "yellow" ? "text-amber-600" : "text-red-600";
   return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
-      </CardContent>
-    </Card>
+    <span className={`font-semibold tabular-nums ${color}`}>
+      {value} <span className="font-normal">{label}</span>
+    </span>
   );
 }
 
