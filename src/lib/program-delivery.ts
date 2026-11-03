@@ -3,8 +3,9 @@
 // workout-editor.tsx (whose grouping algorithm this mirrors).
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Athlete, AthleteTeam, WorkoutExercise, WorkoutSet } from "@/lib/queries";
+import type { Athlete, AthleteTeam, RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 import { filterAthletes, emptyFilters } from "@/components/filters";
+import { suggestLoad } from "@/lib/prescription";
 
 export type ExerciseBlock = { group: string | null; items: WorkoutExercise[] };
 
@@ -101,6 +102,63 @@ export function formatPrescription(exercise: WorkoutExercise, set: WorkoutSet): 
   else if (set.distance_in != null) load_part = `${set.distance_in} in`;
 
   return [setsReps || null, load_part ? `@ ${load_part}` : null].filter(Boolean).join(" ") || "—";
+}
+
+export type AthleteWorkoutRow = {
+  block: string;
+  exercise: string;
+  setNumber: number;
+  reps: string | number;
+  weight: string;
+};
+
+/**
+ * One athlete's personalized set list for a session — same %-of-1RM
+ * resolution (suggestLoad) the printed athlete cards use, as flat rows
+ * instead of a PDF page, so anything that needs this data (an email, a
+ * future in-app view) doesn't have to re-derive it.
+ */
+export function athleteWorkoutRows(
+  athlete: Athlete,
+  exercises: WorkoutExercise[],
+  sets: WorkoutSet[],
+  repMaxes: RepMax[],
+): AthleteWorkoutRow[] {
+  const rows: AthleteWorkoutRow[] = [];
+  const blocks = groupExercisesBySuperset(exercises);
+  for (const [blockIdx, block] of blocks.entries()) {
+    const label = blockLabel(block, blockIdx);
+    for (const ex of block.items) {
+      const exSets = setsForExercise(sets, ex.id);
+      if (exSets.length === 0) {
+        rows.push({
+          block: label,
+          exercise: ex.exercise_name,
+          setNumber: 0,
+          reps: ex.reps ?? "—",
+          weight: "—",
+        });
+        continue;
+      }
+      exSets.forEach((s, i) => {
+        const suggestion = suggestLoad({
+          athleteId: athlete.id,
+          exercise: ex,
+          setRow: s,
+          repMaxes,
+        });
+        const weight = suggestion ? `${suggestion.load} lb` : formatPrescription(ex, s);
+        rows.push({
+          block: label,
+          exercise: ex.exercise_name,
+          setNumber: i + 1,
+          reps: s.reps ?? ex.reps ?? "—",
+          weight,
+        });
+      });
+    }
+  }
+  return rows;
 }
 
 /** One rack, and whichever athletes belong to it. */

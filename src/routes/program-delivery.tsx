@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   athletesQO,
   athleteTeamsQO,
@@ -21,6 +22,7 @@ import {
   blockLabel,
   setsForExercise,
   formatPrescription,
+  athleteWorkoutRows,
 } from "@/lib/program-delivery";
 import {
   buildPrintCardsPdf,
@@ -30,6 +32,9 @@ import {
   downloadPdf,
   type SessionInfo,
 } from "@/lib/program-delivery-export";
+import { notifyWorkout } from "@/lib/notify-workout";
+import { publicOrigin } from "@/lib/share-url";
+import { toUserMessage } from "@/lib/db-errors";
 import { usePermission } from "@/hooks/use-permissions";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import { PageHeader, EmptyState } from "@/components/page-header";
@@ -44,6 +49,16 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Printer,
   MonitorPlay,
   Users,
@@ -52,6 +67,7 @@ import {
   Download,
   Maximize2,
   Info,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -262,6 +278,37 @@ function ProgramDeliveryPage() {
         ? `Download ${roster.length} athlete card${roster.length === 1 ? "" : "s"} (PDF)`
         : "Download handout (PDF)";
 
+  const emailableCount = useMemo(() => roster.filter((a) => a.athlete_email).length, [roster]);
+  const [confirmSend, setConfirmSend] = useState(false);
+  const sendToAthletes = useMutation({
+    mutationFn: () =>
+      notifyWorkout({
+        athletes: roster.map((a) => ({
+          athlete_id: a.id,
+          rows: athleteWorkoutRows(a, exercises, sets, repMaxes),
+        })),
+        session: {
+          teamName: sessionInfo.teamName,
+          sessionName: sessionInfo.sessionName,
+          scheduledDate: sessionInfo.scheduledDate,
+          coachNotes: session?.notes,
+        },
+        loginUrl: `${publicOrigin()}/athlete-login`,
+      }),
+    onSuccess: ({ sent, skipped }) => {
+      setConfirmSend(false);
+      if (sent === 0) {
+        toast.error("Nobody was sent — no athletes on this roster have an email on file.");
+        return;
+      }
+      toast.success(
+        `Sent to ${sent} athlete${sent === 1 ? "" : "s"}` +
+          (skipped.length ? ` · ${skipped.length} skipped (no email on file)` : ""),
+      );
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
   return (
     <div>
       <PageHeader
@@ -424,6 +471,14 @@ function ProgramDeliveryPage() {
                 <Button size="sm" onClick={download} disabled={!canExport}>
                   <Download className="mr-1.5 h-3.5 w-3.5" /> {downloadLabel}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmSend(true)}
+                  disabled={!canExport || roster.length === 0}
+                >
+                  <Mail className="mr-1.5 h-3.5 w-3.5" /> Email athletes
+                </Button>
               </div>
             )}
           </div>
@@ -451,6 +506,30 @@ function ProgramDeliveryPage() {
           </TabsContent>
         </Tabs>
       )}
+
+      <AlertDialog open={confirmSend} onOpenChange={(v) => !v && setConfirmSend(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Email today's session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sends {sessionInfo.sessionName} ({sessionInfo.teamName}) to {emailableCount} of{" "}
+              {roster.length} athlete{roster.length === 1 ? "" : "s"} who have an email on file,
+              each with their own working weights.
+              {emailableCount < roster.length &&
+                ` ${roster.length - emailableCount} have no email on file and will be skipped.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sendToAthletes.mutate()}
+              disabled={sendToAthletes.isPending || emailableCount === 0}
+            >
+              {sendToAthletes.isPending ? "Sending…" : `Send to ${emailableCount}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

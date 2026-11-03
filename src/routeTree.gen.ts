@@ -29,6 +29,7 @@ import { Route as LogReviewRouteImport } from './routes/log-review'
 import { Route as MaxesRouteImport } from './routes/maxes'
 import { Route as MetricsRouteImport } from './routes/metrics'
 import { Route as NotifyParentRouteImport } from './routes/notify-parent'
+import { Route as NotifyWorkoutRouteImport } from './routes/notify-workout'
 import { Route as OrgMembersRouteImport } from './routes/org-members'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as PerformanceRouteImport } from './routes/performance'
@@ -167,6 +168,11 @@ const MetricsRoute = MetricsRouteImport.update({
 const NotifyParentRoute = NotifyParentRouteImport.update({
   id: '/notify-parent',
   path: '/notify-parent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotifyWorkoutRoute = NotifyWorkoutRouteImport.update({
+  id: '/notify-workout',
+  path: '/notify-workout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrgMembersRoute = OrgMembersRouteImport.update({
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/notify-parent': typeof NotifyParentRoute
+  '/notify-workout': typeof NotifyWorkoutRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -448,6 +455,7 @@ export interface FileRoutesByTo {
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/notify-parent': typeof NotifyParentRoute
+  '/notify-workout': typeof NotifyWorkoutRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -509,6 +517,7 @@ export interface FileRoutesById {
   '/maxes': typeof MaxesRoute
   '/metrics': typeof MetricsRoute
   '/notify-parent': typeof NotifyParentRoute
+  '/notify-workout': typeof NotifyWorkoutRoute
   '/org-members': typeof OrgMembersRoute
   '/organizations': typeof OrganizationsRoute
   '/performance': typeof PerformanceRoute
@@ -572,6 +581,7 @@ export interface FileRouteTypes {
     | '/maxes'
     | '/metrics'
     | '/notify-parent'
+    | '/notify-workout'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -633,6 +643,7 @@ export interface FileRouteTypes {
     | '/maxes'
     | '/metrics'
     | '/notify-parent'
+    | '/notify-workout'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -693,6 +704,7 @@ export interface FileRouteTypes {
     | '/maxes'
     | '/metrics'
     | '/notify-parent'
+    | '/notify-workout'
     | '/org-members'
     | '/organizations'
     | '/performance'
@@ -755,6 +767,7 @@ export interface RootRouteChildren {
   MaxesRoute: typeof MaxesRoute
   MetricsRoute: typeof MetricsRoute
   NotifyParentRoute: typeof NotifyParentRoute
+  NotifyWorkoutRoute: typeof NotifyWorkoutRoute
   OrgMembersRoute: typeof OrgMembersRoute
   OrganizationsRoute: typeof OrganizationsRoute
   PerformanceRoute: typeof PerformanceRoute
@@ -924,6 +937,13 @@ declare module '@tanstack/react-router' {
       path: '/notify-parent'
       fullPath: '/notify-parent'
       preLoaderRoute: typeof NotifyParentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notify-workout': {
+      id: '/notify-workout'
+      path: '/notify-workout'
+      fullPath: '/notify-workout'
+      preLoaderRoute: typeof NotifyWorkoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/org-members': {
@@ -1304,6 +1324,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaxesRoute: MaxesRoute,
   MetricsRoute: MetricsRoute,
   NotifyParentRoute: NotifyParentRoute,
+  NotifyWorkoutRoute: NotifyWorkoutRoute,
   OrgMembersRoute: OrgMembersRoute,
   OrganizationsRoute: OrganizationsRoute,
   PerformanceRoute: PerformanceRoute,

@@ -11,6 +11,7 @@ import {
   blockLabel,
   setsForExercise,
   formatPrescription,
+  athleteWorkoutRows,
   type RackGroup,
 } from "@/lib/program-delivery";
 
@@ -149,37 +150,27 @@ export function buildAthleteCardsPdf(opts: {
 }): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const margin = 40;
-  const blocks = groupExercisesBySuperset(opts.exercises);
 
   opts.roster.forEach((athlete, idx) => {
     if (idx > 0) doc.addPage();
     pageHeader(doc, athleteDisplayName(athlete), sessionSubtitle(opts.session));
     let y = 84;
 
-    const body: (string | number)[][] = [];
-    for (const [blockIdx, block] of blocks.entries()) {
-      const label = blockLabel(block, blockIdx);
-      for (const ex of block.items) {
-        const sets = setsForExercise(opts.sets, ex.id);
-        sets.forEach((s, i) => {
-          const suggestion = suggestLoad({
-            athleteId: athlete.id,
-            exercise: ex,
-            setRow: s,
-            repMaxes: opts.repMaxes,
-          });
-          const weight = suggestion ? `${suggestion.load} lb` : formatPrescription(ex, s);
-          body.push([
-            i === 0 ? label : "",
-            i === 0 ? ex.exercise_name : "",
-            String(i + 1),
-            s.reps ?? ex.reps ?? "—",
-            weight,
-          ]);
-        });
-        if (sets.length === 0) body.push([label, ex.exercise_name, "—", ex.reps ?? "—", "—"]);
-      }
-    }
+    const rows = athleteWorkoutRows(athlete, opts.exercises, opts.sets, opts.repMaxes);
+    let lastBlock: string | null = null;
+    let lastExercise: string | null = null;
+    const body: (string | number)[][] = rows.map((r) => {
+      const isNewGroup = r.block !== lastBlock || r.exercise !== lastExercise;
+      lastBlock = r.block;
+      lastExercise = r.exercise;
+      return [
+        isNewGroup ? r.block : "",
+        isNewGroup ? r.exercise : "",
+        r.setNumber === 0 ? "—" : String(r.setNumber),
+        r.reps,
+        r.weight,
+      ];
+    });
 
     autoTable(doc, {
       startY: y,
