@@ -8,12 +8,23 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dumbbell, Trophy, Timer, CheckCircle2, Flame, Calendar, ArrowLeft, Sparkles, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toUserMessage } from "@/lib/db-errors";
 import { suggestLoad } from "@/lib/prescription";
+import { implausibleJump } from "@/lib/validation";
 import { DEFAULT_1RM_FORMULA, isOneRmFormula, type OneRmFormula } from "@/lib/one-rm";
 import { titleCaseName } from "@/lib/queries";
 import type { RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
@@ -687,6 +698,23 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
+  // Catches a fat-fingered weight (typing into the wrong box, an extra
+  // digit) before it ever reaches the coach's review queue — compares
+  // against what the set was actually programmed for, same ±30% threshold
+  // used everywhere else in the app.
+  const [confirmPct, setConfirmPct] = useState<number | null>(null);
+  const attemptSave = () => {
+    const loadNum = Number(load);
+    if (load && Number.isFinite(loadNum) && loadNum > 0 && prescribedLoad) {
+      const pct = implausibleJump(loadNum, prescribedLoad, false);
+      if (pct != null) {
+        setConfirmPct(pct);
+        return;
+      }
+    }
+    save.mutate();
+  };
+
   const done = existing?.status === "completed";
   const velNum = Number(vel);
   const velOk = !vel || !targetVMin || (velNum >= targetVMin && (!targetVMax || velNum <= targetVMax));
@@ -757,7 +785,7 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
         size="lg"
         variant={done ? "outline" : "default"}
         className="h-14 w-full text-lg"
-        onClick={() => save.mutate()}
+        onClick={attemptSave}
         disabled={save.isPending || !rackSessionId}
       >
         {save.isPending
@@ -766,6 +794,31 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
             ? <><Flame className="h-5 w-5" /> Re-log set {position}</>
             : <><CheckCircle2 className="h-5 w-5" /> Log set {position}</>}
       </Button>
+
+      <AlertDialog open={confirmPct != null} onOpenChange={(v) => !v && setConfirmPct(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Double-check this weight</AlertDialogTitle>
+            <AlertDialogDescription>
+              This set is programmed for {prescribedLoad} lb. You entered {load} lb — a{" "}
+              {Math.round(Math.abs(confirmPct ?? 0) * 100)}%{" "}
+              {(confirmPct ?? 0) > 0 ? "jump" : "drop"} from that. Make sure you&apos;ve got the
+              right number before it goes in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Let me fix it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmPct(null);
+                save.mutate();
+              }}
+            >
+              Log it anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
