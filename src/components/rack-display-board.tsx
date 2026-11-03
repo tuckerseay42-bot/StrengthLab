@@ -1,8 +1,10 @@
-// Read-only, TV/kiosk-friendly view of today's rack assignments — meant to be
-// cast to a monitor in the weight room so athletes can find their own rack
-// without asking a coach. Shares the same rack_sessions/rack_session_athletes
-// data as the Assign Racks builder and Live Training, but strips out every
-// editing control in favor of large, legible cards.
+// Read-only, TV/kiosk-friendly board — meant to be cast to a monitor in the
+// weight room. A coach picks who to show (a team, a class period, or
+// everyone assigned to a program) rather than the board depending on rack
+// assignments existing; it falls back to those only to tag a "Rack N" label
+// when they're on file, and strips out every editing control in favor of
+// large, legible name cards that turn green the moment an athlete finishes
+// logging today's actual prescribed workout.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,12 +21,16 @@ import {
   athleteDisplayName,
   type Athlete,
 } from "@/lib/queries";
+import { rosterForTeam } from "@/lib/program-delivery";
 import { resolveAthleteWorkout, buildPrescribedSets } from "@/lib/training-resolver";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -38,7 +44,16 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 type RackRow = { id: string; team_id: string; rack_number: number };
 type RackMember = { rack_session_id: string; athlete_id: string; quadrant: number };
-type RackGroup = RackRow & { athletes: Athlete[] };
+
+// Encodes which roster is showing as one Select value: "team:<id>",
+// "period:<class_period>", or "program:<id>".
+function parseSource(v: string): { kind: "team" | "period" | "program"; value: string } | null {
+  const i = v.indexOf(":");
+  if (i < 0) return null;
+  const kind = v.slice(0, i);
+  if (kind !== "team" && kind !== "period" && kind !== "program") return null;
+  return { kind, value: v.slice(i + 1) };
+}
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -61,7 +76,7 @@ export function RackDisplayBoard() {
   const { data: workoutAssignments = [] } = useQuery(workoutAssignmentsQO);
   const { data: programs = [] } = useQuery(programsQO);
   const { data: programWorkouts = [] } = useQuery(programWorkoutsQO);
-  const [teamId, setTeamId] = useState<string>(activeTeamId ?? "all");
+  const [source, setSource] = useState<string>(activeTeamId ? `team:${activeTeamId}` : "team:all");
   const [search, setSearch] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const now = useClock();
@@ -78,7 +93,21 @@ export function RackDisplayBoard() {
 
   const athleteById = useMemo(() => new Map(athletes.map((a) => [a.id, a])), [athletes]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const periods = useMemo(
+    () =>
+      Array.from(new Set(athletes.map((a) => a.class_period).filter((p): p is string => !!p))).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [athletes],
+  );
+  const sortedPrograms = useMemo(
+    () => programs.slice().sort((a, b) => a.name.localeCompare(b.name)),
+    [programs],
+  );
 
+  // Today's rack layout — used only to tag a "Rack N" label when a coach
+  // has built Assign Racks for the day; the board's roster no longer
+  // depends on it.
   const racksQ = useQuery({
     queryKey: ["rack-display-racks", today()],
     queryFn: async (): Promise<RackRow[]> => {
@@ -114,17 +143,28 @@ export function RackDisplayBoard() {
   });
   const members = membersQ.data ?? [];
 
+  const rackNumberByAthlete = useMemo(() => {
+    const rackById = new Map(racks.map((r) => [r.id, r]));
+    const m = new Map<string, number>();
+    for (const mem of members) {
+      const rack = rackById.get(mem.rack_session_id);
+      if (rack) m.set(mem.athlete_id, rack.rack_number);
+    }
+    return m;
+  }, [racks, members]);
+
+  // Today's logged sets — a rack_set_log always has a rack_session_id
+  // (one gets auto-created the moment an athlete opens today's workout),
+  // but that's independent of whether they were ever placed into a rack
+  // via Assign Racks, so this is scoped by date, not by rack membership.
   const logsQ = useQuery({
-    queryKey: ["rack-display-logs", rackIdsKey],
-    enabled: racks.length > 0,
+    queryKey: ["rack-display-logs", today()],
     queryFn: async (): Promise<{ athlete_id: string; status: string }[]> => {
       const { data, error } = await supabase
         .from("rack_set_logs")
         .select("athlete_id, status")
-        .in(
-          "rack_session_id",
-          racks.map((r) => r.id),
-        );
+        .gte("completed_at", `${today()}T00:00:00`)
+        .lte("completed_at", `${today()}T23:59:59`);
       if (error) throw error;
       return (data ?? []) as { athlete_id: string; status: string }[];
     },
@@ -153,27 +193,29 @@ export function RackDisplayBoard() {
     };
   }, [qc]);
 
-  const scopedRacks = teamId === "all" ? racks : racks.filter((r) => r.team_id === teamId);
-
-  const rackGroups = useMemo<RackGroup[]>(
-    () =>
-      scopedRacks
-        .map((r) => ({
-          ...r,
-          athletes: members
-            .filter((m) => m.rack_session_id === r.id)
-            .sort((a, b) => a.quadrant - b.quadrant)
-            .map((m) => athleteById.get(m.athlete_id))
-            .filter((a): a is Athlete => !!a),
-        }))
-        .sort((a, b) => a.rack_number - b.rack_number),
-    [scopedRacks, members, athleteById],
+  // Who's on the board — a coach-picked team, class period, or program,
+  // not whatever happens to have a rack built for it today.
+  const parsedSource = useMemo(() => parseSource(source), [source]);
+  const roster = useMemo(() => {
+    if (!parsedSource) return [];
+    if (parsedSource.kind === "team") {
+      if (parsedSource.value === "all") return athletes.slice();
+      return rosterForTeam(athletes, athleteTeams, parsedSource.value);
+    }
+    if (parsedSource.kind === "period") {
+      return athletes.filter((a) => a.class_period === parsedSource.value);
+    }
+    return athletes.filter((a) => a.program_id === parsedSource.value);
+  }, [parsedSource, athletes, athleteTeams]);
+  const sortedRoster = useMemo(
+    () => roster.slice().sort((a, b) => athleteDisplayName(a).localeCompare(athleteDisplayName(b))),
+    [roster],
   );
 
-  // Whether each athlete shown on the board has logged every set of
-  // today's actual prescribed workout (same resolver + set-expansion Live
+  // Whether each athlete on the board has logged every set of today's
+  // actual prescribed workout (same resolver + set-expansion Live
   // Training's "Who's up" list uses) — this is what turns a name card
-  // green, independent of which team/rack filter is active.
+  // green.
   const finishedByAthlete = useMemo(() => {
     const logsByAthlete = new Map<string, { athlete_id: string; status: string }[]>();
     for (const l of logs) {
@@ -181,11 +223,8 @@ export function RackDisplayBoard() {
       arr.push(l);
       logsByAthlete.set(l.athlete_id, arr);
     }
-    const boardAthleteIds = new Set(rackGroups.flatMap((r) => r.athletes.map((a) => a.id)));
     const m = new Map<string, boolean>();
-    for (const id of boardAthleteIds) {
-      const athlete = athleteById.get(id);
-      if (!athlete) continue;
+    for (const athlete of sortedRoster) {
       const resolved = resolveAthleteWorkout(athlete, today(), {
         assignments: workoutAssignments,
         programs,
@@ -197,16 +236,15 @@ export function RackDisplayBoard() {
         : null;
       const prescribed = buildPrescribedSets(workout, workoutExercises, workoutSets);
       const totalSets = prescribed.length;
-      const completedCount = (logsByAthlete.get(id) ?? []).filter(
+      const completedCount = (logsByAthlete.get(athlete.id) ?? []).filter(
         (l) => l.status === "completed",
       ).length;
-      m.set(id, totalSets > 0 && completedCount >= totalSets);
+      m.set(athlete.id, totalSets > 0 && completedCount >= totalSets);
     }
     return m;
   }, [
     logs,
-    rackGroups,
-    athleteById,
+    sortedRoster,
     workoutAssignments,
     programs,
     programWorkouts,
@@ -227,13 +265,24 @@ export function RackDisplayBoard() {
   });
   const timeLabel = now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
+  const sourceLabel =
+    parsedSource?.kind === "period"
+      ? parsedSource.value
+      : parsedSource?.kind === "program"
+        ? (sortedPrograms.find((p) => p.id === parsedSource.value)?.name ?? "Program")
+        : parsedSource?.value === "all"
+          ? "All athletes"
+          : (teamById.get(parsedSource?.value ?? "")?.name ?? "Team");
+  const finishedCount = sortedRoster.filter((a) => finishedByAthlete.get(a.id)).length;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-2xl font-bold tracking-tight">Today's Racks</div>
+          <div className="text-2xl font-bold tracking-tight">{sourceLabel}</div>
           <div className="text-sm text-muted-foreground">
             {dateLabel} · {timeLabel}
+            {sortedRoster.length > 0 && ` · ${finishedCount}/${sortedRoster.length} done`}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -246,17 +295,46 @@ export function RackDisplayBoard() {
               className="h-9 w-[180px] pl-8 text-sm"
             />
           </div>
-          <Select value={teamId} onValueChange={setTeamId}>
-            <SelectTrigger className="h-9 w-[180px]">
-              <SelectValue placeholder="All teams" />
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="h-9 w-[200px]">
+              <SelectValue placeholder="Pick who to show" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All teams</SelectItem>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel>Teams</SelectLabel>
+                <SelectItem value="team:all">All athletes</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={`team:${t.id}`}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              {periods.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Class periods</SelectLabel>
+                    {periods.map((p) => (
+                      <SelectItem key={p} value={`period:${p}`}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
+              {sortedPrograms.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Programs</SelectLabel>
+                    {sortedPrograms.map((p) => (
+                      <SelectItem key={p.id} value={`program:${p.id}`}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
             </SelectContent>
           </Select>
           <Button size="sm" variant="outline" onClick={toggleFullscreen}>
@@ -270,70 +348,47 @@ export function RackDisplayBoard() {
         </div>
       </div>
 
-      {rackGroups.length === 0 ? (
+      {sortedRoster.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No racks assigned yet"
-          description="Once a coach builds today's rack assignments in the Assign Racks tab, they'll show up here."
+          title="Nobody on this board"
+          description="Pick a team, class period, or program above that has athletes assigned to it."
         />
       ) : (
-        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto pb-4 pr-1 sm:grid-cols-2 xl:grid-cols-3">
-          {rackGroups.map((r) => {
-            const team = teamById.get(r.team_id) ?? null;
-            const teamColor = team?.color || "var(--primary)";
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-3 overflow-y-auto pb-4 pr-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {sortedRoster.map((a) => {
+            const highlight = needle && matchesSearch(a);
+            const finished = finishedByAthlete.get(a.id) ?? false;
+            const dimmed = needle && !highlight;
+            const rackNumber = rackNumberByAthlete.get(a.id);
             return (
               <div
-                key={r.id}
-                className="flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05),0_8px_24px_-12px_rgba(0,0,0,0.25)]"
+                key={a.id}
+                className={cn(
+                  "flex flex-col gap-1 rounded-2xl border border-border/60 px-4 py-4 text-center shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-colors",
+                  dimmed
+                    ? "border-transparent bg-muted/20 text-muted-foreground/40"
+                    : finished
+                      ? "border-emerald-500/40 bg-emerald-500 text-white"
+                      : highlight
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "bg-card text-foreground",
+                )}
               >
-                <div
-                  className="flex items-center gap-3 px-4 py-3"
-                  style={{ background: `color-mix(in srgb, ${teamColor} 14%, transparent)` }}
-                >
+                {finished && !dimmed && <CheckCircle2 className="mx-auto h-6 w-6" />}
+                <span className="truncate text-xl font-bold tracking-tight">
+                  {athleteDisplayName(a)}
+                </span>
+                {rackNumber != null && (
                   <span
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl font-black text-white"
-                    style={{ backgroundColor: teamColor }}
+                    className={cn(
+                      "text-xs font-medium uppercase tracking-wide",
+                      finished || highlight ? "opacity-80" : "text-muted-foreground",
+                    )}
                   >
-                    {r.rack_number}
+                    Rack {rackNumber}
                   </span>
-                  <div className="min-w-0">
-                    <div className="text-lg font-bold leading-tight">Rack {r.rack_number}</div>
-                    <div className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {team?.name ?? "Unassigned team"}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1.5 p-3">
-                  {r.athletes.length === 0 ? (
-                    <div className="py-4 text-center text-sm text-muted-foreground">
-                      No athletes assigned
-                    </div>
-                  ) : (
-                    r.athletes.map((a) => {
-                      const highlight = needle && matchesSearch(a);
-                      const finished = finishedByAthlete.get(a.id) ?? false;
-                      const dimmed = needle && !highlight;
-                      return (
-                        <div
-                          key={a.id}
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-2.5 text-xl font-semibold tracking-tight transition-colors",
-                            dimmed
-                              ? "text-muted-foreground/40"
-                              : finished
-                                ? "bg-emerald-500 text-white"
-                                : highlight
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted/40 text-foreground",
-                          )}
-                        >
-                          {finished && !dimmed && <CheckCircle2 className="h-5 w-5 shrink-0" />}
-                          <span className="truncate">{athleteDisplayName(a)}</span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                )}
               </div>
             );
           })}
