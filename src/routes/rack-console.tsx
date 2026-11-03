@@ -29,7 +29,7 @@ import {
 } from "@/lib/queries";
 import { MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
 import { notifyParent } from "@/lib/notify-parent";
-import { resolveAthleteWorkout } from "@/lib/training-resolver";
+import { resolveAthleteWorkout, buildPrescribedSets } from "@/lib/training-resolver";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -230,43 +230,6 @@ function mphToSeconds(mph: number, distanceIn: number): number {
 
 // Prescribed sets in order — shared by AthleteTile (per-set logging) and the
 // "Who's up" list (which only needs the total/count, not the full form).
-function buildPrescribedSets(
-  workout: Workout | null,
-  workoutExercises: WorkoutExercise[],
-  workoutSets: WorkoutSet[],
-): Array<{
-  exercise: WorkoutExercise;
-  setPosition: number;
-  setTotal: number;
-  setRow: WorkoutSet | null;
-}> {
-  if (!workout) return [];
-  const exs = workoutExercises
-    .filter((e) => e.workout_id === workout.id)
-    .sort((a, b) => a.position - b.position);
-  const list: Array<{
-    exercise: WorkoutExercise;
-    setPosition: number;
-    setTotal: number;
-    setRow: WorkoutSet | null;
-  }> = [];
-  for (const ex of exs) {
-    const rows = workoutSets
-      .filter((s) => s.workout_exercise_id === ex.id)
-      .sort((a, b) => a.position - b.position);
-    // Each workout_sets row is a *scheme* (e.g. "3 sets of 4") — expand by `sets` count.
-    const expanded: WorkoutSet[] = [];
-    for (const r of rows) {
-      const count = Math.max(1, Number(r.sets ?? 1) || 1);
-      for (let k = 0; k < count; k++) expanded.push(r);
-    }
-    const total = expanded.length > 0 ? expanded.length : (ex.sets ?? 1);
-    for (let i = 0; i < total; i++)
-      list.push({ exercise: ex, setPosition: i + 1, setTotal: total, setRow: expanded[i] ?? null });
-  }
-  return list;
-}
-
 // ============================================================================
 // Small hooks
 // ============================================================================

@@ -6,7 +6,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { athletesQO, teamsQO, athleteDisplayName, type Athlete } from "@/lib/queries";
+import {
+  athletesQO,
+  teamsQO,
+  athleteTeamsQO,
+  workoutsQO,
+  workoutExercisesQO,
+  workoutSetsQO,
+  workoutAssignmentsQO,
+  programsQO,
+  programWorkoutsQO,
+  athleteDisplayName,
+  type Athlete,
+} from "@/lib/queries";
+import { resolveAthleteWorkout, buildPrescribedSets } from "@/lib/training-resolver";
 import { useActiveTeamId } from "@/hooks/use-active-team";
 import {
   Select,
@@ -18,7 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/page-header";
-import { Maximize2, Minimize2, Search, Users } from "lucide-react";
+import { CheckCircle2, Maximize2, Minimize2, Search, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -41,6 +54,13 @@ export function RackDisplayBoard() {
   const [activeTeamId] = useActiveTeamId();
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: athletes = [] } = useQuery(athletesQO);
+  const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
+  const { data: workouts = [] } = useQuery(workoutsQO);
+  const { data: workoutExercises = [] } = useQuery(workoutExercisesQO);
+  const { data: workoutSets = [] } = useQuery(workoutSetsQO);
+  const { data: workoutAssignments = [] } = useQuery(workoutAssignmentsQO);
+  const { data: programs = [] } = useQuery(programsQO);
+  const { data: programWorkouts = [] } = useQuery(programWorkoutsQO);
   const [teamId, setTeamId] = useState<string>(activeTeamId ?? "all");
   const [search, setSearch] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
@@ -94,6 +114,24 @@ export function RackDisplayBoard() {
   });
   const members = membersQ.data ?? [];
 
+  const logsQ = useQuery({
+    queryKey: ["rack-display-logs", rackIdsKey],
+    enabled: racks.length > 0,
+    queryFn: async (): Promise<{ athlete_id: string; status: string }[]> => {
+      const { data, error } = await supabase
+        .from("rack_set_logs")
+        .select("athlete_id, status")
+        .in(
+          "rack_session_id",
+          racks.map((r) => r.id),
+        );
+      if (error) throw error;
+      return (data ?? []) as { athlete_id: string; status: string }[];
+    },
+    refetchInterval: 20_000,
+  });
+  const logs = logsQ.data ?? [];
+
   // Live updates so the TV never needs a manual refresh.
   useEffect(() => {
     const ch = supabase
@@ -105,6 +143,9 @@ export function RackDisplayBoard() {
         "postgres_changes",
         { event: "*", schema: "public", table: "rack_session_athletes" },
         () => qc.invalidateQueries({ queryKey: ["rack-display-members"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "rack_set_logs" }, () =>
+        qc.invalidateQueries({ queryKey: ["rack-display-logs"] }),
       )
       .subscribe();
     return () => {
@@ -128,6 +169,52 @@ export function RackDisplayBoard() {
         .sort((a, b) => a.rack_number - b.rack_number),
     [scopedRacks, members, athleteById],
   );
+
+  // Whether each athlete shown on the board has logged every set of
+  // today's actual prescribed workout (same resolver + set-expansion Live
+  // Training's "Who's up" list uses) — this is what turns a name card
+  // green, independent of which team/rack filter is active.
+  const finishedByAthlete = useMemo(() => {
+    const logsByAthlete = new Map<string, { athlete_id: string; status: string }[]>();
+    for (const l of logs) {
+      const arr = logsByAthlete.get(l.athlete_id) ?? [];
+      arr.push(l);
+      logsByAthlete.set(l.athlete_id, arr);
+    }
+    const boardAthleteIds = new Set(rackGroups.flatMap((r) => r.athletes.map((a) => a.id)));
+    const m = new Map<string, boolean>();
+    for (const id of boardAthleteIds) {
+      const athlete = athleteById.get(id);
+      if (!athlete) continue;
+      const resolved = resolveAthleteWorkout(athlete, today(), {
+        assignments: workoutAssignments,
+        programs,
+        programWorkouts,
+        athleteTeams,
+      });
+      const workout = resolved.workoutId
+        ? (workouts.find((w) => w.id === resolved.workoutId) ?? null)
+        : null;
+      const prescribed = buildPrescribedSets(workout, workoutExercises, workoutSets);
+      const totalSets = prescribed.length;
+      const completedCount = (logsByAthlete.get(id) ?? []).filter(
+        (l) => l.status === "completed",
+      ).length;
+      m.set(id, totalSets > 0 && completedCount >= totalSets);
+    }
+    return m;
+  }, [
+    logs,
+    rackGroups,
+    athleteById,
+    workoutAssignments,
+    programs,
+    programWorkouts,
+    athleteTeams,
+    workouts,
+    workoutExercises,
+    workoutSets,
+  ]);
 
   const needle = search.trim().toLowerCase();
   const matchesSearch = (a: Athlete) =>
@@ -224,19 +311,24 @@ export function RackDisplayBoard() {
                   ) : (
                     r.athletes.map((a) => {
                       const highlight = needle && matchesSearch(a);
+                      const finished = finishedByAthlete.get(a.id) ?? false;
+                      const dimmed = needle && !highlight;
                       return (
                         <div
                           key={a.id}
                           className={cn(
-                            "rounded-lg px-3 py-2.5 text-xl font-semibold tracking-tight transition-colors",
-                            highlight
-                              ? "bg-primary text-primary-foreground"
-                              : needle
-                                ? "text-muted-foreground/40"
-                                : "bg-muted/40 text-foreground",
+                            "flex items-center gap-2 rounded-lg px-3 py-2.5 text-xl font-semibold tracking-tight transition-colors",
+                            dimmed
+                              ? "text-muted-foreground/40"
+                              : finished
+                                ? "bg-emerald-500 text-white"
+                                : highlight
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-muted/40 text-foreground",
                           )}
                         >
-                          {athleteDisplayName(a)}
+                          {finished && !dimmed && <CheckCircle2 className="h-5 w-5 shrink-0" />}
+                          <span className="truncate">{athleteDisplayName(a)}</span>
                         </div>
                       );
                     })

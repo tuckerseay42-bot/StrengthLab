@@ -7,6 +7,9 @@ import type {
   ProgramWorkout,
   WorkoutAssignment,
   AthleteTeam,
+  Workout,
+  WorkoutExercise,
+  WorkoutSet,
 } from "@/lib/queries";
 
 export type ResolvedWorkout = {
@@ -91,4 +94,49 @@ export function resolveAthleteWorkout(
   }
 
   return { workoutId: null, teamId: athlete.team_id, source: "none" };
+}
+
+/**
+ * Expands a workout's exercises/set-schemes into one row per individual
+ * set — e.g. a "3 sets of 4" scheme row becomes 3 rows — so callers can
+ * count "how many sets does this workout actually have" and compare
+ * against logged sets. Shared by Live Training's per-athlete progress and
+ * anything else (e.g. the rack display board) that needs to know whether
+ * an athlete has finished today's session.
+ */
+export function buildPrescribedSets(
+  workout: Workout | null,
+  workoutExercises: WorkoutExercise[],
+  workoutSets: WorkoutSet[],
+): Array<{
+  exercise: WorkoutExercise;
+  setPosition: number;
+  setTotal: number;
+  setRow: WorkoutSet | null;
+}> {
+  if (!workout) return [];
+  const exs = workoutExercises
+    .filter((e) => e.workout_id === workout.id)
+    .sort((a, b) => a.position - b.position);
+  const list: Array<{
+    exercise: WorkoutExercise;
+    setPosition: number;
+    setTotal: number;
+    setRow: WorkoutSet | null;
+  }> = [];
+  for (const ex of exs) {
+    const rows = workoutSets
+      .filter((s) => s.workout_exercise_id === ex.id)
+      .sort((a, b) => a.position - b.position);
+    // Each workout_sets row is a *scheme* (e.g. "3 sets of 4") — expand by `sets` count.
+    const expanded: WorkoutSet[] = [];
+    for (const r of rows) {
+      const count = Math.max(1, Number(r.sets ?? 1) || 1);
+      for (let k = 0; k < count; k++) expanded.push(r);
+    }
+    const total = expanded.length > 0 ? expanded.length : (ex.sets ?? 1);
+    for (let i = 0; i < total; i++)
+      list.push({ exercise: ex, setPosition: i + 1, setTotal: total, setRow: expanded[i] ?? null });
+  }
+  return list;
 }
