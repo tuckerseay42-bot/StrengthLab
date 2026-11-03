@@ -319,7 +319,7 @@ export function RackAssignmentBoard() {
           rack_session_id: newRacks[i].id,
           athlete_id: a.id,
           quadrant: q + 1,
-          override_reason: "auto-grouped",
+          override_reason: "assigned",
         })),
       );
       const { error: memberErr } = await supabase
