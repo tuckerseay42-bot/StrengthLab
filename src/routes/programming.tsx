@@ -1799,14 +1799,20 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
   const qc = useQueryClient();
   const { data: programs = [] } = useQuery(programsQO);
   const program = programs.find((p) => p.id === programId);
+  const { data: teams = [] } = useQuery(teamsQO);
   const { data: phases = [] } = useQuery(programPhasesQO(programId));
   const { data: cycles = [] } = useQuery(programCyclesQO(programId));
   const { data: sessions = [] } = useQuery(programSessionsQO(programId));
   const { data: versions = [] } = useQuery(programVersionsQO(programId));
 
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", team_id: "__none" });
   useEffect(() => {
-    if (program) setForm({ name: program.name, description: program.description || "" });
+    if (program)
+      setForm({
+        name: program.name,
+        description: program.description || "",
+        team_id: program.team_id || "__none",
+      });
   }, [program?.id]);
 
   // Advanced programming toggle (per-program, localStorage).
@@ -1845,6 +1851,7 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
         .update({
           name: form.name.trim() || program?.name,
           description: form.description.trim() || null,
+          team_id: form.team_id === "__none" ? null : form.team_id,
         } as never)
         .eq("id", programId);
       if (error) throw error;
@@ -1999,6 +2006,22 @@ function ProgramEditor({ programId, onSelect }: { programId: string; onSelect: (
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </div>
+          <div>
+            <Label>Team</Label>
+            <Select value={form.team_id} onValueChange={(v) => setForm({ ...form, team_id: v })}>
+              <SelectTrigger>
+                <SelectValue placeholder="No team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">No team (assign later)</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="md:col-span-2 flex justify-end">
             <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
