@@ -86,7 +86,7 @@ function AnalyticsView() {
         .select(
           "id, athlete_id, workout_exercise_id, set_position, load, reps, avg_velocity, estimated_1rm, completed_at, approval_status, status",
         )
-        .in("approval_status", ["auto", "approved"])
+        .neq("approval_status", "rejected")
         .eq("status", "completed")
         .gte("completed_at", `${dateFrom}T00:00:00`)
         .lte("completed_at", `${dateTo}T23:59:59`)
