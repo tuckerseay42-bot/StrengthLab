@@ -25,7 +25,7 @@
 2. After the sync is confirmed: remove the temporary "old write path" fallbacks (in `src/lib/athlete-checkin.functions.ts` and `src/routes/checkin.$token.tsx`) that exist only to survive the sync gap.
 3. Also still unconfirmed from before: Training Maxes / Bench Press populating after the review-gating migration; "Email athletes" reaching kids (athletes need an email on their record); the Display board on a real iPad/TV.
 4. Ideas not built: coach alerts (red-flagged logs, injuries), parent/admin reports, simpler athlete logging screen, SMS, a Data Health screen.
-5. Noticed, not fixed: `/athlete-login` is not on the public list in `src/routes/__root.tsx` (check whether signed-out athletes can reach it). `/training-view/check-in` and `/training-view/session` already were public.
+5. Fixed: `/athlete-login` is now on the public list (signed-out athletes were being sent to the coach login; the "Email athletes" link points there). Also fixed the root error component's type, so `npx tsc --noEmit` is now fully clean.
 
 ## Live Test Checklist (after sync + Publish)
 - Tracking > Weight loads (no "isn't available yet" message). Existing history shows as weeks.
@@ -41,4 +41,5 @@
 - Prettier checked a copy outside the repo ignored the project config. Put the copy inside the repo.
 - Weight history was one row per athlete per UTC day, overwritten by a second weigh-in, and readable/writable by anyone with the public key. Fix: `weigh_ins` (above).
 - Found by browser testing: the athlete profile page never rendered (child of the roster route, which has no outlet) and the QR check-in links bounced signed-out iPads to login. Both fixed in `5b1a335`. Lesson: run new screens in a browser with a faked database (the side-agent harness approach) before trusting them.
+- `/athlete-login` was a public page that the app's sign-in guard did not know was public, so athletes emailed the link landed on the coach login. Fixed in `__root.tsx`.
 - Postgres grants new functions to everyone by default; a function meant for signed-in users must `REVOKE ... FROM PUBLIC, anon` explicitly.

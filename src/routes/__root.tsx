@@ -9,7 +9,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const PUBLIC_PREFIXES = [
@@ -24,7 +24,8 @@ const PUBLIC_PREFIXES = [
   "/checkin/",
   "/training-view/session",
 ];
-const PUBLIC_EXACT = new Set(["/"]);
+// /athlete-login is the signed-out athlete PIN sign-in (and the link in the "Email athletes" message).
+const PUBLIC_EXACT = new Set(["/", "/athlete-login"]);
 
 function isPublicPath(p: string) {
   if (PUBLIC_EXACT.has(p)) return true;
@@ -78,7 +79,12 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error: thrown, reset }: { error: unknown; reset: () => void }) {
+  // The router hands over whatever was thrown, which is not always an Error.
+  const error = useMemo(
+    () => (thrown instanceof Error ? thrown : new Error(String(thrown))),
+    [thrown],
+  );
   console.error(error);
   const router = useRouter();
   useEffect(() => {
