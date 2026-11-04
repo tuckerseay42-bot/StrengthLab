@@ -181,6 +181,8 @@ export function AthleteWeightCard({ athlete }: { athlete: Athlete }) {
     },
     onSuccess: (res, input) => {
       if (res.status === "confirm") {
+        // Close the Add dialog while the question is up so the two never overlap.
+        setAddOpen(false);
         setConfirmJump({ value: input.value, recentAvg: res.recent_avg ?? 0 });
         return;
       }
@@ -501,7 +503,7 @@ export function AthleteWeightCard({ athlete }: { athlete: Athlete }) {
                       {formatWeight(Number(w.value))} lb
                     </span>
                     <Badge variant="outline" className="text-[10px] capitalize">
-                      {w.source}
+                      {w.source === "checkin" ? "Check-in" : w.source}
                     </Badge>
                     {canEdit && (
                       <span className="ml-auto flex items-center gap-0.5">
@@ -591,7 +593,7 @@ export function AthleteWeightCard({ athlete }: { athlete: Athlete }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Re-check</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setAddOpen(true)}>Re-check</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
                 confirmJump && save.mutate({ value: confirmJump.value, confirmed: true })

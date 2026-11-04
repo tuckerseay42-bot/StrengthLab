@@ -38,7 +38,7 @@ import { AthleteInjuryHistory } from "@/components/athlete-injury-history";
 import { AthleteGoals } from "@/components/athlete-goals";
 import { AthleteWeightCard } from "@/components/athlete-weight-card";
 
-export const Route = createFileRoute("/athletes/$id")({
+export const Route = createFileRoute("/athletes_/$id")({
   head: () => ({ meta: [{ title: "Athlete — Strength Lab" }] }),
   component: AthleteCard,
   notFoundComponent: () => (

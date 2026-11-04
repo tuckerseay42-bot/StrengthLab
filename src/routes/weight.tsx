@@ -282,7 +282,7 @@ function WeightPage() {
                 <table className="w-full min-w-max text-sm">
                   <thead className="bg-muted/40">
                     <tr>
-                      <th className="sticky left-0 z-10 bg-muted/40 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th className="sticky left-0 z-10 bg-muted px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Athlete
                       </th>
                       {weekStarts.map((ws) => (

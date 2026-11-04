@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   "/athlete-pin-setup",
   "/sitemap.xml",
   "/training-view/check-in",
+  "/training-view/attendance",
+  "/checkin/",
   "/training-view/session",
 ];
 const PUBLIC_EXACT = new Set(["/"]);

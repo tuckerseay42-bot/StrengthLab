@@ -50,7 +50,7 @@ import { Route as WeightRouteImport } from './routes/weight'
 import { Route as WorkoutsRouteImport } from './routes/workouts'
 import { Route as AthleteJoinTokenRouteImport } from './routes/athlete-join.$token'
 import { Route as AthleteTodayRouteImport } from './routes/athlete.today'
-import { Route as AthletesIdRouteImport } from './routes/athletes.$id'
+import { Route as AthletesIdRouteImport } from './routes/athletes_.$id'
 import { Route as CheckinTokenRouteImport } from './routes/checkin.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as JoinTokenRouteImport } from './routes/join.$token'
@@ -277,9 +277,9 @@ const AthleteTodayRoute = AthleteTodayRouteImport.update({
   getParentRoute: () => AthleteRoute,
 } as any)
 const AthletesIdRoute = AthletesIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AthletesRoute,
+  id: '/athletes_/$id',
+  path: '/athletes/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const CheckinTokenRoute = CheckinTokenRouteImport.update({
   id: '/checkin/$token',
@@ -384,7 +384,7 @@ export interface FileRoutesByFullPath {
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
-  '/athletes': typeof AthletesRouteWithChildren
+  '/athletes': typeof AthletesRoute
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
@@ -447,7 +447,7 @@ export interface FileRoutesByTo {
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
-  '/athletes': typeof AthletesRouteWithChildren
+  '/athletes': typeof AthletesRoute
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
@@ -510,7 +510,7 @@ export interface FileRoutesById {
   '/athlete-login': typeof AthleteLoginRoute
   '/athlete-pin-setup': typeof AthletePinSetupRoute
   '/athlete-qr': typeof AthleteQrRoute
-  '/athletes': typeof AthletesRouteWithChildren
+  '/athletes': typeof AthletesRoute
   '/athleticism-report': typeof AthleticismReportRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
@@ -546,7 +546,7 @@ export interface FileRoutesById {
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
-  '/athletes/$id': typeof AthletesIdRoute
+  '/athletes_/$id': typeof AthletesIdRoute
   '/checkin/$token': typeof CheckinTokenRoute
   '/invite/$token': typeof InviteTokenRoute
   '/join/$token': typeof JoinTokenRoute
@@ -736,7 +736,7 @@ export interface FileRouteTypes {
     | '/workouts'
     | '/athlete-join/$token'
     | '/athlete/today'
-    | '/athletes/$id'
+    | '/athletes_/$id'
     | '/checkin/$token'
     | '/invite/$token'
     | '/join/$token'
@@ -764,7 +764,7 @@ export interface RootRouteChildren {
   AthleteLoginRoute: typeof AthleteLoginRoute
   AthletePinSetupRoute: typeof AthletePinSetupRoute
   AthleteQrRoute: typeof AthleteQrRoute
-  AthletesRoute: typeof AthletesRouteWithChildren
+  AthletesRoute: typeof AthletesRoute
   AthleticismReportRoute: typeof AthleticismReportRoute
   AttendanceRoute: typeof AttendanceRoute
   AuthRoute: typeof AuthRoute
@@ -799,6 +799,7 @@ export interface RootRouteChildren {
   WeightRoute: typeof WeightRoute
   WorkoutsRoute: typeof WorkoutsRouteWithChildren
   AthleteJoinTokenRoute: typeof AthleteJoinTokenRoute
+  AthletesIdRoute: typeof AthletesIdRoute
   CheckinTokenRoute: typeof CheckinTokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   JoinTokenRoute: typeof JoinTokenRoute
@@ -1099,12 +1100,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AthleteTodayRouteImport
       parentRoute: typeof AthleteRoute
     }
-    '/athletes/$id': {
-      id: '/athletes/$id'
-      path: '/$id'
+    '/athletes_/$id': {
+      id: '/athletes_/$id'
+      path: '/athletes/$id'
       fullPath: '/athletes/$id'
       preLoaderRoute: typeof AthletesIdRouteImport
-      parentRoute: typeof AthletesRoute
+      parentRoute: typeof rootRouteImport
     }
     '/checkin/$token': {
       id: '/checkin/$token'
@@ -1253,18 +1254,6 @@ const AthleteRouteChildren: AthleteRouteChildren = {
 const AthleteRouteWithChildren =
   AthleteRoute._addFileChildren(AthleteRouteChildren)
 
-interface AthletesRouteChildren {
-  AthletesIdRoute: typeof AthletesIdRoute
-}
-
-const AthletesRouteChildren: AthletesRouteChildren = {
-  AthletesIdRoute: AthletesIdRoute,
-}
-
-const AthletesRouteWithChildren = AthletesRoute._addFileChildren(
-  AthletesRouteChildren,
-)
-
 interface ProgramsRouteChildren {
   ProgramsIdRoute: typeof ProgramsIdRoute
 }
@@ -1329,7 +1318,7 @@ const rootRouteChildren: RootRouteChildren = {
   AthleteLoginRoute: AthleteLoginRoute,
   AthletePinSetupRoute: AthletePinSetupRoute,
   AthleteQrRoute: AthleteQrRoute,
-  AthletesRoute: AthletesRouteWithChildren,
+  AthletesRoute: AthletesRoute,
   AthleticismReportRoute: AthleticismReportRoute,
   AttendanceRoute: AttendanceRoute,
   AuthRoute: AuthRoute,
@@ -1364,6 +1353,7 @@ const rootRouteChildren: RootRouteChildren = {
   WeightRoute: WeightRoute,
   WorkoutsRoute: WorkoutsRouteWithChildren,
   AthleteJoinTokenRoute: AthleteJoinTokenRoute,
+  AthletesIdRoute: AthletesIdRoute,
   CheckinTokenRoute: CheckinTokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   JoinTokenRoute: JoinTokenRoute,
