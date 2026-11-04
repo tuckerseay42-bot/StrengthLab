@@ -147,6 +147,17 @@ export function summarizeAthlete(
   return { weeks, firstCounted, latestCounted, netChange };
 }
 
+/** One athlete's weight over time as one point per day (that day's weigh-ins averaged), oldest first. */
+export function dailySeries(
+  weighIns: WeighIn[],
+  athleteId: string,
+): { date: string; value: number }[] {
+  const daily = dailyAverages(weighIns.filter((w) => w.athlete_id === athleteId));
+  return [...daily.entries()]
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** The last `count` Monday dates ending with the week that contains `today`, oldest first. */
 export function recentWeekStarts(today: string, count: number): string[] {
   const current = weekStartOf(today);

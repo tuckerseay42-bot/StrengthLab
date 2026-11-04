@@ -3,6 +3,7 @@ import {
   addDays,
   changeBetweenDates,
   dailyAverages,
+  dailySeries,
   easternToday,
   formatChange,
   formatWeight,
@@ -39,6 +40,22 @@ describe("one number per day", () => {
     const daily = dailyAverages([w("2026-11-02", 180), w("2026-11-02", 182), w("2026-11-03", 190)]);
     expect(daily.get("2026-11-02")).toBe(181);
     expect(daily.get("2026-11-03")).toBe(190);
+  });
+});
+
+describe("weight over time", () => {
+  it("gives one point per day for one athlete, oldest first", () => {
+    const rows = [
+      { athlete_id: "a", log_date: "2026-11-03", value: 190 },
+      { athlete_id: "a", log_date: "2026-11-02", value: 180 },
+      { athlete_id: "a", log_date: "2026-11-02", value: 182 },
+      { athlete_id: "b", log_date: "2026-11-02", value: 250 },
+    ];
+    expect(dailySeries(rows, "a")).toEqual([
+      { date: "2026-11-02", value: 181 },
+      { date: "2026-11-03", value: 190 },
+    ]);
+    expect(dailySeries(rows, "nobody")).toEqual([]);
   });
 });
 

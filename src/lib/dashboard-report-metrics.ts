@@ -3,6 +3,7 @@
 // concept: logged test results (weekly measurements), rep_maxes-derived
 // estimated 1RMs (PR testing), and everyday logged lifts (training loads),
 // so all three can be picked from the same filter UI.
+import { dailySeries, type WeighIn } from "@/lib/weigh-ins";
 import type { TestRow, RepMax, CustomTestType, LiftRow, CustomMetric } from "@/lib/queries";
 import { TEST_TYPES, customMetricTestTypeValue } from "@/lib/domain";
 
@@ -179,6 +180,7 @@ export function reportSeries(
   lifts: LiftRow[] = [],
   customMetrics: CustomMetric[] = [],
   bodyweight: number | null = null,
+  weighIns: WeighIn[] = [],
 ): ReportPoint[] {
   const map = new Map<string, number>();
   const consider = (date: string, value: number) => {
@@ -207,7 +209,11 @@ export function reportSeries(
     const id = metric.key.slice(7);
     const cm = customMetrics.find((c) => c.id === id);
     if (cm?.kind === "bodyweight") {
-      if (bodyweight != null) consider(new Date().toISOString().slice(0, 10), Number(bodyweight));
+      // The real weigh-in history when there is one; otherwise the single current number.
+      const history = dailySeries(weighIns, athleteId);
+      if (history.length) for (const p of history) consider(p.date, p.value);
+      else if (bodyweight != null)
+        consider(new Date().toISOString().slice(0, 10), Number(bodyweight));
     } else if (cm?.kind === "lift_max" && cm.exercise_name) {
       const target = cm.exercise_name.trim().toLowerCase();
       const measurement = cm.measurement ?? "load";

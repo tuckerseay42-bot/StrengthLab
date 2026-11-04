@@ -4,6 +4,7 @@
 // PR shelf — built to read like a report a strength coach hands a sport coach,
 // not a settings page.
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,6 +25,8 @@ import {
   type RepMax,
   type CustomTestType,
   type CustomMetric,
+  weighInsQO,
+  type WeighInRow,
 } from "@/lib/queries";
 import {
   allReportMetrics,
@@ -34,6 +37,8 @@ import {
   type FlaggedPoint,
 } from "@/lib/dashboard-report-metrics";
 import { AthleteSpiderGraph } from "@/components/athlete-spider-graph";
+
+const NO_WEIGH_INS: WeighInRow[] = [];
 
 export function AthleteAnalyticsPanel({
   athlete,
@@ -52,6 +57,8 @@ export function AthleteAnalyticsPanel({
   customTypes: CustomTestType[];
   customMetrics: CustomMetric[];
 }) {
+  const { data: weighInData } = useQuery(weighInsQO);
+  const weighIns = weighInData ?? NO_WEIGH_INS;
   const allMetrics = useMemo(
     () => allReportMetrics(customTypes, repMaxes, lifts, customMetrics),
     [customTypes, repMaxes, lifts, customMetrics],
@@ -61,7 +68,16 @@ export function AthleteAnalyticsPanel({
     return allMetrics
       .map((m) => {
         const series = withPRFlags(
-          reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight),
+          reportSeries(
+            m,
+            athlete.id,
+            tests,
+            repMaxes,
+            lifts,
+            customMetrics,
+            athlete.bodyweight,
+            weighIns,
+          ),
           m.lowerIsBetter,
         );
         return { metric: m, series };
@@ -71,7 +87,7 @@ export function AthleteAnalyticsPanel({
         b.series[b.series.length - 1].date.localeCompare(a.series[a.series.length - 1].date),
       )
       .slice(0, 6);
-  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics]);
+  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics, weighIns]);
 
   const percentiles = useMemo(() => {
     const pool = peers.filter((p) => p.id !== athlete.id);
@@ -85,6 +101,7 @@ export function AthleteAnalyticsPanel({
           lifts,
           customMetrics,
           athlete.bodyweight,
+          weighIns,
         );
         if (!mine.length) return null;
         const myBest = metric.lowerIsBetter
@@ -92,7 +109,16 @@ export function AthleteAnalyticsPanel({
           : Math.max(...mine.map((p) => p.value));
         const poolBests = pool
           .map((p) =>
-            reportSeries(metric, p.id, tests, repMaxes, lifts, customMetrics, p.bodyweight),
+            reportSeries(
+              metric,
+              p.id,
+              tests,
+              repMaxes,
+              lifts,
+              customMetrics,
+              p.bodyweight,
+              weighIns,
+            ),
           )
           .filter((s) => s.length)
           .map((s) =>
@@ -106,13 +132,32 @@ export function AthleteAnalyticsPanel({
       .filter(
         (x): x is { metric: (typeof allMetrics)[number]; value: number; pct: number } => x != null,
       );
-  }, [peers, athlete.id, athlete.bodyweight, allMetrics, tests, repMaxes, lifts, customMetrics]);
+  }, [
+    peers,
+    athlete.id,
+    athlete.bodyweight,
+    allMetrics,
+    tests,
+    repMaxes,
+    lifts,
+    customMetrics,
+    weighIns,
+  ]);
 
   const recentPRs = useMemo(() => {
     const items: { label: string; value: number; unit: string; date: string }[] = [];
     for (const m of allMetrics) {
       const series = withPRFlags(
-        reportSeries(m, athlete.id, tests, repMaxes, lifts, customMetrics, athlete.bodyweight),
+        reportSeries(
+          m,
+          athlete.id,
+          tests,
+          repMaxes,
+          lifts,
+          customMetrics,
+          athlete.bodyweight,
+          weighIns,
+        ),
         m.lowerIsBetter,
       );
       const lastPR = [...series].reverse().find((p) => p.isPR);
@@ -120,7 +165,7 @@ export function AthleteAnalyticsPanel({
         items.push({ label: m.label, value: lastPR.value, unit: m.unit, date: lastPR.date });
     }
     return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics]);
+  }, [allMetrics, athlete.id, athlete.bodyweight, tests, repMaxes, lifts, customMetrics, weighIns]);
 
   return (
     <div className="space-y-4">

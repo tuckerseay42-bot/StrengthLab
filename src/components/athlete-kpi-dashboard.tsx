@@ -42,7 +42,8 @@ import type {
   CustomTestType,
   CustomMetric,
 } from "@/lib/queries";
-import { customMetricsQO, spiderTemplatesQO } from "@/lib/queries";
+import { customMetricsQO, spiderTemplatesQO, weighInsQO } from "@/lib/queries";
+import { dailySeries, type WeighIn } from "@/lib/weigh-ins";
 import { computeMetric } from "@/lib/metrics";
 import { pickTemplate } from "@/lib/spider";
 import { TEST_TYPES, testTypeMeta as baseTestTypeMeta } from "@/lib/domain";
@@ -80,6 +81,8 @@ type Ctx = {
   lifts: LiftRow[];
   attendance: AttendanceRow[];
   repMaxes: RepMax[];
+  /** Real weigh-in history; when absent the weight KPI falls back to the single current number. */
+  weighIns?: WeighIn[];
   testMeta: (v: string) => { label: string; unit: string; lowerIsBetter: boolean };
 };
 
@@ -309,10 +312,13 @@ const KPI_DEFS: KpiDef[] = [
     label: "Bodyweight",
     unit: "lb",
     lowerIsBetter: false,
-    build: (c) =>
-      c.athlete.bodyweight
+    build: (c) => {
+      const history = dailySeries(c.weighIns ?? [], c.athlete.id);
+      if (history.length) return history;
+      return c.athlete.bodyweight
         ? [{ date: new Date().toISOString().slice(0, 10), value: Number(c.athlete.bodyweight) }]
-        : [],
+        : [];
+    },
   },
   {
     key: "attendance_pct",
@@ -1291,6 +1297,7 @@ export function AthleteKpiDashboard({
   }, [customTypes]);
 
   const { data: customMetrics = [] } = useQuery(customMetricsQO);
+  const { data: weighInData } = useQuery(weighInsQO);
   const { data: pins = [] } = usePins(athlete.id);
   const { savePins } = usePinMutations(athlete.id);
   const { data: spiderTemplates = [] } = useQuery(spiderTemplatesQO);
@@ -1303,7 +1310,7 @@ export function AthleteKpiDashboard({
   const showProgress = dashboardTemplate?.options?.show_progress ?? true;
   const showPrs = dashboardTemplate?.options?.show_prs ?? true;
 
-  const ctx: Ctx = { athlete, tests, lifts, attendance, repMaxes, testMeta };
+  const ctx: Ctx = { athlete, tests, lifts, attendance, repMaxes, weighIns: weighInData, testMeta };
 
   // All possible KPI defs = built-ins + one per custom metric
   const allDefs = useMemo(() => {

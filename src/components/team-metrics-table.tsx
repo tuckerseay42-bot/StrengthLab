@@ -4,6 +4,7 @@
 // metric was tested, and a Team Average footer row per date for group
 // comparison — a real spreadsheet, not a chart.
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Flame, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,8 @@ import {
   type CustomTestType,
   type CustomMetric,
   type Team,
+  type WeighInRow,
+  weighInsQO,
 } from "@/lib/queries";
 import { SPORTS, GENDERS, GENDER_LABELS, GRADES } from "@/lib/domain";
 import {
@@ -58,6 +61,8 @@ function filterDatesByRange(all: string[], range: string): string[] {
   return all.filter((d) => d >= cutoffISO);
 }
 
+const NO_WEIGH_INS: WeighInRow[] = [];
+
 export function TeamMetricsTable({
   athletes,
   tests,
@@ -75,6 +80,8 @@ export function TeamMetricsTable({
   customMetrics: CustomMetric[];
   teams: Team[];
 }) {
+  const { data: weighInData } = useQuery(weighInsQO);
+  const weighIns = weighInData ?? NO_WEIGH_INS;
   const allMetrics = useMemo(
     () => allReportMetrics(customTypes, repMaxes, lifts, customMetrics),
     [customTypes, repMaxes, lifts, customMetrics],
@@ -127,7 +134,7 @@ export function TeamMetricsTable({
     if (!metric) return [];
     return pool.map((a) => {
       const flagged = withPRFlags(
-        reportSeries(metric, a.id, tests, repMaxes, lifts, customMetrics, a.bodyweight),
+        reportSeries(metric, a.id, tests, repMaxes, lifts, customMetrics, a.bodyweight, weighIns),
         metric.lowerIsBetter,
       );
       const values = flagged.map((p) => p.value);
@@ -138,7 +145,7 @@ export function TeamMetricsTable({
         : null;
       return { athlete: a, points: flagged, best, avg: average(flagged) };
     });
-  }, [pool, metric, tests, repMaxes, lifts, customMetrics]);
+  }, [pool, metric, tests, repMaxes, lifts, customMetrics, weighIns]);
 
   const allDatesLogged = useMemo(() => {
     const set = new Set<string>();

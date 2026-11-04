@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   athletesQO,
   attendanceQO,
-  bodyweightLogsQO,
+  weighInsQO,
   athleteTeamsQO,
   teamsQO,
   type Athlete,
@@ -38,6 +38,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/domain";
+import { easternToday } from "@/lib/weigh-ins";
 import { toast } from "sonner";
 import { publicOrigin } from "@/lib/share-url";
 import { getScopedOrgId } from "@/lib/scoped-insert";
@@ -59,11 +60,11 @@ function AttendancePage() {
   const qc = useQueryClient();
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: attendance = [] } = useQuery(attendanceQO);
-  const { data: bodyweightLogs = [] } = useQuery(bodyweightLogsQO);
+  const { data: weighIns = [] } = useQuery(weighInsQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const [activeTeamId] = useActiveTeamId();
   const [filters, setFilters] = useState(emptyFilters);
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sessionDate, setSessionDate] = useState(easternToday());
   const { data: teams = [] } = useQuery(teamsQO);
   const [qrTeamId, setQrTeamId] = useState<string>("");
   const [showQr, setShowQr] = useState(false);
@@ -133,16 +134,29 @@ function AttendancePage() {
     [roster, todayMap],
   );
 
+  // One number per athlete per day: that day's weigh-ins averaged (an athlete can
+  // weigh in more than once a day now).
   const bwByAthleteDate = useMemo(() => {
+    const sums = new Map<string, { total: number; n: number }>();
+    for (const r of weighIns) {
+      const k = `${r.athlete_id}:${r.log_date}`;
+      const cur = sums.get(k) ?? { total: 0, n: 0 };
+      cur.total += Number(r.value);
+      cur.n += 1;
+      sums.set(k, cur);
+    }
     const m = new Map<string, number>();
-    for (const r of bodyweightLogs) m.set(`${r.athlete_id}:${r.log_date}`, r.value);
+    for (const [k, { total, n }] of sums) m.set(k, Math.round((total / n) * 10) / 10);
     return m;
-  }, [bodyweightLogs]);
+  }, [weighIns]);
   const todayBwMap = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of bodyweightLogs) if (r.log_date === sessionDate) m.set(r.athlete_id, r.value);
+    const suffix = `:${sessionDate}`;
+    for (const [k, v] of bwByAthleteDate) {
+      if (k.endsWith(suffix)) m.set(k.slice(0, -suffix.length), v);
+    }
     return m;
-  }, [bodyweightLogs, sessionDate]);
+  }, [bwByAthleteDate, sessionDate]);
 
   // --- Live check-in feed -------------------------------------------------
   const [liveIds, setLiveIds] = useState<string[]>([]);
@@ -173,8 +187,8 @@ function AttendancePage() {
           );
         }
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "bodyweight_logs" }, () => {
-        qc.invalidateQueries({ queryKey: ["bodyweight_logs"] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "weigh_ins" }, () => {
+        qc.invalidateQueries({ queryKey: ["weigh_ins"] });
       })
       .subscribe();
     return () => {
