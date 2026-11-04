@@ -36,6 +36,13 @@
 - Edit an athlete's weight in the roster form: a new weigh-in should appear on their profile.
 
 ## What Went Wrong
+- Prescribed weights appearing and disappearing for some kids (Nov 2026). Causes found, all fixed in the commits after `9205769`:
+  1. Shared lists (workouts, workout exercises/sets, assignments, programs, exercises, attendance, athlete teams, rack members, ...) were loaded in ONE request, and the Data API silently returns at most 1000 rows. Past that, rows are dropped, and with ties in the sort (many sets at position 1) WHICH rows are dropped can differ per request, so the same screen could show a weight on one device and not on another. Fix: every list now pages with `fetchAll` (`src/lib/fetch-all.ts`) and a unique `id` tie-break. Rule going forward: never read a growing table with a plain `.select()`; use `fetchAll` or filter to one day/athlete/workout.
+  2. The Training View and live page read EVERY rack assignment ever made (grows daily); now scoped to today's racks.
+  3. The Training View froze rep maxes the moment they first loaded, even if that was a cached copy from an earlier visit. Now it waits for a finished load.
+  4. The athlete's own workout screen filled the weight box only when it first appeared; if the rep maxes (or a "% of another lift" name) arrived a moment later, the box stayed blank. Now it shows "Getting your weights ready..." until pricing data is in, restarts the box if the prescription changes, and holds the maxes still for the workout.
+  5. Printed athlete cards, rack sheets and the "Email athletes" message priced "% of another lift" sets without that lift's name, so those came out blank. Now they get the names.
+  Tests: `npm test` (fetch-all paging, prescription pricing). Could not check the real database sizes from here; if `workout_sets` or `workout_exercises` is over 1000 rows that confirms cause 1.
 - Auto-group: wrote `override_reason: "auto-grouped"`, which the database check constraint rejects. Racks were created empty. Fix: use `"assigned"`.
 - Rep maxes "no data": opening Log Review silently set unusual sets to `pending`, and the rollup and lift trigger ignored everything but `auto`/`approved`. Fix: only `rejected` is excluded.
 - The `xlsx` package silently ignores cell styles on write. Fix: `exceljs`, loaded on demand (static import grew the Tests page from 32KB to 963KB).

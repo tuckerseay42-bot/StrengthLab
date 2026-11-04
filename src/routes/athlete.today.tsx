@@ -227,15 +227,20 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
     },
   });
 
-  const { data: repMaxData = [] } = useQuery({
+  // Read once when the workout opens and then hold still: a refetch mid-workout
+  // would quietly re-price the sets that are left, and a cached copy from an
+  // earlier visit would price today's from out-of-date maxes.
+  const { data: repMaxData = [], isLoading: repMaxesLoading } = useQuery({
     queryKey: ["athlete-today-rep-maxes", athleteId],
+    staleTime: Infinity,
+    gcTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase.from("rep_maxes").select("*").eq("athlete_id", athleteId);
       if (error) throw error;
       return (data ?? []) as RepMax[];
     },
   });
-  const { data: formula = DEFAULT_1RM_FORMULA } = useQuery({
+  const { data: formula = DEFAULT_1RM_FORMULA, isLoading: formulaLoading } = useQuery({
     queryKey: ["athlete-today-1rm-formula", organizationId],
     enabled: !!organizationId,
     queryFn: async (): Promise<OneRmFormula> => {
@@ -247,7 +252,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
     ...exercises.map((e) => e.percent_of_exercise_id),
     ...setPrescriptions.map((s) => s.percent_of_exercise_id),
   ].filter((id): id is string => !!id)));
-  const { data: referenceExercises = [] } = useQuery({
+  const { data: referenceExercises = [], isLoading: referencesLoading } = useQuery({
     queryKey: ["athlete-today-reference-exercises", referenceIds],
     enabled: referenceIds.length > 0,
     queryFn: async () => {
@@ -450,6 +455,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
               athleteId={athleteId}
               rackSessionId={rackSession?.id ?? null}
               pe={focused}
+              pricingLoading={repMaxesLoading || formulaLoading || referencesLoading}
               onLogged={() => qc.invalidateQueries({ queryKey: ["today-logs", athleteId, rackSession?.id] })}
             />
           ) : null}
@@ -579,8 +585,8 @@ function LineupRow({ pe, isFocused, onSelect }: { pe: PerExercise; isFocused: bo
 }
 
 /* ---- Up-now card: the one exercise the athlete should be doing ---- */
-function FocusedExerciseCard({ athleteId, rackSessionId, pe, onLogged }: {
-  athleteId: string; rackSessionId: string | null; pe: PerExercise; onLogged: () => void;
+function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onLogged }: {
+  athleteId: string; rackSessionId: string | null; pe: PerExercise; pricingLoading: boolean; onLogged: () => void;
 }) {
   const { exercise, setList, logs } = pe;
   const firstOpen = setList.find((s) => !logs.some((l) => l.set_position === s.position))?.position ?? setList.at(-1)?.position ?? 1;
@@ -633,9 +639,16 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, onLogged }: {
           })}
         </div>
 
-        {active && (
+        {active && pricingLoading && (
+          <div className="rounded-lg border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+            Getting your weights ready…
+          </div>
+        )}
+        {active && !pricingLoading && (
           <SetEntry
-            key={active.position}
+            // The weight box starts from the prescription, so start it over if the
+            // prescription changes (e.g. a late-arriving max) instead of keeping a blank.
+            key={`${active.position}:${active.prescribedLoad ?? "none"}:${active.prescribedReps ?? "none"}`}
             athleteId={athleteId}
             rackSessionId={rackSessionId}
             exerciseId={exercise.id}
