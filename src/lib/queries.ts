@@ -479,6 +479,21 @@ export const weighInsQO = queryOptions({
   },
 });
 
+/** One athlete's weigh-ins. Shares the ["weigh_ins"] key prefix so a single invalidate refreshes both. */
+export const athleteWeighInsQO = (athleteId: string) =>
+  queryOptions({
+    queryKey: ["weigh_ins", "athlete", athleteId],
+    queryFn: async (): Promise<WeighInRow[]> =>
+      fetchAll<WeighInRow>(() =>
+        supabase
+          .from("weigh_ins" as never)
+          .select("*")
+          .eq("athlete_id", athleteId)
+          .order("logged_at", { ascending: false })
+          .order("id"),
+      ),
+  });
+
 export const teamsQO = queryOptions({
   queryKey: ["teams"],
   queryFn: async (): Promise<Team[]> => {
