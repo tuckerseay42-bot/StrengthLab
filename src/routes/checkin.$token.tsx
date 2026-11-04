@@ -6,10 +6,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { ClipboardCheck, CheckCircle2, Search, ArrowLeft } from "lucide-react";
+import { WeighInFeedback, type FeedbackLog } from "@/components/weigh-in-feedback";
+
+// How long an athlete's own weight feedback stays up before the screen clears for the next athlete.
+const FEEDBACK_MS = 9000;
+
+type KioskResult = {
+  status: "ok" | "confirm";
+  name: string;
+  recent_avg?: number;
+  logs?: FeedbackLog[];
+};
 
 export const Route = createFileRoute("/checkin/$token")({
   head: () => ({
@@ -58,6 +76,8 @@ function RosterCheckInPage() {
   const [bodyweight, setBodyweight] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [confirmJump, setConfirmJump] = useState<{ recentAvg: number } | null>(null);
+  const [feedback, setFeedback] = useState<{ value: number; logs: FeedbackLog[] } | null>(null);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const teamQ = useQuery({
@@ -83,13 +103,15 @@ function RosterCheckInPage() {
   const pickNext = () => {
     if (resetTimer.current) clearTimeout(resetTimer.current);
     setDone(null);
+    setFeedback(null);
+    setConfirmJump(null);
     setSelected(null);
     setConfirmed(false);
     setBodyweight("");
     setSearch("");
   };
 
-  const submit = async () => {
+  const submit = async (confirmed = false) => {
     if (!selected) return;
     setBusy(true);
     try {
@@ -97,14 +119,45 @@ function RosterCheckInPage() {
       if (bw != null && (!Number.isFinite(bw) || bw < 40 || bw > 700)) {
         throw new Error("Enter a bodyweight between 40 and 700 lb");
       }
-      const { data, error } = await supabase.rpc("roster_check_in", {
-        _token: token,
-        _athlete_id: selected.athlete_id,
-        _bodyweight: bw ?? undefined,
-      });
-      if (error) throw error;
-      setDone((data as string | null) ?? selected.display_name);
-      resetTimer.current = setTimeout(pickNext, 5000);
+      const { data, error } = await supabase.rpc(
+        "kiosk_check_in" as never,
+        {
+          _token: token,
+          _athlete_id: selected.athlete_id,
+          _bodyweight: bw,
+          _confirmed: confirmed,
+        } as never,
+      );
+      if (error) {
+        // The weigh-in database update hasn't reached this database yet; keep
+        // the kiosk working the old way instead of failing the check-in.
+        const missing =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          /could not find the function|schema cache/i.test(error.message);
+        if (!missing) throw error;
+        const legacy = await supabase.rpc("roster_check_in", {
+          _token: token,
+          _athlete_id: selected.athlete_id,
+          _bodyweight: bw ?? undefined,
+        });
+        if (legacy.error) throw legacy.error;
+        setDone((legacy.data as string | null) ?? selected.display_name);
+        resetTimer.current = setTimeout(pickNext, 5000);
+        return;
+      }
+      const res = data as unknown as KioskResult;
+      if (res.status === "confirm") {
+        setConfirmJump({ recentAvg: res.recent_avg ?? 0 });
+        return;
+      }
+      setConfirmJump(null);
+      const logs = res.logs ?? [];
+      const hasFeedback = bw != null && logs.length > 0;
+      if (hasFeedback) setFeedback({ value: bw, logs });
+      setDone(res.name || selected.display_name);
+      // Long enough to read their own result before the next athlete steps up.
+      resetTimer.current = setTimeout(pickNext, hasFeedback ? FEEDBACK_MS : 5000);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Check-in failed");
     } finally {
@@ -127,7 +180,16 @@ function RosterCheckInPage() {
           </p>
         </div>
 
-        {done ? (
+        {done && feedback ? (
+          <Card>
+            <CardContent>
+              <WeighInFeedback name={done} value={feedback.value} logs={feedback.logs} />
+              <Button className="h-12 w-full text-base" onClick={pickNext}>
+                Check in next athlete →
+              </Button>
+            </CardContent>
+          </Card>
+        ) : done ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
               <CheckCircle2 className="h-12 w-12 text-primary" />
@@ -157,7 +219,11 @@ function RosterCheckInPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-lg font-semibold">{selected.display_name}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {[selected.grade ? `Grade ${selected.grade}` : null, selected.position, selected.class_period]
+                    {[
+                      selected.grade ? `Grade ${selected.grade}` : null,
+                      selected.position,
+                      selected.class_period,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "—"}
                   </div>
@@ -169,7 +235,10 @@ function RosterCheckInPage() {
                   <Button
                     variant="outline"
                     className="h-14"
-                    onClick={() => { setSelected(null); setSearch(""); }}
+                    onClick={() => {
+                      setSelected(null);
+                      setSearch("");
+                    }}
                   >
                     <ArrowLeft className="h-4 w-4" /> Not me
                   </Button>
@@ -195,9 +264,38 @@ function RosterCheckInPage() {
                       className="h-14 text-center text-xl"
                     />
                   </div>
-                  <Button className="h-14 w-full text-base" disabled={busy} onClick={submit}>
-                    {busy ? "Saving…" : `Mark ${selected.display_name} present`}
-                  </Button>
+                  {confirmJump ? (
+                    <div className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                      <p>
+                        <b>{bodyweight} lb</b> is a big jump from your last two weeks (about{" "}
+                        {confirmJump.recentAvg} lb). Is that right?
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          className="h-12"
+                          disabled={busy}
+                          onClick={() => {
+                            setConfirmJump(null);
+                            setBodyweight("");
+                          }}
+                        >
+                          Re-enter
+                        </Button>
+                        <Button className="h-12" disabled={busy} onClick={() => submit(true)}>
+                          Yes, that's right
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      className="h-14 w-full text-base"
+                      disabled={busy}
+                      onClick={() => submit()}
+                    >
+                      {busy ? "Saving…" : `Mark ${selected.display_name} present`}
+                    </Button>
+                  )}
                   <button
                     type="button"
                     className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
@@ -241,7 +339,9 @@ function RosterCheckInPage() {
                           <RosterTile r={r} />
                           <span className="min-w-0 flex-1 truncate">{r.display_name}</span>
                           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                            {[r.grade ? `Gr ${r.grade}` : null, r.position].filter(Boolean).join(" · ")}
+                            {[r.grade ? `Gr ${r.grade}` : null, r.position]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </span>
                         </CommandItem>
                       ))}
