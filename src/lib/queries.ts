@@ -455,6 +455,30 @@ export const bodyweightLogsQO = queryOptions({
   },
 });
 
+/** One weigh-in. Several per day are allowed; log_date is the Eastern calendar day. */
+export type WeighInRow = {
+  id: string;
+  athlete_id: string;
+  organization_id: string;
+  logged_at: string;
+  log_date: string;
+  value: number;
+  source: "checkin" | "manual" | "import";
+};
+
+export const weighInsQO = queryOptions({
+  queryKey: ["weigh_ins"],
+  queryFn: async (): Promise<WeighInRow[]> => {
+    // A season of weigh-ins for a full roster passes 1000 rows quickly; page
+    // through, or the oldest weeks silently drop off the grid.
+    return fetchAll<WeighInRow>(() =>
+      scoped(supabase.from("weigh_ins" as never).select("*"))
+        .order("logged_at", { ascending: false })
+        .order("id"),
+    );
+  },
+});
+
 export const teamsQO = queryOptions({
   queryKey: ["teams"],
   queryFn: async (): Promise<Team[]> => {

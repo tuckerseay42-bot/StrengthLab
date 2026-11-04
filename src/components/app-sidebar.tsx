@@ -27,6 +27,7 @@ import {
   User,
   LogIn,
   HeartPulse,
+  Scale,
 } from "lucide-react";
 import {
   Sidebar,
@@ -81,6 +82,7 @@ const GROUPS: Group[] = [
       { to: "/tests", label: "Tests", icon: Gauge },
       { to: "/maxes", label: "Training Maxes", icon: Dumbbell },
       { to: "/attendance", label: "Attendance", icon: ClipboardCheck },
+      { to: "/weight", label: "Weight", icon: Scale },
       { to: "/gps", label: "GPS Tool", icon: Satellite },
     ],
   },

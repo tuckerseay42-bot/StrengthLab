@@ -46,6 +46,7 @@ import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TestsRouteImport } from './routes/tests'
 import { Route as TestsImportExtractRouteImport } from './routes/tests-import-extract'
 import { Route as TrainingRouteImport } from './routes/training'
+import { Route as WeightRouteImport } from './routes/weight'
 import { Route as WorkoutsRouteImport } from './routes/workouts'
 import { Route as AthleteJoinTokenRouteImport } from './routes/athlete-join.$token'
 import { Route as AthleteTodayRouteImport } from './routes/athlete.today'
@@ -255,6 +256,11 @@ const TrainingRoute = TrainingRouteImport.update({
   path: '/training',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WeightRoute = WeightRouteImport.update({
+  id: '/weight',
+  path: '/weight',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkoutsRoute = WorkoutsRouteImport.update({
   id: '/workouts',
   path: '/workouts',
@@ -410,6 +416,7 @@ export interface FileRoutesByFullPath {
   '/tests': typeof TestsRouteWithChildren
   '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
+  '/weight': typeof WeightRoute
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
@@ -471,6 +478,7 @@ export interface FileRoutesByTo {
   '/teams': typeof TeamsRoute
   '/tests': typeof TestsRouteWithChildren
   '/tests-import-extract': typeof TestsImportExtractRoute
+  '/weight': typeof WeightRoute
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
@@ -534,6 +542,7 @@ export interface FileRoutesById {
   '/tests': typeof TestsRouteWithChildren
   '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
+  '/weight': typeof WeightRoute
   '/workouts': typeof WorkoutsRouteWithChildren
   '/athlete-join/$token': typeof AthleteJoinTokenRoute
   '/athlete/today': typeof AthleteTodayRoute
@@ -598,6 +607,7 @@ export interface FileRouteTypes {
     | '/tests'
     | '/tests-import-extract'
     | '/training'
+    | '/weight'
     | '/workouts'
     | '/athlete-join/$token'
     | '/athlete/today'
@@ -659,6 +669,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/tests'
     | '/tests-import-extract'
+    | '/weight'
     | '/workouts'
     | '/athlete-join/$token'
     | '/athlete/today'
@@ -721,6 +732,7 @@ export interface FileRouteTypes {
     | '/tests'
     | '/tests-import-extract'
     | '/training'
+    | '/weight'
     | '/workouts'
     | '/athlete-join/$token'
     | '/athlete/today'
@@ -784,6 +796,7 @@ export interface RootRouteChildren {
   TestsRoute: typeof TestsRouteWithChildren
   TestsImportExtractRoute: typeof TestsImportExtractRoute
   TrainingRoute: typeof TrainingRouteWithChildren
+  WeightRoute: typeof WeightRoute
   WorkoutsRoute: typeof WorkoutsRouteWithChildren
   AthleteJoinTokenRoute: typeof AthleteJoinTokenRoute
   CheckinTokenRoute: typeof CheckinTokenRoute
@@ -1056,6 +1069,13 @@ declare module '@tanstack/react-router' {
       path: '/training'
       fullPath: '/training'
       preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/weight': {
+      id: '/weight'
+      path: '/weight'
+      fullPath: '/weight'
+      preLoaderRoute: typeof WeightRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workouts': {
@@ -1341,6 +1361,7 @@ const rootRouteChildren: RootRouteChildren = {
   TestsRoute: TestsRouteWithChildren,
   TestsImportExtractRoute: TestsImportExtractRoute,
   TrainingRoute: TrainingRouteWithChildren,
+  WeightRoute: WeightRoute,
   WorkoutsRoute: WorkoutsRouteWithChildren,
   AthleteJoinTokenRoute: AthleteJoinTokenRoute,
   CheckinTokenRoute: CheckinTokenRoute,
