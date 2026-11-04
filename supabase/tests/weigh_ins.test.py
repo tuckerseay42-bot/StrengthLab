@@ -159,5 +159,55 @@ res = run("SELECT kiosk_check_in(%s,%s,NULL)", (token, kid))[0][0]
 check("kiosk works with attendance only (no weight)", res["status"] == "ok" and res["name"] == "Sam Lee", res)
 as_super()
 
+
+# ============ Step 6 migration: one door at the database level + retire old table ============
+run((REPO / "20261104130000_weight_one_door_retire_old_table.sql").read_text())
+
+run("GRANT SELECT, INSERT, UPDATE, DELETE ON public.athletes TO authenticated")  # stand-in for the real coach edit access
+newkid, kioskkid, oldkid = [str(uuid.uuid4()) for _ in range(3)]
+run("INSERT INTO athletes (id, organization_id, team_id, name, first_name, last_name) VALUES (%s,%s,%s,'Ann New','Ann','New')", (newkid, orgA, team))
+run("INSERT INTO athletes (id, organization_id, team_id, name, first_name, last_name) VALUES (%s,%s,%s,'Ken Kiosk','Ken','Kiosk')", (kioskkid, orgA, team))
+run("INSERT INTO athletes (id, organization_id, team_id, name, first_name, last_name) VALUES (%s,%s,%s,'Olly Old','Olly','Old')", (oldkid, orgA, team))
+def n_w(a): return run("SELECT count(*) FROM weigh_ins WHERE athlete_id=%s", (a,))[0][0]
+
+# a profile edit / import that sets the weight becomes a weigh-in
+as_user(coachA); run("UPDATE athletes SET bodyweight = 175 WHERE id=%s", (newkid,)); as_super()
+check("editing an athlete's weight records a weigh-in", n_w(newkid) == 1 and float(run("SELECT value FROM weigh_ins WHERE athlete_id=%s", (newkid,))[0][0]) == 175)
+as_user(coachA); run("UPDATE athletes SET bodyweight = 175 WHERE id=%s", (newkid,)); as_super()
+check("re-saving the same weight adds nothing", n_w(newkid) == 1)
+as_user(coachA); run("UPDATE athletes SET bodyweight = 180 WHERE id=%s", (newkid,)); as_super()
+check("a changed weight adds one more weigh-in", n_w(newkid) == 2)
+check("current weight is the latest", float(run("SELECT bodyweight FROM athletes WHERE id=%s", (newkid,))[0][0]) == 180)
+as_user(coachA); run("UPDATE athletes SET bodyweight = 5 WHERE id=%s", (newkid,)); as_super()
+check("an out-of-range number does not block the save and adds no weigh-in", n_w(newkid) == 2)
+impid = str(uuid.uuid4())
+run("INSERT INTO athletes (id, organization_id, team_id, name, first_name, last_name, bodyweight) VALUES (%s,%s,%s,'Imp Ort','Imp','Ort',210)", (impid, orgA, team))
+check("a roster import that includes a weight records it", n_w(impid) == 1)
+
+# the kiosk door must not double-record
+as_user(None, "anon"); run("SELECT kiosk_check_in(%s,%s,190)", (token, kioskkid)); as_super()
+check("kiosk check-in records exactly one weigh-in", n_w(kioskkid) == 1)
+check("current weight follows the kiosk weigh-in", float(run("SELECT bodyweight FROM athletes WHERE id=%s", (kioskkid,))[0][0]) == 190)
+
+# old function (cached old kiosk page) still works and records exactly one
+run("SELECT roster_check_in(%s,%s,201)", (token, oldkid))
+check("old roster_check_in still works and records exactly one weigh-in", n_w(oldkid) == 1)
+
+# backdating and deleting never create extra rows
+as_user(coachA); run("SELECT log_weigh_in(%s, 150, '2026-10-01 12:00:00+00')", (kioskkid,)); as_super()
+check("a backdated weigh-in adds exactly one row", n_w(kioskkid) == 2)
+as_user(coachA); run("DELETE FROM weigh_ins WHERE athlete_id=%s AND value=190", (kioskkid,)); as_super()
+check("deleting the latest adds nothing and current weight falls back", n_w(kioskkid) == 1 and float(run("SELECT bodyweight FROM athletes WHERE id=%s", (kioskkid,))[0][0]) == 150)
+
+# old table is retired
+as_user(None, "anon")
+check("anon can no longer read the old table", raises(lambda: run("SELECT count(*) FROM bodyweight_logs")) is not None)
+as_user(coachB)
+check("another org's coach sees none of the old rows", run("SELECT count(*) FROM bodyweight_logs")[0][0] == 0)
+as_user(coachA)
+check("this org's coach can still read the old history", run("SELECT count(*) FROM bodyweight_logs")[0][0] >= 1)
+check("nobody can write the old table directly", raises(lambda: run("INSERT INTO bodyweight_logs (athlete_id, organization_id, value) VALUES (%s,%s,150)", (kid, orgA))) is not None)
+as_super()
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
