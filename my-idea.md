@@ -23,3 +23,10 @@ The course zip I shared first (Build With AI: Fundamentals) teaches a method and
 1. What do I keep track of? (not answered yet)
 2. Where do I go to look at it? (not answered yet)
 3. What do I keep doing by hand? (not answered yet)
+
+## Weight Tracking Rebuild (First Plank, Decided 2026-11-04)
+My build request (from Cody's course, my bodyweight tracker): athletes check in daily, every weigh-in has a date and time, weekly average, a week counts only with weigh-ins on 3 or more different days, faded "2 of 3" for 1 or 2 days, a dash for none, weekly change vs the last counted week, net change from the first counted week to the latest, a two-date picker on the profile, four screens (check-in, team grid, athlete profile, roster), clean and easy to read.
+- Lives inside Strength Lab Hub. "For Strength lab hub please use my new bodyweight tracker prompt to rebuild any weight tracking."
+- Same-day weigh-ins: keep every one with its time. Each day counts once in the weekly average, using that day's average. "Yes that's right."
+- No goals. "No goals. Just show me red or green." (Weekly change up is green, down is red.)
+- Who sees what: coaches see and manage everything; athletes at check-in only add their own; nobody outside the org sees anything. "Yes that's right. Athletes should see immediate feedback back before the next logs in."
