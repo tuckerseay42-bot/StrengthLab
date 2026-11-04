@@ -10,28 +10,7 @@ function scoped<T extends { eq: (col: string, v: string) => T }>(q: T): T {
   return orgId ? q.eq("organization_id", orgId) : q;
 }
 
-/**
- * The Data API caps a single response at 1000 rows. Tables like lifts grow well
- * past that, so page through until a short page comes back.
- */
-const PAGE = 1000;
-async function fetchAll<T>(
-  build: () => {
-    range: (
-      from: number,
-      to: number,
-    ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
-  },
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build().range(from, from + PAGE - 1);
-    if (error) throw error;
-    const rows = (data ?? []) as T[];
-    out.push(...rows);
-    if (rows.length < PAGE) return out;
-  }
-}
+import { fetchAll } from "@/lib/fetch-all";
 
 export type Athlete = {
   id: string;
@@ -363,13 +342,12 @@ export type TestAssignment = {
 
 export const testAssignmentsQO = queryOptions({
   queryKey: ["test_assignments"],
-  queryFn: async (): Promise<TestAssignment[]> => {
-    const { data, error } = await scoped(
-      supabase.from("test_assignments" as never).select("*"),
-    ).order("scheduled_date", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as TestAssignment[];
-  },
+  queryFn: async (): Promise<TestAssignment[]> =>
+    fetchAll<TestAssignment>(() =>
+      scoped(supabase.from("test_assignments" as never).select("*"))
+        .order("scheduled_date", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export const liftsQO = queryOptions({
@@ -401,37 +379,32 @@ export const liftSetsQO = queryOptions({
 
 export const attendanceQO = queryOptions({
   queryKey: ["attendance"],
-  queryFn: async (): Promise<AttendanceRow[]> => {
-    const { data, error } = await scoped(supabase.from("attendance").select("*")).order(
-      "session_date",
-      { ascending: false },
-    );
-    if (error) throw error;
-    return (data ?? []) as AttendanceRow[];
-  },
+  queryFn: async (): Promise<AttendanceRow[]> =>
+    fetchAll<AttendanceRow>(() =>
+      scoped(supabase.from("attendance").select("*"))
+        .order("session_date", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export const athleteInjuriesQO = queryOptions({
   queryKey: ["athlete_injuries"],
-  queryFn: async (): Promise<AthleteInjury[]> => {
-    const { data, error } = await scoped(
-      supabase.from("athlete_injuries" as never).select("*"),
-    ).order("started_on", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as unknown as AthleteInjury[];
-  },
+  queryFn: async (): Promise<AthleteInjury[]> =>
+    fetchAll<AthleteInjury>(() =>
+      scoped(supabase.from("athlete_injuries" as never).select("*"))
+        .order("started_on", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export const athleteGoalsQO = queryOptions({
   queryKey: ["athlete_goals"],
-  queryFn: async (): Promise<AthleteGoal[]> => {
-    const { data, error } = await scoped(supabase.from("athlete_goals" as never).select("*")).order(
-      "target_date",
-      { ascending: true, nullsFirst: false },
-    );
-    if (error) throw error;
-    return (data ?? []) as unknown as AthleteGoal[];
-  },
+  queryFn: async (): Promise<AthleteGoal[]> =>
+    fetchAll<AthleteGoal>(() =>
+      scoped(supabase.from("athlete_goals" as never).select("*"))
+        .order("target_date", { ascending: true, nullsFirst: false })
+        .order("id"),
+    ),
 });
 
 /** One weigh-in. Several per day are allowed; log_date is the Eastern calendar day. */
@@ -486,44 +459,42 @@ export const teamsQO = queryOptions({
 
 export const registrationsQO = queryOptions({
   queryKey: ["registrations"],
-  queryFn: async (): Promise<Registration[]> => {
-    const { data, error } = await scoped(supabase.from("registrations").select("*")).order(
-      "created_at",
-      { ascending: false },
-    );
-    if (error) throw error;
-    return (data ?? []) as Registration[];
-  },
+  queryFn: async (): Promise<Registration[]> =>
+    fetchAll<Registration>(() =>
+      scoped(supabase.from("registrations").select("*"))
+        .order("created_at", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export type AthleteTeam = { athlete_id: string; team_id: string; season: string | null };
 export const athleteTeamsQO = queryOptions({
   queryKey: ["athlete_teams"],
-  queryFn: async (): Promise<AthleteTeam[]> => {
-    const { data, error } = await supabase
-      .from("athlete_teams")
-      .select("athlete_id, team_id, season");
-    if (error) throw error;
-    return (data ?? []) as AthleteTeam[];
-  },
+  queryFn: async (): Promise<AthleteTeam[]> =>
+    fetchAll<AthleteTeam>(() =>
+      supabase
+        .from("athlete_teams")
+        .select("athlete_id, team_id, season")
+        .order("athlete_id")
+        .order("team_id")
+        .order("season"),
+    ),
 });
 
 export const exercisesQO = queryOptions({
   queryKey: ["exercises"],
-  queryFn: async (): Promise<Exercise[]> => {
-    const { data, error } = await scoped(supabase.from("exercises").select("*")).order("name");
-    if (error) throw error;
-    return (data ?? []) as unknown as Exercise[];
-  },
+  queryFn: async (): Promise<Exercise[]> =>
+    fetchAll<Exercise>(() =>
+      scoped(supabase.from("exercises").select("*")).order("name").order("id"),
+    ),
 });
 
 export const exerciseRelationshipsQO = queryOptions({
   queryKey: ["exercise_relationships"],
-  queryFn: async (): Promise<ExerciseRelationship[]> => {
-    const { data, error } = await supabase.from("exercise_relationships").select("*");
-    if (error) throw error;
-    return (data ?? []) as ExerciseRelationship[];
-  },
+  queryFn: async (): Promise<ExerciseRelationship[]> =>
+    fetchAll<ExerciseRelationship>(() =>
+      supabase.from("exercise_relationships").select("*").order("id"),
+    ),
 });
 
 export const customMetricsQO = queryOptions({
@@ -567,44 +538,40 @@ export const leaderboardsQO = queryOptions({
 
 export const workoutsQO = queryOptions({
   queryKey: ["workouts"],
-  queryFn: async (): Promise<Workout[]> => {
-    const { data, error } = await scoped(supabase.from("workouts").select("*")).order(
-      "updated_at",
-      { ascending: false },
-    );
-    if (error) throw error;
-    return (data ?? []) as Workout[];
-  },
+  queryFn: async (): Promise<Workout[]> =>
+    fetchAll<Workout>(() =>
+      scoped(supabase.from("workouts").select("*"))
+        .order("updated_at", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export const workoutBlocksQO = queryOptions({
   queryKey: ["workout_blocks"],
-  queryFn: async (): Promise<WorkoutBlock[]> => {
-    const { data, error } = await supabase.from("workout_blocks").select("*").order("position");
-    if (error) throw error;
-    return (data ?? []) as WorkoutBlock[];
-  },
+  queryFn: async (): Promise<WorkoutBlock[]> =>
+    fetchAll<WorkoutBlock>(() =>
+      supabase.from("workout_blocks").select("*").order("position").order("id"),
+    ),
 });
 
 export const workoutExercisesQO = queryOptions({
   queryKey: ["workout_exercises"],
-  queryFn: async (): Promise<WorkoutExercise[]> => {
-    const { data, error } = await supabase.from("workout_exercises").select("*").order("position");
-    if (error) throw error;
-    return (data ?? []) as WorkoutExercise[];
-  },
+  queryFn: async (): Promise<WorkoutExercise[]> =>
+    fetchAll<WorkoutExercise>(() =>
+      supabase.from("workout_exercises").select("*").order("position").order("id"),
+    ),
 });
 
 export const workoutAssignmentsQO = queryOptions({
   queryKey: ["workout_assignments"],
-  queryFn: async (): Promise<WorkoutAssignment[]> => {
-    const { data, error } = await supabase
-      .from("workout_assignments")
-      .select("*")
-      .order("scheduled_date", { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as WorkoutAssignment[];
-  },
+  queryFn: async (): Promise<WorkoutAssignment[]> =>
+    fetchAll<WorkoutAssignment>(() =>
+      supabase
+        .from("workout_assignments")
+        .select("*")
+        .order("scheduled_date", { ascending: false })
+        .order("id"),
+    ),
 });
 
 export type RackSessionAthlete = {
@@ -623,23 +590,18 @@ export type RackSessionAthlete = {
 
 export const rackSessionAthletesQO = queryOptions({
   queryKey: ["rack_session_athletes"],
-  queryFn: async (): Promise<RackSessionAthlete[]> => {
-    const { data, error } = await supabase
-      .from("rack_session_athletes")
-      .select("*")
-      .order("quadrant");
-    if (error) throw error;
-    return (data ?? []) as RackSessionAthlete[];
-  },
+  queryFn: async (): Promise<RackSessionAthlete[]> =>
+    fetchAll<RackSessionAthlete>(() =>
+      supabase.from("rack_session_athletes").select("*").order("quadrant").order("id"),
+    ),
 });
 
 export const workoutSetsQO = queryOptions({
   queryKey: ["workout_sets"],
-  queryFn: async (): Promise<WorkoutSet[]> => {
-    const { data, error } = await supabase.from("workout_sets").select("*").order("position");
-    if (error) throw error;
-    return (data ?? []) as WorkoutSet[];
-  },
+  queryFn: async (): Promise<WorkoutSet[]> =>
+    fetchAll<WorkoutSet>(() =>
+      supabase.from("workout_sets").select("*").order("position").order("id"),
+    ),
 });
 
 // Rep maxes power every %-of-1RM prescription. The rollup that turns logged
@@ -678,25 +640,24 @@ export const repMaxesQO = queryOptions({
 
 export const programsQO = queryOptions({
   queryKey: ["programs"],
-  queryFn: async (): Promise<Program[]> => {
-    const { data, error } = await scoped(supabase.from("programs" as never).select("*")).order(
-      "name",
-    );
-    if (error) throw error;
-    return (data ?? []) as unknown as Program[];
-  },
+  queryFn: async (): Promise<Program[]> =>
+    fetchAll<Program>(() =>
+      scoped(supabase.from("programs" as never).select("*"))
+        .order("name")
+        .order("id"),
+    ),
 });
 
 export const programWorkoutsQO = queryOptions({
   queryKey: ["program_workouts"],
-  queryFn: async (): Promise<ProgramWorkout[]> => {
-    const { data, error } = await supabase
-      .from("program_workouts" as never)
-      .select("*")
-      .order("position");
-    if (error) throw error;
-    return (data ?? []) as unknown as ProgramWorkout[];
-  },
+  queryFn: async (): Promise<ProgramWorkout[]> =>
+    fetchAll<ProgramWorkout>(() =>
+      supabase
+        .from("program_workouts" as never)
+        .select("*")
+        .order("position")
+        .order("id"),
+    ),
 });
 
 // ---------- Program hierarchy (phases → cycles → sessions) ----------

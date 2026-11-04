@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { fetchAll } from "@/lib/fetch-all";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -99,9 +100,10 @@ function TodayView() {
   const { data: exerciseNames = {} } = useQuery({
     queryKey: ["workout_exercise_names"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("workout_exercises").select("id, exercise_name");
-      if (error) throw error;
-      return Object.fromEntries((data ?? []).map((e) => [e.id, e.exercise_name]));
+      const rows = await fetchAll<{ id: string; exercise_name: string }>(() =>
+        supabase.from("workout_exercises").select("id, exercise_name").order("id"),
+      );
+      return Object.fromEntries(rows.map((e) => [e.id, e.exercise_name]));
     },
     staleTime: 60_000,
   });
