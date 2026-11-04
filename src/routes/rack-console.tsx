@@ -322,7 +322,7 @@ function TrainingView() {
   const { data: programWorkouts = [] } = useQuery(programWorkoutsQO);
   const { data: workoutAssignments = [] } = useQuery(workoutAssignmentsQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
-  const { data: repMaxes = [] } = useQuery(repMaxesQO);
+  const { data: repMaxes = [], isFetching: repMaxesFetching } = useQuery(repMaxesQO);
   const { data: exerciseLib = [] } = useQuery(exercisesQO);
 
   const measurementByExId = useMemo(() => {
@@ -679,12 +679,20 @@ function TrainingView() {
     },
     refetchInterval: 30_000,
   });
+  // Only today's racks. Reading every assignment ever made hits the 1000-row
+  // limit after a few weeks and silently drops some of today's athletes.
+  const todayRackSessionIds = useMemo(
+    () => (rackSessionsQ.data ?? []).map((r) => r.id),
+    [rackSessionsQ.data],
+  );
   const rackSessionAthletesQ = useQuery({
-    queryKey: ["training-view-rsa"],
+    queryKey: ["training-view-rsa", todayRackSessionIds.join(",")],
+    enabled: todayRackSessionIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rack_session_athletes")
-        .select("rack_session_id, athlete_id, quadrant");
+        .select("rack_session_id, athlete_id, quadrant")
+        .in("rack_session_id", todayRackSessionIds);
       if (error) throw error;
       return (data ?? []) as { rack_session_id: string; athlete_id: string; quadrant: number }[];
     },
@@ -1005,6 +1013,7 @@ function TrainingView() {
         exercises={exerciseLib}
         measurementByExId={measurementByExId}
         repMaxes={repMaxes}
+        repMaxesSettled={!repMaxesFetching}
         logs={athleteLogs}
         allLogs={logs}
         flash={flash}
@@ -1678,6 +1687,8 @@ function AthleteTile(props: {
   }[];
   measurementByExId: Map<string, Measurement>;
   repMaxes: RepMax[];
+  /** True once the rep max list has finished loading (not just a cached copy). */
+  repMaxesSettled: boolean;
   logs: RackSetLog[];
   allLogs: RackSetLog[];
   flash: { at: number; kind: "set" | "pr" | "flag" } | undefined;
@@ -1716,6 +1727,7 @@ function AthleteTile(props: {
     exercises: exerciseLib,
     measurementByExId,
     repMaxes,
+    repMaxesSettled,
     logs,
     flash,
     compact,
@@ -1808,10 +1820,13 @@ function AthleteTile(props: {
   // new rep maxes; without freezing, every remaining set would get re-priced
   // mid-session (e.g. a 365 log bumping later sets off a 195 opener).
   const formula = useOrg1RMFormula();
+  // Wait for a finished load before freezing: freezing the cached copy from an
+  // earlier visit would lock in out-of-date maxes for the whole workout, and an
+  // athlete whose max arrived since would show no weight.
   const frozenRepMaxes = useFrozen(
     repMaxes,
     `${athlete.id}:${workout?.id ?? "none"}`,
-    repMaxes.length > 0,
+    repMaxes.length > 0 && repMaxesSettled,
   );
 
   const suggested = useMemo(() => {

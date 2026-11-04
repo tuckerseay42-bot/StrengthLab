@@ -125,13 +125,17 @@ function useTodayRackSessions(enabled: boolean) {
     },
   });
 }
-function useRackSessionAthletes(enabled: boolean) {
+function useRackSessionAthletes(enabled: boolean, sessionIds: string[]) {
   return useQuery({
-    queryKey: ["live_rack_session_athletes", localDateKey()],
-    enabled,
+    queryKey: ["live_rack_session_athletes", localDateKey(), sessionIds.join(",")],
+    enabled: enabled && sessionIds.length > 0,
     refetchInterval: enabled ? 30_000 : false,
     queryFn: async () => {
-      const { data, error } = await supabase.from("rack_session_athletes").select("*");
+      // Only today's racks; every assignment ever made passes the 1000-row limit.
+      const { data, error } = await supabase
+        .from("rack_session_athletes")
+        .select("*")
+        .in("rack_session_id", sessionIds);
       if (error) throw error;
       return (data ?? []) as RackSessionAthlete[];
     },
@@ -169,7 +173,10 @@ function LiveTrainingPage() {
   const { data: exercises = [] } = useQuery(workoutExercisesQO);
   const { data: sets = [] } = useQuery(workoutSetsQO);
   const { data: rackSessions = [] } = useTodayRackSessions(autoRefresh);
-  const { data: rsAthletes = [] } = useRackSessionAthletes(autoRefresh);
+  const { data: rsAthletes = [] } = useRackSessionAthletes(
+    autoRefresh,
+    rackSessions.map((r) => r.id),
+  );
   const { data: setLogs = [] } = useTodaySetLogs(autoRefresh);
 
   useEffect(() => {
