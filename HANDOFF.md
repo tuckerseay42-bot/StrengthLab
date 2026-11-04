@@ -7,6 +7,7 @@
   - Weekly math: `src/lib/weigh-ins.ts` (+ `npm test`, 22 tests). Monday-Sunday weeks, a day's weigh-ins averaged, a week counts with 3+ different days, change vs last counted week, net change, two-date change. Up is green, down is red, no goals.
   - Team Grid: `/weight` (Tracking > Weight). Profile weight card: `src/components/athlete-weight-card.tsx` on the athlete page. Attendance, KPI dashboard and report metrics read `weigh_ins`.
   - Kiosks: type-a-name `/checkin/<code>` and the two PIN kiosks show the athlete their own result (`src/components/weigh-in-feedback.tsx`) for about 9 seconds. Weight goes through `kiosk_check_in` / `log_weigh_in` (range check, 30% typo prompt).
+  - Attendance board and list: a scale button on each athlete logs a weigh-in (same `log_weigh_in` door, typo question included) and marks them present; tapping the tile still only flips present/absent.
   - Any change to `athletes.bodyweight` (profile edit, roster import) now also records a weigh-in (database trigger). `athletes.bodyweight` always equals the latest weigh-in, so strength-vs-bodyweight scores, spider charts and the print report are untouched.
   - Old `bodyweight_logs` is retired: read-only for coaches, no anonymous access.
 - Earlier this stretch (already pushed): testing sheet styling, program team reassignment, auto-group fix, live set-entry typo prompt, "Email athletes", Display board, review-gating data fix (migration `20261103120000_...`, also needs the sync).

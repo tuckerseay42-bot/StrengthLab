@@ -26,6 +26,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Download,
   Check,
   X,
@@ -36,6 +43,7 @@ import {
   Search,
   Maximize2,
   Minimize2,
+  Scale,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/domain";
 import { easternToday } from "@/lib/weigh-ins";
@@ -254,6 +262,61 @@ function AttendancePage() {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
   });
+
+  // ---- Weigh-in from the board ----
+  // A coach taps the scale on an athlete's tile and types the weight. It goes through
+  // the same log_weigh_in door as the check-in kiosks (range check, typo question,
+  // every weigh-in kept with its time), and weighing in marks them present.
+  const [weighTarget, setWeighTarget] = useState<Athlete | null>(null);
+  const [weighValue, setWeighValue] = useState("");
+  const [weighConfirm, setWeighConfirm] = useState<{ recentAvg: number } | null>(null);
+  const closeWeigh = () => {
+    setWeighTarget(null);
+    setWeighValue("");
+    setWeighConfirm(null);
+  };
+
+  const weigh = useMutation({
+    mutationFn: async (input: { athlete: Athlete; value: number; confirmed: boolean }) => {
+      const { data, error } = await supabase.rpc(
+        "log_weigh_in" as never,
+        {
+          _athlete_id: input.athlete.id,
+          _value: input.value,
+          _source: "manual",
+          // Today logs as right now; another day's board logs at midday Eastern on that day.
+          _logged_at: sessionDate === easternToday() ? null : `${sessionDate}T17:00:00Z`,
+          _confirmed: input.confirmed,
+        } as never,
+      );
+      if (error) throw error;
+      return data as unknown as { status: "ok" | "confirm"; recent_avg?: number };
+    },
+    onSuccess: (res, input) => {
+      if (res.status === "confirm") {
+        setWeighConfirm({ recentAvg: res.recent_avg ?? 0 });
+        return;
+      }
+      if (todayMap.get(input.athlete.id)?.present !== true) {
+        set.mutate({ athlete_id: input.athlete.id, present: true });
+      }
+      void qc.invalidateQueries({ queryKey: ["weigh_ins"] });
+      void qc.invalidateQueries({ queryKey: ["athletes"] });
+      toast.success(`${input.athlete.name}: ${input.value} lb logged`);
+      closeWeigh();
+    },
+    onError: (e: Error) => toast.error(toUserMessage(e)),
+  });
+
+  const submitWeigh = (confirmed = false) => {
+    if (!weighTarget) return;
+    const value = Number(weighValue);
+    if (!Number.isFinite(value) || value < 40 || value > 700) {
+      toast.error("Enter a weight between 40 and 700 lb");
+      return;
+    }
+    weigh.mutate({ athlete: weighTarget, value, confirmed });
+  };
 
   const markAll = (present: boolean) => {
     roster.forEach((a) => set.mutate({ athlete_id: a.id, present }));
@@ -560,43 +623,53 @@ function AttendancePage() {
                     const bw = todayBwMap.get(a.id);
                     const justIn = justInAthleteIds.includes(a.id);
                     return (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => {
-                          set.mutate({ athlete_id: a.id, present: !present });
-                          if (present) {
-                            void notifyParent(a.id, "missed_session", {
-                              date: sessionDate,
-                              reason: "Marked absent for today's session.",
-                            });
-                          }
-                        }}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
-                          present
-                            ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
-                            : "border-border/50 bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
-                          justIn && "scale-[1.04] ring-2 ring-[color:var(--color-success)]",
-                        )}
-                      >
-                        {present ? (
-                          <Check className="h-5 w-5 text-[color:var(--color-success)]" />
-                        ) : (
-                          <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
-                        )}
-                        <div className="w-full truncate text-sm font-semibold">{a.name}</div>
-                        {bw != null && (
-                          <div className="text-[11px] tabular-nums text-muted-foreground">
-                            {bw} lb
-                          </div>
-                        )}
-                        {checkedInAt && (
-                          <div className="text-[11px] tabular-nums text-muted-foreground">
-                            {checkedInAt}
-                          </div>
-                        )}
-                      </button>
+                      <div key={a.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            set.mutate({ athlete_id: a.id, present: !present });
+                            if (present) {
+                              void notifyParent(a.id, "missed_session", {
+                                date: sessionDate,
+                                reason: "Marked absent for today's session.",
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "flex h-full w-full flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
+                            present
+                              ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
+                              : "border-border/50 bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
+                            justIn && "scale-[1.04] ring-2 ring-[color:var(--color-success)]",
+                          )}
+                        >
+                          {present ? (
+                            <Check className="h-5 w-5 text-[color:var(--color-success)]" />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
+                          )}
+                          <div className="w-full truncate text-sm font-semibold">{a.name}</div>
+                          {bw != null && (
+                            <div className="text-[11px] tabular-nums text-muted-foreground">
+                              {bw} lb
+                            </div>
+                          )}
+                          {checkedInAt && (
+                            <div className="text-[11px] tabular-nums text-muted-foreground">
+                              {checkedInAt}
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWeighTarget(a)}
+                          aria-label={`Weigh in ${a.name}`}
+                          title="Log a weigh-in"
+                          className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
+                        >
+                          <Scale className="h-4 w-4" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -623,6 +696,15 @@ function AttendancePage() {
                       </span>
                     )}
                     <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => setWeighTarget(a)}
+                        aria-label={`Weigh in ${a.name}`}
+                        title="Log a weigh-in"
+                      >
+                        <Scale className="h-4 w-4" />
+                      </Button>
                       <Button
                         size="icon"
                         variant={present === true ? "default" : "outline"}
@@ -699,6 +781,73 @@ function AttendancePage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!weighTarget} onOpenChange={(open) => !open && closeWeigh()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Weigh in {weighTarget?.name}</DialogTitle>
+          </DialogHeader>
+          {weighConfirm ? (
+            <div className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p>
+                <b>{weighValue} lb</b> is 30% or more away from this athlete's last two weeks (about{" "}
+                {weighConfirm.recentAvg} lb). That's usually a typo. Is it right?
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  disabled={weigh.isPending}
+                  onClick={() => {
+                    setWeighConfirm(null);
+                    setWeighValue("");
+                  }}
+                >
+                  Re-enter
+                </Button>
+                <Button disabled={weigh.isPending} onClick={() => submitWeigh(true)}>
+                  Yes, that's right
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitWeigh();
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <Label htmlFor="board-bw">Weight (lb)</Label>
+                <Input
+                  id="board-bw"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min={40}
+                  max={700}
+                  autoFocus
+                  value={weighValue}
+                  onChange={(e) => setWeighValue(e.target.value)}
+                  placeholder="e.g. 185.4"
+                  className="h-14 text-center text-xl"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Saving also marks them present for {sessionDate}.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={closeWeigh}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={weigh.isPending || !weighValue.trim()}>
+                  {weigh.isPending ? "Saving…" : "Save weigh-in"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
