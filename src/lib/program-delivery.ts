@@ -5,7 +5,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Athlete, AthleteTeam, RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 import { filterAthletes, emptyFilters } from "@/components/filters";
-import { suggestLoad } from "@/lib/prescription";
+import { suggestLoad, referenceNameFor } from "@/lib/prescription";
 
 export type ExerciseBlock = { group: string | null; items: WorkoutExercise[] };
 
@@ -123,6 +123,7 @@ export function athleteWorkoutRows(
   exercises: WorkoutExercise[],
   sets: WorkoutSet[],
   repMaxes: RepMax[],
+  exerciseNameById?: ReadonlyMap<string, string>,
 ): AthleteWorkoutRow[] {
   const rows: AthleteWorkoutRow[] = [];
   const blocks = groupExercisesBySuperset(exercises);
@@ -146,6 +147,7 @@ export function athleteWorkoutRows(
           exercise: ex,
           setRow: s,
           repMaxes,
+          referenceExerciseName: referenceNameFor(ex, s, exerciseNameById),
         });
         const weight = suggestion ? `${suggestion.load} lb` : formatPrescription(ex, s);
         rows.push({

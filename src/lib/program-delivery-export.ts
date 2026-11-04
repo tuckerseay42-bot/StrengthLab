@@ -5,7 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Athlete, RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 import { athleteDisplayName } from "@/lib/queries";
-import { suggestLoad } from "@/lib/prescription";
+import { suggestLoad, referenceNameFor } from "@/lib/prescription";
 import {
   groupExercisesBySuperset,
   blockLabel,
@@ -147,6 +147,7 @@ export function buildAthleteCardsPdf(opts: {
   exercises: WorkoutExercise[];
   sets: WorkoutSet[];
   repMaxes: RepMax[];
+  exerciseNameById?: ReadonlyMap<string, string>;
 }): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const margin = 40;
@@ -156,7 +157,13 @@ export function buildAthleteCardsPdf(opts: {
     pageHeader(doc, athleteDisplayName(athlete), sessionSubtitle(opts.session));
     let y = 84;
 
-    const rows = athleteWorkoutRows(athlete, opts.exercises, opts.sets, opts.repMaxes);
+    const rows = athleteWorkoutRows(
+      athlete,
+      opts.exercises,
+      opts.sets,
+      opts.repMaxes,
+      opts.exerciseNameById,
+    );
     let lastBlock: string | null = null;
     let lastExercise: string | null = null;
     const body: (string | number)[][] = rows.map((r) => {
@@ -209,6 +216,7 @@ export function buildRackSheetsPdf(opts: {
   exercises: WorkoutExercise[];
   sets: WorkoutSet[];
   repMaxes: RepMax[];
+  exerciseNameById?: ReadonlyMap<string, string>;
 }): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "landscape" });
   const margin = 40;
@@ -246,6 +254,7 @@ export function buildRackSheetsPdf(opts: {
               exercise: ex,
               setRow: s,
               repMaxes: opts.repMaxes,
+              referenceExerciseName: referenceNameFor(ex, s, opts.exerciseNameById),
             });
             row.push(suggestion ? `${suggestion.load}` : s.percent != null ? `${s.percent}%` : "—");
           }

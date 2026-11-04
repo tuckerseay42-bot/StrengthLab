@@ -6,8 +6,7 @@ export const epley = (load: number, reps: number, formula: OneRmFormula = DEFAUL
   estimate1RM(load, reps, formula) ?? load;
 
 // Always round DOWN to the nearest 5 lb — no 2.5 lb plates in the weight room.
-export const roundToPlate = (n: number, step = 5) =>
-  Math.floor(n / step) * step;
+export const roundToPlate = (n: number, step = 5) => Math.floor(n / step) * step;
 
 /**
  * Best e1RM for an athlete on a given exercise (matches by exercise_id first,
@@ -36,16 +35,37 @@ export function bestE1rm(
   // log override a coach-edited training max and inflate every prescription.
   const storedOneRm = matches
     .filter((r) => r.reps === 1)
-    .reduce<RepMax | null>((best, r) => (!best || Number(r.load) > Number(best.load) ? r : best), null);
+    .reduce<RepMax | null>(
+      (best, r) => (!best || Number(r.load) > Number(best.load) ? r : best),
+      null,
+    );
   if (storedOneRm) return { e1rm: Number(storedOneRm.load), source: storedOneRm };
 
   let best = 0;
   let bestRow: RepMax | null = null;
   for (const r of matches) {
     const e = epley(Number(r.load), r.reps, formula);
-    if (e > best) { best = e; bestRow = r; }
+    if (e > best) {
+      best = e;
+      bestRow = r;
+    }
   }
   return bestRow ? { e1rm: best, source: bestRow } : null;
+}
+
+/**
+ * The name of the lift a set is a percentage OF, when that is a different lift
+ * from the one being done (e.g. "75% of Back Squat" on a box squat). suggestLoad
+ * can only match another lift's max by name when it is told the name, so every
+ * caller that prices a set should pass this.
+ */
+export function referenceNameFor(
+  exercise: Pick<WorkoutExercise, "percent_of_exercise_id">,
+  setRow: Pick<WorkoutSet, "percent_of_exercise_id"> | null | undefined,
+  nameById: ReadonlyMap<string, string> | undefined,
+): string | null {
+  const refId = setRow?.percent_of_exercise_id ?? exercise.percent_of_exercise_id;
+  return refId ? (nameById?.get(refId) ?? null) : null;
 }
 
 export type SuggestedLoad = {
@@ -61,26 +81,42 @@ export type SuggestedLoad = {
  */
 export function suggestLoad(params: {
   athleteId: string;
-  exercise: Pick<WorkoutExercise, "exercise_id" | "exercise_name" | "load" | "percent" | "percent_of_exercise_id">;
+  exercise: Pick<
+    WorkoutExercise,
+    "exercise_id" | "exercise_name" | "load" | "percent" | "percent_of_exercise_id"
+  >;
   setRow?: Pick<WorkoutSet, "load" | "percent" | "percent_of_exercise_id" | "rm_reps"> | null;
   repMaxes: RepMax[];
   referenceExerciseName?: string | null;
   step?: number;
   formula?: OneRmFormula;
 }): SuggestedLoad {
-  const { athleteId, exercise, setRow, repMaxes, referenceExerciseName, step = 5, formula = DEFAULT_1RM_FORMULA } = params;
+  const {
+    athleteId,
+    exercise,
+    setRow,
+    repMaxes,
+    referenceExerciseName,
+    step = 5,
+    formula = DEFAULT_1RM_FORMULA,
+  } = params;
 
   const explicit = setRow?.load ?? exercise.load ?? null;
   if (explicit != null) {
     return { load: Number(explicit), basis: "explicit", detail: "prescribed" };
   }
 
-  const refExId = setRow?.percent_of_exercise_id ?? exercise.percent_of_exercise_id ?? exercise.exercise_id ?? null;
+  const refExId =
+    setRow?.percent_of_exercise_id ??
+    exercise.percent_of_exercise_id ??
+    exercise.exercise_id ??
+    null;
   // Only allow the name fallback when the reference IS this exercise; a
   // percent-of-another-lift reference must match by id.
-  const refName = !refExId || refExId === exercise.exercise_id
-    ? exercise.exercise_name
-    : (referenceExerciseName ?? null);
+  const refName =
+    !refExId || refExId === exercise.exercise_id
+      ? exercise.exercise_name
+      : (referenceExerciseName ?? null);
 
   // Target RM (e.g. 85% of 5RM). Check this before generic %1RM because an
   // RM prescription can intentionally contain both rm_reps and percent.

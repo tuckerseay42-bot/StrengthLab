@@ -10,6 +10,7 @@ import {
   programPhasesQO,
   programSessionsQO,
   repMaxesQO,
+  exercisesQO,
   type WorkoutExercise,
   type WorkoutSet,
 } from "@/lib/queries";
@@ -87,6 +88,12 @@ function ProgramDeliveryPage() {
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
   const { data: programs = [] } = useQuery(programsQO);
   const { data: repMaxes = [] } = useQuery(repMaxesQO);
+  // Library names, so a "% of another lift" set can be priced from that lift's max.
+  const { data: exerciseLib = [] } = useQuery(exercisesQO);
+  const exerciseNameById = useMemo(
+    () => new Map(exerciseLib.map((e) => [e.id, e.name] as const)),
+    [exerciseLib],
+  );
 
   const [teamId, setTeamId] = useState<string>(activeTeamId ?? "");
   const [programId, setProgramId] = useState<string>("");
@@ -197,7 +204,14 @@ function ProgramDeliveryPage() {
         coachNotes: session?.notes,
       });
     if (tab === "athlete")
-      return buildAthleteCardsPdf({ session: sessionInfo, roster, exercises, sets, repMaxes });
+      return buildAthleteCardsPdf({
+        session: sessionInfo,
+        roster,
+        exercises,
+        sets,
+        repMaxes,
+        exerciseNameById,
+      });
     return buildRackSheetsPdf({
       session: sessionInfo,
       rackGroups,
@@ -205,6 +219,7 @@ function ProgramDeliveryPage() {
       exercises,
       sets,
       repMaxes,
+      exerciseNameById,
     });
   };
 
@@ -243,6 +258,7 @@ function ProgramDeliveryPage() {
     roster.length,
     rackGroups.length,
     repMaxes.length,
+    exerciseLib.length,
   ]);
 
   useEffect(() => {
@@ -285,7 +301,7 @@ function ProgramDeliveryPage() {
       notifyWorkout({
         athletes: roster.map((a) => ({
           athlete_id: a.id,
-          rows: athleteWorkoutRows(a, exercises, sets, repMaxes),
+          rows: athleteWorkoutRows(a, exercises, sets, repMaxes, exerciseNameById),
         })),
         session: {
           teamName: sessionInfo.teamName,
