@@ -354,6 +354,7 @@ export type Database = {
           athlete_id: string
           created_at: string
           id: string
+          kiosk_reopened: boolean
           notes: string | null
           organization_id: string
           present: boolean
@@ -365,6 +366,7 @@ export type Database = {
           athlete_id: string
           created_at?: string
           id?: string
+          kiosk_reopened?: boolean
           notes?: string | null
           organization_id?: string
           present?: boolean
@@ -376,6 +378,7 @@ export type Database = {
           athlete_id?: string
           created_at?: string
           id?: string
+          kiosk_reopened?: boolean
           notes?: string | null
           organization_id?: string
           present?: boolean

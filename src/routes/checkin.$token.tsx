@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,12 @@ function RosterCheckInPage() {
       if (error) throw error;
       return (data ?? []) as RosterRow[];
     },
+    // Names disappear once checked in (also from other iPads on this same link),
+    // so keep the list fresh.
+    refetchInterval: 20_000,
   });
+
+  const qc = useQueryClient();
 
   const roster = useMemo(() => rosterQ.data ?? [], [rosterQ.data]);
 
@@ -144,6 +149,7 @@ function RosterCheckInPage() {
         if (legacy.error) throw legacy.error;
         setDone((legacy.data as string | null) ?? selected.display_name);
         resetTimer.current = setTimeout(pickNext, 5000);
+        void qc.invalidateQueries({ queryKey: ["checkin-roster", token] });
         return;
       }
       const res = data as unknown as KioskResult;
@@ -156,6 +162,12 @@ function RosterCheckInPage() {
       const hasFeedback = bw != null && logs.length > 0;
       if (hasFeedback) setFeedback({ value: bw, logs });
       setDone(res.name || selected.display_name);
+      // Take them off the list now so the next kid can't tap their name.
+      const checkedInId = selected.athlete_id;
+      qc.setQueryData<RosterRow[]>(["checkin-roster", token], (old) =>
+        old ? old.filter((r) => r.athlete_id !== checkedInId) : old,
+      );
+      void qc.invalidateQueries({ queryKey: ["checkin-roster", token] });
       // Long enough to read their own result before the next athlete steps up.
       resetTimer.current = setTimeout(pickNext, hasFeedback ? FEEDBACK_MS : 5000);
     } catch (err) {
@@ -327,7 +339,11 @@ function RosterCheckInPage() {
                     />
                   </div>
                   <CommandList className="max-h-[45vh]">
-                    <CommandEmpty>No athlete found — check with your coach.</CommandEmpty>
+                    <CommandEmpty>
+                      {roster.length === 0
+                        ? "Everyone on this team has checked in today."
+                        : "No athlete found — check with your coach. If you already checked in, your name is off the list."}
+                    </CommandEmpty>
                     <CommandGroup>
                       {roster.map((r) => (
                         <CommandItem

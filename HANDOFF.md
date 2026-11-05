@@ -28,14 +28,17 @@
 4. Ideas not built: coach alerts (red-flagged logs, injuries), parent/admin reports, simpler athlete logging screen, SMS, a Data Health screen.
 5. Fixed: `/athlete-login` is now on the public list (signed-out athletes were being sent to the coach login; the "Email athletes" link points there). Also fixed the root error component's type, so `npx tsc --noEmit` is now fully clean.
 
+- Team check-in kiosk (`/checkin/<code>`) now takes a name off the list once that kid is present today (Eastern day), so the next kid can't tap it by mistake. The list also refreshes every 20 seconds so other iPads on the same link catch up. A coach brings a name back with the small undo button on a present tile (or in the list view) on the Attendance page; that sets `attendance.kiosk_reopened` for today only and does not mark the kid absent or notify a parent. Checking in again clears it. Migration `20261105120000_kiosk_hide_checked_in.sql` (needs the Lovable sync). Test: `python3 supabase/tests/kiosk_hide_checked_in.test.py` (12 checks). Not covered: the two PIN kiosks have no name list, so they are unchanged.
 ## Live Test Checklist (after sync + Publish)
 - Tracking > Weight loads (no "isn't available yet" message). Existing history shows as weeks.
 - Open any athlete (roster > name): the profile page opens and shows the Weight card.
 - On a signed-out iPad open the team check-in link (Attendance page QR): find a name, type a weight, see the feedback card; try a wild number (e.g. 90 for a 185 lb kid) to see the "is that right?" prompt.
 - Log two weigh-ins on one day and three different days in one week for one athlete; check the grid shows the bold average and a green/red change.
 - Edit an athlete's weight in the roster form: a new weigh-in should appear on their profile.
+- Check one kid in on the kiosk: their name leaves the list (also on a second iPad within 20 seconds). On the Attendance board tap the small undo icon on their tile: the name returns to the kiosk list; check in again and it leaves again.
 
 ## What Went Wrong
+- Found while testing the kiosk change: the older migration `20260924180000_...` writes `position text` bare in a `RETURNS TABLE(...)`, and a fresh real Postgres rejects that (reserved word). Production evidently has it, so I did not touch that file; the new migration drops and re-creates the roster function with `"position"` quoted so it works either way.
 - Prescribed weights appearing and disappearing for some kids (Nov 2026). Causes found, all fixed in the commits after `9205769`:
   1. Shared lists (workouts, workout exercises/sets, assignments, programs, exercises, attendance, athlete teams, rack members, ...) were loaded in ONE request, and the Data API silently returns at most 1000 rows. Past that, rows are dropped, and with ties in the sort (many sets at position 1) WHICH rows are dropped can differ per request, so the same screen could show a weight on one device and not on another. Fix: every list now pages with `fetchAll` (`src/lib/fetch-all.ts`) and a unique `id` tie-break. Rule going forward: never read a growing table with a plain `.select()`; use `fetchAll` or filter to one day/athlete/workout.
   2. The Training View and live page read EVERY rack assignment ever made (grows daily); now scoped to today's racks.

@@ -44,6 +44,7 @@ import {
   Maximize2,
   Minimize2,
   Scale,
+  Undo2,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/domain";
 import { easternToday } from "@/lib/weigh-ins";
@@ -320,6 +321,34 @@ function AttendancePage() {
       setWeighNote({ text: toUserMessage(e), bad: true });
     },
   });
+
+  // Bring a name back onto the team check-in kiosk list (a kid tapped the wrong name,
+  // or needs to log again). Today only: the kiosk only ever checks in today. Leaves
+  // present/absent alone, so no "absent" notice goes to a parent.
+  const reopen = useMutation({
+    mutationFn: async (athlete: Athlete) => {
+      const { data, error } = await supabase
+        .from("attendance")
+        .update({ kiosk_reopened: true })
+        .eq("athlete_id", athlete.id)
+        .eq("session_date", sessionDate)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Nothing to bring back: not checked in yet.");
+      return athlete;
+    },
+    onSuccess: (athlete) => {
+      void qc.invalidateQueries({ queryKey: ["attendance"] });
+      const text = `${athlete.name} is back on the check-in list`;
+      toast.success(text);
+      setWeighNote({ text });
+    },
+    onError: (e: Error) => {
+      toast.error(toUserMessage(e));
+      setWeighNote({ text: toUserMessage(e), bad: true });
+    },
+  });
+  const canReopen = sessionDate === easternToday();
 
   const submitWeigh = (confirmed = false) => {
     if (!weighTarget) return;
@@ -685,7 +714,23 @@ function AttendancePage() {
                               {checkedInAt}
                             </div>
                           )}
+                          {present && row?.kiosk_reopened && canReopen && (
+                            <div className="text-[11px] font-medium text-primary">
+                              Back on check-in list
+                            </div>
+                          )}
                         </button>
+                        {present && !row?.kiosk_reopened && canReopen && (
+                          <button
+                            type="button"
+                            onClick={() => reopen.mutate(a)}
+                            aria-label={`Bring ${a.name} back on the check-in list`}
+                            title="Bring name back on the check-in list"
+                            className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
+                          >
+                            <Undo2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setWeighTarget(a)}
@@ -722,6 +767,17 @@ function AttendancePage() {
                       </span>
                     )}
                     <div className="flex gap-1">
+                      {present === true && canReopen && !todayMap.get(a.id)?.kiosk_reopened && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => reopen.mutate(a)}
+                          aria-label={`Bring ${a.name} back on the check-in list`}
+                          title="Bring name back on the check-in list"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="outline"

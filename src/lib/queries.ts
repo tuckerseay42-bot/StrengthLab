@@ -93,6 +93,7 @@ export type AttendanceRow = {
   session_date: string;
   present: boolean;
   notes: string | null;
+  kiosk_reopened?: boolean;
   updated_at?: string | null;
   created_at?: string | null;
 };
