@@ -276,6 +276,15 @@ function AttendancePage() {
     setWeighConfirm(null);
   };
 
+  // Toasts live outside the full-screen card and cannot be seen there, so show the result
+  // inside the card as well.
+  const [weighNote, setWeighNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  useEffect(() => {
+    if (!weighNote) return;
+    const t = setTimeout(() => setWeighNote(null), 4000);
+    return () => clearTimeout(t);
+  }, [weighNote]);
+
   const weigh = useMutation({
     mutationFn: async (input: { athlete: Athlete; value: number; confirmed: boolean }) => {
       const { data, error } = await supabase.rpc(
@@ -303,9 +312,13 @@ function AttendancePage() {
       void qc.invalidateQueries({ queryKey: ["weigh_ins"] });
       void qc.invalidateQueries({ queryKey: ["athletes"] });
       toast.success(`${input.athlete.name}: ${input.value} lb logged`);
+      setWeighNote({ text: `${input.athlete.name}: ${input.value} lb logged` });
       closeWeigh();
     },
-    onError: (e: Error) => toast.error(toUserMessage(e)),
+    onError: (e: Error) => {
+      toast.error(toUserMessage(e));
+      setWeighNote({ text: toUserMessage(e), bad: true });
+    },
   });
 
   const submitWeigh = (confirmed = false) => {
@@ -578,6 +591,19 @@ function AttendancePage() {
               </Button>
             </div>
           </div>
+          {weighNote && (
+            <div
+              role="status"
+              className={cn(
+                "mt-2 rounded-md px-3 py-2 text-sm font-medium",
+                weighNote.bad
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]",
+              )}
+            >
+              {weighNote.text}
+            </div>
+          )}
           {roster.length > 0 && (
             <div className="mt-2 flex items-center gap-2">
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -636,7 +662,7 @@ function AttendancePage() {
                             }
                           }}
                           className={cn(
-                            "flex h-full w-full flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all duration-500 active:scale-95",
+                            "flex h-full w-full flex-col items-center gap-1 rounded-xl border py-3 pl-3 pr-11 text-center transition-all duration-500 active:scale-95",
                             present
                               ? "border-[color:var(--color-success)]/50 bg-[color:var(--color-success)]/15"
                               : "border-border/50 bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
@@ -665,7 +691,7 @@ function AttendancePage() {
                           onClick={() => setWeighTarget(a)}
                           aria-label={`Weigh in ${a.name}`}
                           title="Log a weigh-in"
-                          className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
+                          className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground hover:text-foreground"
                         >
                           <Scale className="h-4 w-4" />
                         </button>
@@ -783,7 +809,7 @@ function AttendancePage() {
       </Card>
 
       <Dialog open={!!weighTarget} onOpenChange={(open) => !open && closeWeigh()}>
-        <DialogContent>
+        <DialogContent container={isFullscreen ? checkinCardRef.current : null}>
           <DialogHeader>
             <DialogTitle>Weigh in {weighTarget?.name}</DialogTitle>
           </DialogHeader>
