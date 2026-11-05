@@ -56,6 +56,7 @@ import { RackAssignmentBoard } from "@/components/rack-assignment-board";
 import { RackDisplayBoard } from "@/components/rack-display-board";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -117,6 +118,7 @@ import {
   RotateCw,
   List,
   AlertTriangle,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { suggestLoad } from "@/lib/prescription";
@@ -860,23 +862,6 @@ function TrainingView() {
                 )}
               </div>
               <div className="flex items-center gap-1">
-                {viewMode === "grid" && (
-                  <>
-                    <ToolbarToggle
-                      active={compact}
-                      onClick={() => setCompact((v) => !v)}
-                      icon={<Rows3 className="h-3.5 w-3.5" />}
-                      label={compact ? "Compact" : "Expanded"}
-                    />
-                    <ToolbarToggle
-                      active={rackMode}
-                      onClick={() => setRackMode((v) => !v)}
-                      icon={<LayoutGrid className="h-3.5 w-3.5" />}
-                      label="Rack mode"
-                    />
-                    <div className="mx-1 h-5 w-px bg-border/60" />
-                  </>
-                )}
                 <ToolbarToggle
                   active={fullscreen}
                   onClick={toggleFullscreen}
@@ -889,11 +874,31 @@ function TrainingView() {
                   }
                   label="Fullscreen"
                 />
-                <Button size="sm" variant="ghost" asChild className="h-7 px-2">
-                  <Link to="/training/live" className="text-xs">
-                    Facility view
-                  </Link>
-                </Button>
+                {/* Everything you rarely change lives here, so the bar stays short. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs">
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">View</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    {viewMode === "grid" && (
+                      <>
+                        <DropdownMenuCheckboxItem checked={compact} onCheckedChange={setCompact}>
+                          Compact tiles
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={rackMode} onCheckedChange={setRackMode}>
+                          Group by rack
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem asChild>
+                      <Link to="/training/live">Facility view</Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -944,21 +949,24 @@ function TrainingView() {
                   LAYOUT_GRID[layoutSize],
                 )}
               >
-                {Array.from({ length: layoutSize }).map((_, i) => {
-                  const a = selectedAthletes[i];
-                  if (a) return renderTile(a);
-                  return (
-                    <SlotPicker
-                      key={`slot-${i}`}
-                      index={i + 1}
-                      athletes={athletes}
-                      teamById={teamById}
-                      selectedIds={selectedIds}
-                      recentIds={recent}
-                      onPick={(id) => toggleAthlete(id)}
-                    />
-                  );
-                })}
+                {/* Only the kids who are up, plus one add button (not a wall of empty boxes). */}
+                {Array.from({ length: Math.min(layoutSize, selectedAthletes.length + 1) }).map(
+                  (_, i) => {
+                    const a = selectedAthletes[i];
+                    if (a) return renderTile(a);
+                    return (
+                      <SlotPicker
+                        key={`slot-${i}`}
+                        index={i + 1}
+                        athletes={athletes}
+                        teamById={teamById}
+                        selectedIds={selectedIds}
+                        recentIds={recent}
+                        onPick={(id) => toggleAthlete(id)}
+                      />
+                    );
+                  },
+                )}
               </div>
             )}
 
@@ -2614,61 +2622,96 @@ function AthleteTile(props: {
                   )}
                 </div>
 
-                <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
-                  <thead>
-                    <tr className="text-[8px] uppercase tracking-wider text-muted-foreground">
-                      <th className="w-10 px-1 py-0.5 text-left font-medium">Set</th>
-                      <th className="px-1 py-0.5 text-left font-medium">Reps</th>
-                      <th className="px-1 py-0.5 text-left font-medium">Wt</th>
-                      {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
-                      <th className="w-8 px-1 py-0.5" />
-                    </tr>
-                  </thead>
-                  <tbody>
+                {!focused && !selfService ? (
+                  <div className="flex flex-wrap gap-1.5 px-1.5 py-2">
                     {g.rows.map((r) => {
                       const done = r.log?.status === "completed";
                       const skipped = r.log?.status === "skipped";
                       const isCurrent =
                         current?.exercise.id === g.ex.id && current.setPosition === r.pos;
+                      const wt = done ? (r.log?.load ?? "—") : (r.load ?? "—");
+                      const reps = done ? (r.log?.reps ?? "—") : (r.reps ?? "—");
                       return (
-                        <tr
+                        <button
                           key={r.pos}
+                          type="button"
                           onClick={() => setCursorOverride(r.idx)}
+                          aria-label={`Set ${r.pos}: ${wt} for ${reps}`}
                           className={cn(
-                            "cursor-pointer border-t border-border/30",
-                            done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                            skipped && "text-muted-foreground line-through",
-                            isCurrent && !done && "bg-primary/10 font-semibold",
+                            "flex min-h-9 min-w-[3.75rem] flex-col items-center justify-center rounded-md border px-2 py-0.5 text-[11px] tabular-nums leading-tight",
+                            done
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : isCurrent
+                                ? "border-primary bg-primary/15 font-semibold text-foreground ring-1 ring-primary"
+                                : "border-border/50 bg-muted/30 text-muted-foreground",
+                            skipped && "line-through opacity-60",
                           )}
                         >
-                          <td className="px-1 py-1">{r.pos}</td>
-                          <td className="px-1 py-1">
-                            {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
-                          </td>
-                          <td className="px-1 py-1 font-semibold">
-                            {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
-                          </td>
-                          {showVel && (
-                            <td className="px-1 py-1">
-                              {done
-                                ? (r.log?.avg_velocity ?? "—")
-                                : r.vel != null
-                                  ? `${r.vel}`
-                                  : "—"}
-                            </td>
-                          )}
-                          <td className="px-1 py-1 text-right">
-                            {done ? (
-                              <Check className="ml-auto h-3.5 w-3.5" />
-                            ) : isCurrent ? (
-                              <span className="ml-auto block h-1.5 w-1.5 rounded-full bg-primary" />
-                            ) : null}
-                          </td>
-                        </tr>
+                          <span className="text-[9px] uppercase opacity-70">Set {r.pos}</span>
+                          <span className="font-semibold">
+                            {wt} × {reps}
+                          </span>
+                        </button>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
+                    <thead>
+                      <tr className="text-[8px] uppercase tracking-wider text-muted-foreground">
+                        <th className="w-10 px-1 py-0.5 text-left font-medium">Set</th>
+                        <th className="px-1 py-0.5 text-left font-medium">Reps</th>
+                        <th className="px-1 py-0.5 text-left font-medium">Wt</th>
+                        {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
+                        <th className="w-8 px-1 py-0.5" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.rows.map((r) => {
+                        const done = r.log?.status === "completed";
+                        const skipped = r.log?.status === "skipped";
+                        const isCurrent =
+                          current?.exercise.id === g.ex.id && current.setPosition === r.pos;
+                        return (
+                          <tr
+                            key={r.pos}
+                            onClick={() => setCursorOverride(r.idx)}
+                            className={cn(
+                              "cursor-pointer border-t border-border/30",
+                              done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                              skipped && "text-muted-foreground line-through",
+                              isCurrent && !done && "bg-primary/10 font-semibold",
+                            )}
+                          >
+                            <td className="px-1 py-1">{r.pos}</td>
+                            <td className="px-1 py-1">
+                              {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
+                            </td>
+                            <td className="px-1 py-1 font-semibold">
+                              {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
+                            </td>
+                            {showVel && (
+                              <td className="px-1 py-1">
+                                {done
+                                  ? (r.log?.avg_velocity ?? "—")
+                                  : r.vel != null
+                                    ? `${r.vel}`
+                                    : "—"}
+                              </td>
+                            )}
+                            <td className="px-1 py-1 text-right">
+                              {done ? (
+                                <Check className="ml-auto h-3.5 w-3.5" />
+                              ) : isCurrent ? (
+                                <span className="ml-auto block h-1.5 w-1.5 rounded-full bg-primary" />
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
 
                 {isActive && focusPanel}
               </div>
