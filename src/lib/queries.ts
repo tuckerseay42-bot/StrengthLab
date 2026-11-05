@@ -611,7 +611,7 @@ export const workoutSetsQO = queryOptions({
 // rows that beat what's already stored. Throttled so it runs at most once
 // every 2 minutes per client.
 let lastRepMaxRollup = 0;
-async function refreshRepMaxRollup() {
+async function refreshRepMaxRollup(): Promise<void> {
   const now = Date.now();
   if (now - lastRepMaxRollup < 120_000) return;
   lastRepMaxRollup = now;
@@ -627,8 +627,19 @@ async function refreshRepMaxRollup() {
 
 export const repMaxesQO = queryOptions({
   queryKey: ["rep_maxes"],
-  queryFn: async (): Promise<RepMax[]> => {
-    await refreshRepMaxRollup();
+  queryFn: async ({ client }): Promise<RepMax[]> => {
+    // Wait for the rollup so fresh sets are counted, but never more than a few
+    // seconds: it can be slow, and every rack screen sits on "getting weights
+    // ready" until this list arrives. If it is still running, show what is stored
+    // now and load again the moment it finishes.
+    const rollup = refreshRepMaxRollup();
+    const finished = await Promise.race([
+      rollup.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
+    ]);
+    if (!finished) {
+      void rollup.then(() => client.invalidateQueries({ queryKey: ["rep_maxes"] }));
+    }
     // Thousands of rows across a roster — page through, or older athletes'
     // maxes fall off and their prescribed loads come back blank.
     return fetchAll<RepMax>(() =>

@@ -53,4 +53,28 @@ describe("fetchAll", () => {
       expect((data as Row[]).length).toBeLessThan(rows.length);
     });
   });
+
+  it("asks for later pages at the same time, and keeps rows in order", async () => {
+    const rows = makeRows(PAGE * 6 + 17);
+    const sorted = [...rows].sort((a, b) => a.position - b.position || a.id - b.id);
+    let inFlight = 0;
+    let peak = 0;
+    const got = await fetchAll<Row>(() => ({
+      range: async (from: number, to: number) => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return { data: sorted.slice(from, to + 1), error: null };
+      },
+    }));
+    expect(peak).toBeGreaterThan(1);
+    expect(got).toEqual(sorted);
+  });
+
+  it("stops correctly when the table ends exactly on a batch boundary", async () => {
+    const got = await fetchAll<Row>(fakeTable(makeRows(PAGE * 5)));
+    expect(got).toHaveLength(PAGE * 5);
+    expect(new Set(got.map((r) => r.id)).size).toBe(PAGE * 5);
+  });
 });

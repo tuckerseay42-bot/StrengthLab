@@ -7,6 +7,10 @@
  * row when the first sort column has ties (e.g. many sets at position 1).
  */
 export const PAGE = 1000;
+// After the first (full) page, ask for this many more pages at once instead of one
+// after another. Each round trip to the database is slow on a phone; a table of
+// 5,000 rows used to cost five waits in a row.
+const PARALLEL = 4;
 
 export async function fetchAll<T>(
   build: () => {
@@ -16,12 +20,21 @@ export async function fetchAll<T>(
     ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
   },
 ): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
+  const page = async (from: number): Promise<T[]> => {
     const { data, error } = await build().range(from, from + PAGE - 1);
     if (error) throw error;
-    const rows = (data ?? []) as T[];
-    out.push(...rows);
-    if (rows.length < PAGE) return out;
+    return (data ?? []) as T[];
+  };
+
+  const out = await page(0);
+  if (out.length < PAGE) return out;
+  for (let from = PAGE; ; from += PAGE * PARALLEL) {
+    const batch = await Promise.all(
+      Array.from({ length: PARALLEL }, (_, i) => page(from + i * PAGE)),
+    );
+    for (const rows of batch) {
+      out.push(...rows);
+      if (rows.length < PAGE) return out;
+    }
   }
 }
