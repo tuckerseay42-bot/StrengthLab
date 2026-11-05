@@ -140,3 +140,90 @@ export function buildPrescribedSets(
   }
   return list;
 }
+
+// ---------------------------------------------------------------------------
+// "Best set" logging. Kids log ONE set per lifting exercise: the best (top) set
+// they hit that day. Exercises measured some other way (jumps, sprints, carries,
+// tests) still log set by set, so those stay as they are.
+// ---------------------------------------------------------------------------
+
+export type PrescribedSet = ReturnType<typeof buildPrescribedSets>[number];
+
+/**
+ * Which set is the "top set": the highest % of max if any set has one, otherwise
+ * the highest written weight, otherwise the last set. Ties go to the later set.
+ * Returns that set's position.
+ */
+export function pickTopPosition(
+  items: Array<{ position: number; percent: number | null; load: number | null }>,
+): number {
+  if (items.length === 0) return 1;
+  const pick = (value: (i: (typeof items)[number]) => number | null) => {
+    let best: (typeof items)[number] | null = null;
+    let bestValue = -Infinity;
+    for (const i of items) {
+      const v = value(i);
+      if (v == null) continue;
+      if (v >= bestValue) {
+        best = i;
+        bestValue = v;
+      }
+    }
+    return best;
+  };
+  return (pick((i) => i.percent) ?? pick((i) => i.load) ?? items[items.length - 1]).position;
+}
+
+/** Same rule for one exercise's expanded sets. Returns the set position (1-based). */
+export function topSetPosition(sets: PrescribedSet[]): number {
+  return pickTopPosition(
+    sets.map((p) => ({
+      position: p.setPosition,
+      percent: p.setRow?.percent ?? p.exercise.percent ?? null,
+      load: p.setRow?.load ?? p.exercise.load ?? null,
+    })),
+  );
+}
+
+/**
+ * Cuts each "best set" exercise down to its one top set, so progress, "done" and
+ * the log button all count one entry per lift. Other exercises are untouched.
+ */
+export function collapseToBestSet(
+  list: PrescribedSet[],
+  isBestSetExercise: (exercise: WorkoutExercise) => boolean,
+): PrescribedSet[] {
+  const byExercise = new Map<string, PrescribedSet[]>();
+  for (const p of list) {
+    const group = byExercise.get(p.exercise.id) ?? [];
+    group.push(p);
+    byExercise.set(p.exercise.id, group);
+  }
+  return list.filter((p) => {
+    if (!isBestSetExercise(p.exercise)) return true;
+    return p.setPosition === topSetPosition(byExercise.get(p.exercise.id)!);
+  });
+}
+
+/**
+ * How many of the (already collapsed) entries are done. A lift counts as done
+ * once ANY completed log exists for it (older set-by-set logs from earlier the
+ * same day still count); other exercises need a log for that exact set.
+ */
+export function countDoneEntries(
+  entries: PrescribedSet[],
+  logs: Array<{ workout_exercise_id: string; set_position: number; status: string }>,
+  isBestSetExercise: (exercise: WorkoutExercise) => boolean,
+): number {
+  let done = 0;
+  for (const p of entries) {
+    const hit = logs.some(
+      (l) =>
+        l.status === "completed" &&
+        l.workout_exercise_id === p.exercise.id &&
+        (isBestSetExercise(p.exercise) || l.set_position === p.setPosition),
+    );
+    if (hit) done++;
+  }
+  return done;
+}

@@ -1,3 +1,4 @@
+import { pickTopPosition } from "@/lib/training-resolver";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -262,6 +263,20 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
     },
   });
 
+  // Which exercises are plain lifts (weight x reps)? Those log ONE best set. Jumps,
+  // sprints and the like keep logging set by set.
+  const measureIds = Array.from(new Set(exercises.map((e) => e.exercise_id).filter((id): id is string => !!id)));
+  const { data: measurementRows = [], isLoading: measurementsLoading } = useQuery({
+    queryKey: ["athlete-today-measurements", measureIds],
+    enabled: measureIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("exercises").select("id, measurement_type").in("id", measureIds);
+      if (error) throw error;
+      return (data ?? []) as { id: string; measurement_type: string | null }[];
+    },
+  });
+  const measurementById = useMemo(() => new Map(measurementRows.map((r) => [r.id, r.measurement_type ?? "load"])), [measurementRows]);
+
   // Today's logs
   const { data: logs = [] } = useQuery({
     queryKey: ["today-logs", athleteId, rackSession?.id],
@@ -344,10 +359,17 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
       const prescriptions = setPrescriptions.filter((s) => s.workout_exercise_id === ex.id);
       const exLogs = logs.filter((l) => l.workout_exercise_id === ex.id);
       const setList = buildSetList(ex, prescriptions, athleteId, repMaxData, referenceExercises, formula);
+      const isLift = (measurementById.get(ex.exercise_id ?? "") ?? "load") === "load";
+      if (isLift && setList.length > 0) {
+        // One entry for the whole lift: its best (top) set. Any log for the lift counts.
+        const bestPos = pickTopPosition(setList.map((s) => ({ position: s.position, percent: s.percent, load: s.prescribedLoad })));
+        const isDone = exLogs.length > 0;
+        return { exercise: ex, setList, logs: exLogs, completedCount: isDone ? 1 : 0, totalCount: 1, isDone, bestPos };
+      }
       const completedCount = exLogs.length;
-      return { exercise: ex, setList, logs: exLogs, completedCount, totalCount: setList.length, isDone: setList.length > 0 && completedCount >= setList.length };
+      return { exercise: ex, setList, logs: exLogs, completedCount, totalCount: setList.length, isDone: setList.length > 0 && completedCount >= setList.length, bestPos: null };
     });
-  }, [exercises, setPrescriptions, logs, athleteId, repMaxData, referenceExercises, formula]);
+  }, [exercises, setPrescriptions, logs, athleteId, repMaxData, referenceExercises, formula, measurementById]);
 
   // Which exercise is "up now" — the first one with sets left, unless the
   // athlete tapped ahead in the lineup to look at something else.
@@ -420,7 +442,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
             <Card>
               <CardContent className="space-y-2 p-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">{completedSets} of {totalSets || "?"} sets · {pct}%</div>
+                  <div className="text-sm font-semibold">{completedSets} of {totalSets || "?"} logged · {pct}%</div>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
@@ -446,7 +468,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
                 <CheckCircle2 className="h-8 w-8 shrink-0 text-emerald-500" />
                 <div>
                   <div className="text-lg font-semibold">Workout complete — nice work!</div>
-                  <div className="text-xs text-muted-foreground">Every set for today is logged.</div>
+                  <div className="text-xs text-muted-foreground">Everything for today is logged.</div>
                 </div>
               </CardContent>
             </Card>
@@ -455,7 +477,7 @@ export function TodayView({ athleteId, athleteName, programId, organizationId }:
               athleteId={athleteId}
               rackSessionId={rackSession?.id ?? null}
               pe={focused}
-              pricingLoading={repMaxesLoading || formulaLoading || referencesLoading}
+              pricingLoading={repMaxesLoading || formulaLoading || referencesLoading || measurementsLoading}
               onLogged={() => qc.invalidateQueries({ queryKey: ["today-logs", athleteId, rackSession?.id] })}
             />
           ) : null}
@@ -551,7 +573,8 @@ function RestTimer({ lastCompleted }: { lastCompleted: string | null }) {
 }
 
 /* ---- Today's lineup row — one line per exercise, tap to jump ---- */
-type PerExercise = { exercise: ExerciseRow; setList: PlannedSet[]; logs: Log[]; completedCount: number; totalCount: number; isDone: boolean };
+/** bestPos is set for lifts: the one set a kid logs (their best). null = log every set. */
+type PerExercise = { exercise: ExerciseRow; setList: PlannedSet[]; logs: Log[]; completedCount: number; totalCount: number; isDone: boolean; bestPos: number | null };
 
 function LineupRow({ pe, isFocused, onSelect }: { pe: PerExercise; isFocused: boolean; onSelect: () => void }) {
   const { exercise, completedCount, totalCount, isDone } = pe;
@@ -577,9 +600,11 @@ function LineupRow({ pe, isFocused, onSelect }: { pe: PerExercise; isFocused: bo
       )}
       <div className="min-w-0 flex-1">
         <div className={cn("truncate text-sm", isFocused ? "font-semibold" : "font-medium")}>{exercise.exercise_name}</div>
-        <div className="text-[11px] text-muted-foreground">{totalCount} × {exercise.reps || "?"}</div>
+        <div className="text-[11px] text-muted-foreground">{pe.setList.length} × {exercise.reps || "?"}</div>
       </div>
-      <span className="shrink-0 text-xs text-muted-foreground">{completedCount}/{totalCount}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {pe.bestPos != null ? (isDone ? "Logged" : "Best set") : `${completedCount}/${totalCount}`}
+      </span>
     </button>
   );
 }
@@ -589,12 +614,14 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onL
   athleteId: string; rackSessionId: string | null; pe: PerExercise; pricingLoading: boolean; onLogged: () => void;
 }) {
   const { exercise, setList, logs } = pe;
-  const firstOpen = setList.find((s) => !logs.some((l) => l.set_position === s.position))?.position ?? setList.at(-1)?.position ?? 1;
+  const isBestSet = pe.bestPos != null;
+  const firstOpen = pe.bestPos ?? setList.find((s) => !logs.some((l) => l.set_position === s.position))?.position ?? setList.at(-1)?.position ?? 1;
   const [activePos, setActivePos] = useState(firstOpen);
   useEffect(() => { setActivePos(firstOpen); }, [exercise.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = setList.find((s) => s.position === activePos) ?? setList[0];
-  const activeLog = logs.find((l) => l.set_position === activePos);
+  // A lift's one log may sit at another set position if it was saved set-by-set earlier.
+  const activeLog = logs.find((l) => l.set_position === activePos) ?? (isBestSet ? logs[0] : undefined);
 
   return (
     <Card className="overflow-hidden border-primary/30">
@@ -609,12 +636,37 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onL
             </div>
             {exercise.notes && <div className="mt-1 text-xs text-muted-foreground">{exercise.notes}</div>}
           </div>
-          <Badge variant={pe.completedCount >= setList.length ? "default" : "secondary"} className="shrink-0">
-            {pe.completedCount}/{setList.length}
+          <Badge variant={pe.isDone ? "default" : "secondary"} className="shrink-0">
+            {isBestSet ? (pe.isDone ? "Logged" : "Best set") : `${pe.completedCount}/${setList.length}`}
           </Badge>
         </div>
 
+        {/* Lifts: every set is shown so the athlete sees all their weights; they log
+            only the best one below. */}
+        {isBestSet && (
+          <div className="overflow-hidden rounded-lg border">
+            {setList.map((s) => {
+              const isBest = s.position === pe.bestPos;
+              return (
+                <div
+                  key={s.position}
+                  className={cn(
+                    "flex items-center gap-3 border-b px-3 py-2 text-base last:border-b-0",
+                    isBest && "bg-primary/10 font-semibold",
+                  )}
+                >
+                  <span className="w-12 shrink-0 text-sm text-muted-foreground">Set {s.position}</span>
+                  <span className="tabular-nums">{s.prescribedReps ?? "—"} reps</span>
+                  <span className="ml-auto tabular-nums font-semibold">{s.prescribedLoad != null ? `${s.prescribedLoad} lb` : "—"}</span>
+                  {isBest && <span className="rounded bg-primary/20 px-1.5 text-[10px] font-bold uppercase text-primary">Best</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Set pills — tap any set to bring it up below */}
+        {!isBestSet && (
         <div className="flex flex-wrap gap-1.5">
           {setList.map((s) => {
             const done = logs.some((l) => l.set_position === s.position);
@@ -638,6 +690,7 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onL
             );
           })}
         </div>
+        )}
 
         {active && pricingLoading && (
           <div className="rounded-lg border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
@@ -656,10 +709,12 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onL
             prescribedLoad={active.prescribedLoad}
             prescribedReps={active.prescribedReps}
             existing={activeLog}
+            bestSet={isBestSet}
             targetVMin={exercise.target_velocity_min}
             targetVMax={exercise.target_velocity_max}
             onLogged={(loggedPos) => {
               onLogged();
+              if (isBestSet) return;
               const next = setList.find((s) => s.position === loggedPos + 1);
               if (next) setActivePos(next.position);
             }}
@@ -671,10 +726,10 @@ function FocusedExerciseCard({ athleteId, rackSessionId, pe, pricingLoading, onL
 }
 
 /* ---- Big single-set entry ---- */
-function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLoad, prescribedReps, existing, targetVMin, targetVMax, onLogged }: {
+function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLoad, prescribedReps, existing, bestSet = false, targetVMin, targetVMax, onLogged }: {
   athleteId: string; rackSessionId: string | null; exerciseId: string; position: number;
   prescribedLoad: number | null; prescribedReps: string | null;
-  existing?: Log; targetVMin: number | null; targetVMax: number | null;
+  existing?: Log; bestSet?: boolean; targetVMin: number | null; targetVMax: number | null;
   onLogged: (position: number) => void;
 }) {
   const [load, setLoad] = useState<string>(existing?.load?.toString() ?? prescribedLoad?.toString() ?? "");
@@ -707,7 +762,7 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
         if (error) throw error;
       }
     },
-    onSuccess: () => { toast.success(`Set ${position} logged`); onLogged(position); },
+    onSuccess: () => { toast.success(bestSet ? "Best set logged" : `Set ${position} logged`); onLogged(position); },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 
@@ -734,7 +789,7 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
 
   return (
     <div className={cn("space-y-3 rounded-lg border bg-muted/30 p-3", done && "border-emerald-500/40 bg-emerald-500/5")}>
-      <div className="text-sm font-semibold text-muted-foreground">Set {position}</div>
+      <div className="text-sm font-semibold text-muted-foreground">{bestSet ? "Log your best set" : `Set ${position}`}</div>
       {!editing && hasPrefill ? (
         <div className="flex items-center justify-between gap-2 rounded-md bg-background/60 px-3 py-2">
           <span className="text-3xl font-bold tabular-nums">
@@ -804,8 +859,8 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
         {save.isPending
           ? "Saving…"
           : done
-            ? <><Flame className="h-5 w-5" /> Re-log set {position}</>
-            : <><CheckCircle2 className="h-5 w-5" /> Log set {position}</>}
+            ? <><Flame className="h-5 w-5" /> {bestSet ? "Re-log best set" : `Re-log set ${position}`}</>
+            : <><CheckCircle2 className="h-5 w-5" /> {bestSet ? "Log best set" : `Log set ${position}`}</>}
       </Button>
 
       <AlertDialog open={confirmPct != null} onOpenChange={(v) => !v && setConfirmPct(null)}>

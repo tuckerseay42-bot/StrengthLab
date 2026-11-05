@@ -29,7 +29,12 @@ import {
 } from "@/lib/queries";
 import { MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
 import { notifyParent } from "@/lib/notify-parent";
-import { resolveAthleteWorkout, buildPrescribedSets } from "@/lib/training-resolver";
+import {
+  resolveAthleteWorkout,
+  buildPrescribedSets,
+  collapseToBestSet,
+  countDoneEntries,
+} from "@/lib/training-resolver";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -332,6 +337,13 @@ function TrainingView() {
     for (const e of exerciseLib) m.set(e.id, (e.measurement_type ?? "load") as Measurement);
     return m;
   }, [exerciseLib]);
+
+  // Kids log ONE set (their best) for each lifting exercise. Jumps, sprints, carries
+  // and tests keep logging set by set.
+  const isBestSetExercise = useCallback(
+    (ex: WorkoutExercise) => (measurementByExId.get(ex.exercise_id ?? "") ?? "load") === "load",
+    [measurementByExId],
+  );
 
   // UI state
   const [mode, setMode] = useState<"assign" | "live" | "display">("live");
@@ -736,10 +748,14 @@ function TrainingView() {
     for (const a of selectedAthletes) {
       const workoutId = effectiveWorkoutFor(a.id);
       const workout = workoutId ? (workouts.find((w) => w.id === workoutId) ?? null) : null;
-      const prescribed = buildPrescribedSets(workout, workoutExercises, workoutSets);
+      // One entry per lift (the best set), set-by-set for everything else.
+      const prescribed = collapseToBestSet(
+        buildPrescribedSets(workout, workoutExercises, workoutSets),
+        isBestSetExercise,
+      );
       const athleteLogs = logs.filter((l) => l.athlete_id === a.id);
       const totalSets = prescribed.length;
-      const completedCount = athleteLogs.filter((l) => l.status === "completed").length;
+      const completedCount = countDoneEntries(prescribed, athleteLogs, isBestSetExercise);
       const finished = totalSets > 0 && completedCount >= totalSets;
       let lastCompletedAt: number | null = null;
       for (const l of athleteLogs) {
@@ -750,7 +766,15 @@ function TrainingView() {
       m.set(a.id, { totalSets, completedCount, finished, lastCompletedAt, workout });
     }
     return m;
-  }, [selectedAthletes, effectiveWorkoutFor, workouts, workoutExercises, workoutSets, logs]);
+  }, [
+    selectedAthletes,
+    effectiveWorkoutFor,
+    workouts,
+    workoutExercises,
+    workoutSets,
+    logs,
+    isBestSetExercise,
+  ]);
 
   // ---- Log mutation ----
   const logMutation = useMutation({
@@ -792,10 +816,7 @@ function TrainingView() {
             <Users className="h-3.5 w-3.5" />
             Assign Racks
           </TabsTrigger>
-          <TabsTrigger value="display" className="gap-1.5">
-            <Tv className="h-3.5 w-3.5" />
-            Display
-          </TabsTrigger>
+          {/* The Display (TV) tab is hidden for now: the coach is adding another tool for that. */}
         </TabsList>
       </Tabs>
 
@@ -874,31 +895,6 @@ function TrainingView() {
                   }
                   label="Fullscreen"
                 />
-                {/* Everything you rarely change lives here, so the bar stays short. */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs">
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">View</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    {viewMode === "grid" && (
-                      <>
-                        <DropdownMenuCheckboxItem checked={compact} onCheckedChange={setCompact}>
-                          Compact tiles
-                        </DropdownMenuCheckboxItem>
-                        <DropdownMenuCheckboxItem checked={rackMode} onCheckedChange={setRackMode}>
-                          Group by rack
-                        </DropdownMenuCheckboxItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem asChild>
-                      <Link to="/training/live">Facility view</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </div>
 
@@ -1020,6 +1016,7 @@ function TrainingView() {
         workoutSets={workoutSets}
         exercises={exerciseLib}
         measurementByExId={measurementByExId}
+        isBestSetExercise={isBestSetExercise}
         repMaxes={repMaxes}
         repMaxesSettled={!repMaxesFetching}
         logs={athleteLogs}
@@ -1694,6 +1691,7 @@ function AthleteTile(props: {
     movement_patterns?: string[];
   }[];
   measurementByExId: Map<string, Measurement>;
+  isBestSetExercise: (ex: WorkoutExercise) => boolean;
   repMaxes: RepMax[];
   /** True once the rep max list has finished loading (not just a cached copy). */
   repMaxesSettled: boolean;
@@ -1734,6 +1732,7 @@ function AthleteTile(props: {
     workoutSets,
     exercises: exerciseLib,
     measurementByExId,
+    isBestSetExercise,
     repMaxes,
     repMaxesSettled,
     logs,
@@ -1755,20 +1754,40 @@ function AthleteTile(props: {
   const now = useNow(1000);
 
   // Prescribed sets in order
-  const prescribed = useMemo(
+  // Every set, for showing the whole workout.
+  const prescribedAll = useMemo(
     () => buildPrescribedSets(workout, workoutExercises, workoutSets),
     [workout, workoutExercises, workoutSets],
   );
+  // What actually gets logged: one best set per lift, every set for the rest.
+  const prescribed = useMemo(
+    () => collapseToBestSet(prescribedAll, isBestSetExercise),
+    [prescribedAll, isBestSetExercise],
+  );
+  // The set position that carries a lift's best-set log.
+  const bestPosByEx = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of prescribed)
+      if (isBestSetExercise(p.exercise)) m.set(p.exercise.id, p.setPosition);
+    return m;
+  }, [prescribed, isBestSetExercise]);
 
   const doneKey = (exId: string, pos: number) => `${exId}:${pos}`;
   const doneMap = useMemo(() => {
     const m = new Map<string, RackSetLog>();
-    for (const l of logs) m.set(doneKey(l.workout_exercise_id, l.set_position), l);
+    // A lift's log counts for its best-set entry even if it was saved at another
+    // set position earlier in the day.
+    for (const l of logs) {
+      const pos = bestPosByEx.get(l.workout_exercise_id) ?? l.set_position;
+      const key = doneKey(l.workout_exercise_id, pos);
+      const prev = m.get(key);
+      if (!prev || new Date(l.completed_at) >= new Date(prev.completed_at)) m.set(key, l);
+    }
     return m;
-  }, [logs]);
+  }, [logs, bestPosByEx]);
 
   const totalSets = prescribed.length;
-  const completedCount = logs.filter((l) => l.status === "completed").length;
+  const completedCount = countDoneEntries(prescribed, logs, isBestSetExercise);
   const pct = totalSets > 0 ? Math.round((completedCount / totalSets) * 100) : 0;
   const finished = totalSets > 0 && completedCount >= totalSets;
 
@@ -1961,10 +1980,12 @@ function AthleteTile(props: {
         vel: number | null;
         log: RackSetLog | null;
         idx: number;
+        /** The one set a kid logs for this lift (its top set). */
+        best: boolean;
       }>;
     }> = [];
     const byEx = new Map<string, number>();
-    prescribed.forEach((p, idx) => {
+    prescribedAll.forEach((p) => {
       let gi = byEx.get(p.exercise.id);
       if (gi == null) {
         gi = out.length;
@@ -1994,11 +2015,29 @@ function AthleteTile(props: {
         percent: p.setRow?.percent ?? p.exercise.percent ?? null,
         vel: p.setRow?.target_velocity_min ?? null,
         log: doneMap.get(doneKey(p.exercise.id, p.setPosition)) ?? null,
-        idx,
+        // Tapping any row of a lift jumps to that lift's single log entry.
+        idx: Math.max(
+          0,
+          prescribed.findIndex(
+            (u) =>
+              u.exercise.id === p.exercise.id &&
+              (bestPosByEx.has(p.exercise.id) || u.setPosition === p.setPosition),
+          ),
+        ),
+        best: bestPosByEx.get(p.exercise.id) === p.setPosition,
       });
     });
     return out;
-  }, [prescribed, doneMap, frozenRepMaxes, athlete.id, exerciseLib, formula]);
+  }, [
+    prescribedAll,
+    prescribed,
+    bestPosByEx,
+    doneMap,
+    frozenRepMaxes,
+    athlete.id,
+    exerciseLib,
+    formula,
+  ]);
 
   const letter = current?.exercise.superset_group ?? null;
   const exNum = current ? exGroups.findIndex((g) => g.ex.id === current.exercise.id) + 1 : 0;
@@ -2067,12 +2106,18 @@ function AthleteTile(props: {
     const priorSame = priorLogFor(logs, current.exercise.id, current.setPosition, lastResult?.id);
     const pb = personalBestFor(repMaxes, athlete.id, current.exercise);
     const remainingInEx = current.setTotal - (current.setPosition - 1);
-    const btnLabel = remainingInEx === 1 ? "Log last set" : `Log set ${current.setPosition}`;
+    const btnLabel = bestPosByEx.has(current.exercise.id)
+      ? "Log best set"
+      : remainingInEx === 1
+        ? "Log last set"
+        : `Log set ${current.setPosition}`;
     return (
       <div className="border-t border-primary/30 bg-primary/[0.04] px-2.5 py-2">
         <div className="mb-1.5 flex items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Set {current.setPosition} of {current.setTotal}
+            {bestPosByEx.has(current.exercise.id)
+              ? "Log your best set"
+              : `Set ${current.setPosition} of ${current.setTotal}`}
           </span>
           {restSec != null && (
             <div
@@ -2613,7 +2658,7 @@ function AthleteTile(props: {
                   )}
                 >
                   <span className={badgeClass}>{g.label}</span>
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-bold uppercase tracking-tight">
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-tight">
                     {name}
                   </span>
                   {g.max != null && (
@@ -2623,10 +2668,10 @@ function AthleteTile(props: {
                   )}
                 </div>
 
-                <table className="w-full table-fixed border-collapse text-[11px] tabular-nums">
+                <table className="w-full table-fixed border-collapse text-sm tabular-nums">
                   <thead>
-                    <tr className="text-[8px] uppercase tracking-wider text-muted-foreground">
-                      <th className="w-10 px-1 py-0.5 text-left font-medium">Set</th>
+                    <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <th className="w-16 px-1.5 py-1 text-left font-medium">Set</th>
                       <th className="px-1 py-0.5 text-left font-medium">Reps</th>
                       <th className="px-1 py-0.5 text-left font-medium">Wt</th>
                       {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
@@ -2638,7 +2683,8 @@ function AthleteTile(props: {
                       const done = r.log?.status === "completed";
                       const skipped = r.log?.status === "skipped";
                       const isCurrent =
-                        current?.exercise.id === g.ex.id && current.setPosition === r.pos;
+                        current?.exercise.id === g.ex.id &&
+                        (bestPosByEx.has(g.ex.id) ? r.best : current.setPosition === r.pos);
                       return (
                         <tr
                           key={r.pos}
@@ -2650,11 +2696,18 @@ function AthleteTile(props: {
                             isCurrent && !done && "bg-primary/10 font-semibold",
                           )}
                         >
-                          <td className="px-1 py-1">{r.pos}</td>
-                          <td className="px-1 py-1">
+                          <td className="px-1.5 py-1.5">
+                            {r.pos}
+                            {r.best && g.rows.length > 1 && (
+                              <span className="ml-1 rounded bg-primary/20 px-1 text-[9px] font-bold uppercase text-primary">
+                                Best
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-1.5 py-1.5">
                             {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
                           </td>
-                          <td className="px-1 py-1 font-semibold">
+                          <td className="px-1.5 py-1.5 font-semibold">
                             {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
                           </td>
                           {showVel && (
@@ -2666,9 +2719,9 @@ function AthleteTile(props: {
                                   : "—"}
                             </td>
                           )}
-                          <td className="px-1 py-1 text-right">
+                          <td className="px-1.5 py-1.5 text-right">
                             {done ? (
-                              <Check className="ml-auto h-3.5 w-3.5" />
+                              <Check className="ml-auto h-4 w-4" />
                             ) : isCurrent ? (
                               <span className="ml-auto block h-1.5 w-1.5 rounded-full bg-primary" />
                             ) : null}
