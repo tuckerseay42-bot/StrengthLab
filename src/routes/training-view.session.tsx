@@ -153,6 +153,7 @@ function KioskSessionPage() {
           athleteId={athlete.id}
           athleteName={displayName}
           programId={athlete.program_id}
+          organizationId={athlete.organization_id}
         />
       </div>
     </div>
