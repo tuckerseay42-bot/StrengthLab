@@ -101,6 +101,7 @@ import {
   Grid3X3,
   LayoutGrid,
   CalendarCheck,
+  ChevronLeft,
   Check,
   MoreVertical,
   Trophy,
@@ -1804,11 +1805,9 @@ function AthleteTile(props: {
 
   const pickedWeekDay = useMemo(() => {
     if (!workout) return null;
-    return (
-      programWorkouts.find(
-        (pw) => pw.workout_id === workout.id && pw.program_id === athlete.program_id,
-      ) ?? null
-    );
+    // Prefer the kid's own program when the same workout sits in several programs.
+    const matches = programWorkouts.filter((pw) => pw.workout_id === workout.id);
+    return matches.find((pw) => pw.program_id === athlete.program_id) ?? matches[0] ?? null;
   }, [workout, programWorkouts, athlete.program_id]);
 
   // Prescribed sets in order
@@ -2913,9 +2912,10 @@ function estimateRemaining(prescribed: Array<{ exercise: WorkoutExercise }>, don
 // ============================================================================
 
 /**
- * What a kid sees after adding themselves: pick the WEEK, then the DAY of their own
- * program (set on the Programs page), or tap Today. This week and today's day are
- * outlined as a hint, but nothing loads until the kid taps.
+ * What a kid sees after adding themselves: pick the PROGRAM, then the WEEKS are
+ * listed, then the DAYS are listed, or tap Today. Their own program is listed
+ * first and marked, and this week / today's day are outlined as a hint, but
+ * nothing loads until the kid taps a day.
  */
 function WeekDayPicker({
   athlete,
@@ -2932,44 +2932,58 @@ function WeekDayPicker({
   todayWorkoutId: string | null;
   onPick: (workoutId: string | null) => void;
 }) {
+  const [programId, setProgramId] = useState<string | null>(null);
   const [week, setWeek] = useState<number | null>(null);
+  const workoutName = (id: string) => workouts.find((w) => w.id === id)?.name ?? "Workout";
+
+  // Only programs that actually have workouts, the kid's own first.
+  const choices = useMemo(() => {
+    const withWorkouts = new Set(programWorkouts.map((pw) => pw.program_id));
+    return programs
+      .filter((p) => withWorkouts.has(p.id))
+      .sort(
+        (a, b) =>
+          Number(b.id === athlete.program_id) - Number(a.id === athlete.program_id) ||
+          a.name.localeCompare(b.name),
+      );
+  }, [programs, programWorkouts, athlete.program_id]);
+
   const rows = useMemo(
     () =>
       programWorkouts
-        .filter((pw) => pw.program_id === athlete.program_id)
+        .filter((pw) => pw.program_id === programId)
         .sort((a, b) => a.week - b.week || a.day - b.day || a.position - b.position),
-    [programWorkouts, athlete.program_id],
+    [programWorkouts, programId],
   );
   const weeks = useMemo(() => Array.from(new Set(rows.map((r) => r.week))), [rows]);
   const todayRow = todayWorkoutId
     ? (rows.find((r) => r.workout_id === todayWorkoutId) ?? null)
     : null;
-  const workoutName = (id: string) => workouts.find((w) => w.id === id)?.name ?? "Workout";
+  const program = programs.find((p) => p.id === programId) ?? null;
 
-  const todayButton = todayWorkoutId ? (
-    <Button
-      className="h-12 w-full gap-1.5 text-base font-semibold"
-      onClick={() => onPick(todayWorkoutId)}
-    >
-      <CalendarCheck className="h-4 w-4" /> Today
-      <span className="font-normal opacity-80">· {workoutName(todayWorkoutId)}</span>
-    </Button>
-  ) : (
-    <div className="rounded-md bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
-      Nothing is scheduled for today. Pick a week and day.
+  const step = (n: number, text: string) => (
+    <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+      {n} · {text}
     </div>
   );
+  const row =
+    "flex min-h-12 w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/50 active:scale-[0.99]";
+  const crumb = (label: string, onBack: () => void) => (
+    <button
+      type="button"
+      onClick={onBack}
+      className="mb-2 flex max-w-full items-center gap-1 truncate rounded-md bg-muted/40 px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+    >
+      <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  );
 
-  // No program on this kid, or an empty one: fall back to the full program browser.
-  if (rows.length === 0) {
+  // Nothing to pick from: fall back to the full program browser.
+  if (choices.length === 0) {
     return (
       <div className="space-y-2 px-3 pb-3 pt-2 text-center">
-        <p className="text-xs text-muted-foreground">
-          {athlete.program_id
-            ? "This athlete's program has no workouts yet."
-            : "This athlete has no program assigned."}
-        </p>
-        {todayButton}
+        <p className="text-xs text-muted-foreground">No program has workouts yet.</p>
         <HierarchicalWorkoutPickerTrigger
           programs={programs}
           workouts={workouts}
@@ -2986,58 +3000,100 @@ function WeekDayPicker({
     );
   }
 
-  const dayRows = week != null ? rows.filter((r) => r.week === week) : [];
-  return (
-    <div className="space-y-3 px-3 pb-3 pt-2">
-      {todayButton}
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          1 · Pick your week
-        </div>
-        <div className="grid grid-cols-4 gap-1.5">
-          {weeks.map((w) => (
-            <button
-              key={w}
-              type="button"
-              onClick={() => setWeek(w)}
-              className={cn(
-                "flex h-12 items-center justify-center rounded-lg border text-base font-bold tabular-nums transition-colors",
-                week === w
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border/60 bg-muted/20 hover:bg-muted/50",
-                week !== w && todayRow?.week === w && "ring-1 ring-primary/60",
-              )}
-            >
-              Wk {w}
-            </button>
-          ))}
-        </div>
-      </div>
-      {week != null && (
-        <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            2 · Pick your day
+  // Step 1: program (with the Today shortcut)
+  if (programId == null) {
+    return (
+      <div className="space-y-3 px-3 pb-3 pt-2">
+        {todayWorkoutId ? (
+          <Button
+            className="h-12 w-full gap-1.5 text-base font-semibold"
+            onClick={() => onPick(todayWorkoutId)}
+          >
+            <CalendarCheck className="h-4 w-4" /> Today
+            <span className="font-normal opacity-80">· {workoutName(todayWorkoutId)}</span>
+          </Button>
+        ) : (
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
+            Nothing is scheduled for today. Pick a program, week and day.
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {dayRows.map((r) => (
+        )}
+        <div>
+          {step(1, "Pick your program")}
+          <div className="space-y-1.5">
+            {choices.map((p) => (
               <button
-                key={r.id}
+                key={p.id}
                 type="button"
-                onClick={() => onPick(r.workout_id)}
-                className={cn(
-                  "flex min-h-14 flex-col items-start justify-center rounded-lg border border-border/60 bg-muted/20 px-3 py-1.5 text-left transition-colors hover:bg-muted/50 active:scale-[0.98]",
-                  todayRow?.id === r.id && "ring-1 ring-primary/60",
-                )}
+                onClick={() => {
+                  setProgramId(p.id);
+                  setWeek(null);
+                }}
+                className={row}
               >
-                <span className="text-base font-bold">Day {r.day}</span>
-                <span className="w-full truncate text-xs text-muted-foreground">
-                  {workoutName(r.workout_id)}
-                </span>
+                <span className="truncate text-base font-bold">{p.name}</span>
+                {p.id === athlete.program_id && (
+                  <span className="shrink-0 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary">
+                    Your program
+                  </span>
+                )}
               </button>
             ))}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  // Step 2: weeks are listed
+  if (week == null) {
+    return (
+      <div className="px-3 pb-3 pt-2">
+        {crumb(program?.name ?? "Program", () => setProgramId(null))}
+        {step(2, "Pick your week")}
+        <div className="space-y-1.5">
+          {weeks.map((w) => {
+            const count = rows.filter((r) => r.week === w).length;
+            return (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWeek(w)}
+                className={cn(row, todayRow?.week === w && "ring-1 ring-primary/60")}
+              >
+                <span className="text-base font-bold">Week {w}</span>
+                <span className="text-xs text-muted-foreground">
+                  {count} day{count === 1 ? "" : "s"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: days are listed
+  return (
+    <div className="px-3 pb-3 pt-2">
+      {crumb(`${program?.name ?? "Program"} · Week ${week}`, () => setWeek(null))}
+      {step(3, "Pick your day")}
+      <div className="space-y-1.5">
+        {rows
+          .filter((r) => r.week === week)
+          .map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onPick(r.workout_id)}
+              className={cn(row, todayRow?.id === r.id && "ring-1 ring-primary/60")}
+            >
+              <span className="text-base font-bold">Day {r.day}</span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {workoutName(r.workout_id)}
+              </span>
+            </button>
+          ))}
+      </div>
     </div>
   );
 }
