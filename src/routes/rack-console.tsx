@@ -27,6 +27,7 @@ import {
   type WorkoutSet,
   type RepMax,
   type Program,
+  type ProgramWorkout,
 } from "@/lib/queries";
 import { MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
 import { notifyParent } from "@/lib/notify-parent";
@@ -99,6 +100,7 @@ import {
   Grid2X2,
   Grid3X3,
   LayoutGrid,
+  CalendarCheck,
   Check,
   MoreVertical,
   Trophy,
@@ -272,6 +274,29 @@ function useFrozen<T>(value: T, key: string, ready: boolean): T {
   return ref.current.value;
 }
 
+// State that survives an iPad refresh for the rest of TODAY (a new day starts clean):
+// who is on the screen and which day each kid picked.
+function useDayState<T>(name: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const key = `sl.tv.${name}.${today()}`;
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === "undefined") return initial;
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : initial;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage can be blocked; the screen still works */
+    }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 function useLocalStorage<T>(key: string, initial: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
     if (typeof window === "undefined") return initial;
@@ -353,7 +378,7 @@ function TrainingView() {
   // status, one athlete logs full-screen at a time. "grid" is the old
   // all-tiles-at-once console, still useful when watching many racks.
   const [viewMode, setViewMode] = useLocalStorage<ViewMode>(VIEW_MODE_KEY, "list");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useDayState<string[]>("athletes", []);
 
   // Only the kids on screen need their rep maxes (a few rows each), not the whole
   // roster's history, so weights show up fast even with a big roster. Each kid is
@@ -369,7 +394,10 @@ function TrainingView() {
   // Tap-to-expand: one athlete takes over the screen so numbers are readable.
   const [focusId, setFocusId] = useState<string | null>(null);
 
-  const [workoutByAthlete, setWorkoutByAthlete] = useState<Record<string, string | null>>({});
+  const [workoutByAthlete, setWorkoutByAthlete] = useDayState<Record<string, string | null>>(
+    "picks",
+    {},
+  );
   const [compact, setCompact] = useState(false);
   const [rackMode, setRackMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -439,10 +467,10 @@ function TrainingView() {
 
   const effectiveWorkoutFor = useCallback(
     (athleteId: string): string | null => {
-      if (workoutByAthlete[athleteId] !== undefined) return workoutByAthlete[athleteId];
-      return resolvedByAthlete.get(athleteId)?.workoutId ?? null;
+      // Nothing loads on its own: the athlete picks a week, then a day (or taps Today).
+      return workoutByAthlete[athleteId] ?? null;
     },
-    [workoutByAthlete, resolvedByAthlete],
+    [workoutByAthlete],
   );
 
   // Session (single row keyed on team + date)
@@ -1026,6 +1054,8 @@ function TrainingView() {
         workout={workout}
         workouts={workouts}
         programs={programs}
+        programWorkouts={programWorkouts}
+        todayWorkoutId={resolvedByAthlete.get(a.id)?.workoutId ?? null}
         workoutExercises={workoutExercises}
         workoutSets={workoutSets}
         exercises={exerciseLib}
@@ -1696,6 +1726,9 @@ function AthleteTile(props: {
   workout: Workout | null;
   workouts: Workout[];
   programs: Program[];
+  programWorkouts: ProgramWorkout[];
+  /** The workout the calendar says is today's, for the Today button. */
+  todayWorkoutId: string | null;
   workoutExercises: WorkoutExercise[];
   workoutSets: WorkoutSet[];
   exercises: {
@@ -1742,6 +1775,8 @@ function AthleteTile(props: {
     workout,
     workouts,
     programs,
+    programWorkouts,
+    todayWorkoutId,
     workoutExercises,
     workoutSets,
     exercises: exerciseLib,
@@ -1766,6 +1801,15 @@ function AthleteTile(props: {
     onLog,
   } = props;
   const now = useNow(1000);
+
+  const pickedWeekDay = useMemo(() => {
+    if (!workout) return null;
+    return (
+      programWorkouts.find(
+        (pw) => pw.workout_id === workout.id && pw.program_id === athlete.program_id,
+      ) ?? null
+    );
+  }, [workout, programWorkouts, athlete.program_id]);
 
   // Prescribed sets in order
   // Every set, for showing the whole workout.
@@ -2620,23 +2664,33 @@ function AthleteTile(props: {
         </div>
       </div>
 
+      {workout && (
+        <div className="flex items-center gap-2 px-3 text-[11px] text-muted-foreground">
+          {pickedWeekDay && (
+            <span className="font-semibold text-foreground">
+              Wk {pickedWeekDay.week} · Day {pickedWeekDay.day}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onSetWorkout(null)}
+            className="ml-auto font-semibold uppercase tracking-wide underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Change day
+          </button>
+        </div>
+      )}
+
       {/* Body */}
       {!workout ? (
-        <div className="space-y-2 px-3 pb-3 pt-2 text-center">
-          <p className="text-xs text-muted-foreground">No workout auto-assigned for today.</p>
-          <HierarchicalWorkoutPickerTrigger
-            programs={programs}
-            workouts={workouts}
-            athleteProgramId={athlete.program_id}
-            currentWorkoutId={null}
-            onPick={onSetWorkout}
-            trigger={
-              <Button size="sm" variant="outline" className="h-9 w-full gap-1.5 text-xs">
-                <BookOpen className="h-3.5 w-3.5" /> Choose workout
-              </Button>
-            }
-          />
-        </div>
+        <WeekDayPicker
+          athlete={athlete}
+          programWorkouts={programWorkouts}
+          workouts={workouts}
+          programs={programs}
+          todayWorkoutId={todayWorkoutId}
+          onPick={onSetWorkout}
+        />
       ) : finished && !reopened ? (
         <FinishScreen
           athlete={athlete}
@@ -2857,6 +2911,136 @@ function estimateRemaining(prescribed: Array<{ exercise: WorkoutExercise }>, don
 // ============================================================================
 // Tile helpers
 // ============================================================================
+
+/**
+ * What a kid sees after adding themselves: pick the WEEK, then the DAY of their own
+ * program (set on the Programs page), or tap Today. This week and today's day are
+ * outlined as a hint, but nothing loads until the kid taps.
+ */
+function WeekDayPicker({
+  athlete,
+  programWorkouts,
+  workouts,
+  programs,
+  todayWorkoutId,
+  onPick,
+}: {
+  athlete: Athlete;
+  programWorkouts: ProgramWorkout[];
+  workouts: Workout[];
+  programs: Program[];
+  todayWorkoutId: string | null;
+  onPick: (workoutId: string | null) => void;
+}) {
+  const [week, setWeek] = useState<number | null>(null);
+  const rows = useMemo(
+    () =>
+      programWorkouts
+        .filter((pw) => pw.program_id === athlete.program_id)
+        .sort((a, b) => a.week - b.week || a.day - b.day || a.position - b.position),
+    [programWorkouts, athlete.program_id],
+  );
+  const weeks = useMemo(() => Array.from(new Set(rows.map((r) => r.week))), [rows]);
+  const todayRow = todayWorkoutId
+    ? (rows.find((r) => r.workout_id === todayWorkoutId) ?? null)
+    : null;
+  const workoutName = (id: string) => workouts.find((w) => w.id === id)?.name ?? "Workout";
+
+  const todayButton = todayWorkoutId ? (
+    <Button
+      className="h-12 w-full gap-1.5 text-base font-semibold"
+      onClick={() => onPick(todayWorkoutId)}
+    >
+      <CalendarCheck className="h-4 w-4" /> Today
+      <span className="font-normal opacity-80">· {workoutName(todayWorkoutId)}</span>
+    </Button>
+  ) : (
+    <div className="rounded-md bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
+      Nothing is scheduled for today. Pick a week and day.
+    </div>
+  );
+
+  // No program on this kid, or an empty one: fall back to the full program browser.
+  if (rows.length === 0) {
+    return (
+      <div className="space-y-2 px-3 pb-3 pt-2 text-center">
+        <p className="text-xs text-muted-foreground">
+          {athlete.program_id
+            ? "This athlete's program has no workouts yet."
+            : "This athlete has no program assigned."}
+        </p>
+        {todayButton}
+        <HierarchicalWorkoutPickerTrigger
+          programs={programs}
+          workouts={workouts}
+          athleteProgramId={athlete.program_id}
+          currentWorkoutId={null}
+          onPick={onPick}
+          trigger={
+            <Button size="sm" variant="outline" className="h-9 w-full gap-1.5 text-xs">
+              <BookOpen className="h-3.5 w-3.5" /> Choose workout
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const dayRows = week != null ? rows.filter((r) => r.week === week) : [];
+  return (
+    <div className="space-y-3 px-3 pb-3 pt-2">
+      {todayButton}
+      <div>
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          1 · Pick your week
+        </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {weeks.map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => setWeek(w)}
+              className={cn(
+                "flex h-12 items-center justify-center rounded-lg border text-base font-bold tabular-nums transition-colors",
+                week === w
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border/60 bg-muted/20 hover:bg-muted/50",
+                week !== w && todayRow?.week === w && "ring-1 ring-primary/60",
+              )}
+            >
+              Wk {w}
+            </button>
+          ))}
+        </div>
+      </div>
+      {week != null && (
+        <div>
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            2 · Pick your day
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {dayRows.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onPick(r.workout_id)}
+                className={cn(
+                  "flex min-h-14 flex-col items-start justify-center rounded-lg border border-border/60 bg-muted/20 px-3 py-1.5 text-left transition-colors hover:bg-muted/50 active:scale-[0.98]",
+                  todayRow?.id === r.id && "ring-1 ring-primary/60",
+                )}
+              >
+                <span className="text-base font-bold">Day {r.day}</span>
+                <span className="w-full truncate text-xs text-muted-foreground">
+                  {workoutName(r.workout_id)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * The ONE thing logged for a lifting exercise: the athlete's best set. Weight and
