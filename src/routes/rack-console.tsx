@@ -30,6 +30,7 @@ import {
 } from "@/lib/queries";
 import { MOVEMENT_PATTERN_LABEL } from "@/lib/movement-patterns";
 import { notifyParent } from "@/lib/notify-parent";
+import { implausibleJump } from "@/lib/validation";
 import {
   resolveAthleteWorkout,
   buildPrescribedSets,
@@ -1805,9 +1806,17 @@ function AthleteTile(props: {
   const finished = totalSets > 0 && completedCount >= totalSets;
 
   // Cursor = first unlogged set
-  const autoCursor = prescribed.findIndex(
-    (p) => !doneMap.has(doneKey(p.exercise.id, p.setPosition)),
-  );
+  const isUndone = (p: (typeof prescribed)[number]) =>
+    !doneMap.has(doneKey(p.exercise.id, p.setPosition));
+  // Lifts log inline under their own sets, so the cursor (which drives the big log
+  // panel) waits on the first unfinished jump/sprint/etc., and only falls back to a
+  // lift when nothing else is left.
+  const autoCursor = (() => {
+    // A kid on the shared tablet sees one exercise at a time, in workout order.
+    if (selfService) return prescribed.findIndex(isUndone);
+    const nonLift = prescribed.findIndex((p) => !isBestSetExercise(p.exercise) && isUndone(p));
+    return nonLift >= 0 ? nonLift : prescribed.findIndex(isUndone);
+  })();
   const [cursorOverride, setCursorOverride] = useState<number | null>(null);
   // Reopen (from FinishScreen) needs to actually swap the view back to the
   // sheet — `finished` alone can't do that since it stays true once every
@@ -2055,6 +2064,38 @@ function AthleteTile(props: {
   const letter = current?.exercise.superset_group ?? null;
   const exNum = current ? exGroups.findIndex((g) => g.ex.id === current.exercise.id) + 1 : 0;
   const exLabel = current ? `${letter ?? String.fromCharCode(64 + exNum)}${exNum}` : "";
+
+  // Log a lift's one best set (every lift on the card has its own box).
+  const logBest = (
+    g: { ex: WorkoutExercise },
+    load: number | null,
+    reps: number | null,
+    status: "completed" | "skipped",
+  ) => {
+    const bestPos = bestPosByEx.get(g.ex.id);
+    if (!workout || bestPos == null) return;
+    const ov = overrides.get(g.ex.id) ?? null;
+    const name = ov?.substitute_exercise_name ?? g.ex.exercise_name;
+    const priorBest = personalBestFor(repMaxes, athlete.id, g.ex);
+    const isPr = status === "completed" && load != null && !!priorBest && load > priorBest.load;
+    onLog({
+      workout_exercise_id: g.ex.id,
+      set_position: bestPos,
+      load: status === "completed" ? load : null,
+      reps: status === "completed" ? reps : null,
+      avg_velocity: null,
+      time_seconds: null,
+      distance_in: null,
+      rpe: null,
+      notes: null,
+      status,
+      active_workout_id: workout.id,
+      review_reason: isPr ? "pr" : null,
+    });
+    if (isPr && load != null) {
+      void notifyParent(athlete.id, "pr", { exercise_name: name, load, reps: reps ?? 0 });
+    }
+  };
 
   const doLog = (status: "completed" | "skipped") => {
     if (!current || !workout) return;
@@ -2745,7 +2786,21 @@ function AthleteTile(props: {
                   </tbody>
                 </table>
 
-                {isActive && focusPanel}
+                {bestPosByEx.has(g.ex.id)
+                  ? (() => {
+                      const top = g.rows.find((r) => r.best) ?? g.rows[g.rows.length - 1];
+                      return (
+                        <BestSetRow
+                          // Start over if the planned weight shows up late (e.g. a late max).
+                          key={`${g.ex.id}:${top?.load ?? "none"}:${top?.reps ?? "none"}`}
+                          planLoad={top?.load ?? null}
+                          planReps={top?.reps ?? null}
+                          log={top?.log ?? null}
+                          onLog={(load, reps, status) => logBest(g, load, reps, status)}
+                        />
+                      );
+                    })()
+                  : isActive && focusPanel}
               </div>
             );
           })}
@@ -2802,6 +2857,125 @@ function estimateRemaining(prescribed: Array<{ exercise: WorkoutExercise }>, don
 // ============================================================================
 // Tile helpers
 // ============================================================================
+
+/**
+ * The ONE thing logged for a lifting exercise: the athlete's best set. Weight and
+ * reps start from the planned top set; a wild weight asks "log anyway?" first.
+ * Every lift on the card has its own, so the whole workout is visible at once.
+ */
+function BestSetRow({
+  planLoad,
+  planReps,
+  log,
+  onLog,
+}: {
+  planLoad: number | null;
+  planReps: string | number | null;
+  log: RackSetLog | null;
+  onLog: (load: number | null, reps: number | null, status: "completed" | "skipped") => void;
+}) {
+  const planRepsText = planReps != null ? (String(planReps).match(/\d+/)?.[0] ?? "") : "";
+  const [load, setLoad] = useState(planLoad != null ? String(planLoad) : "");
+  const [reps, setReps] = useState(planRepsText);
+  const [editing, setEditing] = useState(false);
+  const [warn, setWarn] = useState<number | null>(null);
+  const done = log?.status === "completed";
+  const skipped = log?.status === "skipped";
+
+  const submit = () => {
+    const loadNum = load.trim() === "" ? null : Number(load);
+    const repsNum = reps.trim() === "" ? null : Number(reps);
+    if (warn == null && loadNum != null && planLoad) {
+      const jump = implausibleJump(loadNum, planLoad, false);
+      if (jump != null) {
+        setWarn(jump);
+        return;
+      }
+    }
+    setWarn(null);
+    setEditing(false);
+    onLog(loadNum, repsNum, "completed");
+  };
+
+  if ((done || skipped) && !editing) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-2 border-t px-2.5 py-2",
+          done ? "border-emerald-500/30 bg-emerald-500/10" : "border-border/40 bg-muted/30",
+        )}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Best set
+        </span>
+        {done ? (
+          <>
+            <Check className="h-4 w-4 text-emerald-500" />
+            <span className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {log?.load ?? "—"} lb × {log?.reps ?? "—"}
+            </span>
+          </>
+        ) : (
+          <span className="text-sm text-muted-foreground">Skipped</span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setLoad(log?.load != null ? String(log.load) : load);
+            setReps(log?.reps != null ? String(log.reps) : reps);
+            setEditing(true);
+          }}
+          className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Edit
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-primary/30 bg-primary/[0.04] px-2.5 py-2">
+      <div className="flex items-end gap-2">
+        <span className="mb-3 w-12 shrink-0 text-[10px] font-bold uppercase leading-tight tracking-wider text-muted-foreground">
+          Best set
+        </span>
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+          <NumInput
+            label="Weight"
+            value={load}
+            onChange={(v) => {
+              setLoad(v);
+              setWarn(null);
+            }}
+            suffix="lb"
+            size="md"
+          />
+          <NumInput label="Reps" value={reps} onChange={setReps} size="md" />
+        </div>
+        <Button className="h-12 shrink-0 gap-1 px-3 font-semibold" onClick={submit}>
+          <Check className="h-4 w-4" /> {warn != null ? "Log anyway" : "Log"}
+        </Button>
+        {!done && (
+          <Button
+            variant="outline"
+            className="h-12 w-10 shrink-0 p-0"
+            onClick={() => onLog(null, null, "skipped")}
+            title="Skip / miss"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      {warn != null && (
+        <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          That is {Math.round(Math.abs(warn) * 100)}% {warn > 0 ? "above" : "below"} the plan. Check
+          the weight, then tap Log anyway.
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NumInput({
   label,
