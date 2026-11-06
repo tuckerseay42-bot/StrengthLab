@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getActiveOrgId } from "@/hooks/use-active-org";
 
@@ -606,40 +606,70 @@ export const workoutSetsQO = queryOptions({
 });
 
 // Rep maxes power every %-of-1RM prescription. The rollup that turns logged
-// rack sets / lifts into rep_max rows used to be triggered from the (now
-// removed) Rep Max screen, so we refresh it here — idempotent, only inserts
-// rows that beat what's already stored. Throttled so it runs at most once
-// every 2 minutes per client.
+// rack sets / lifts into rep_max rows is an org-wide database job that reads
+// every logged set and lift, so it can be slow. It must NEVER hold up the
+// weights on screen: it runs in the background, and when it finishes the maxes
+// are loaded again. It is skipped if it ran in the last couple of minutes in
+// this browser (remembered across page reloads too, since an iPad reloads a lot).
 let lastRepMaxRollup = 0;
-async function refreshRepMaxRollup(): Promise<void> {
+let rollupInFlight = false;
+const ROLLUP_STORAGE_KEY = "sl:last-rep-max-rollup";
+
+function rollupRanWithin(ms: number): boolean {
   const now = Date.now();
-  if (now - lastRepMaxRollup < 120_000) return;
-  lastRepMaxRollup = now;
+  if (now - lastRepMaxRollup < ms) return true;
   try {
-    await supabase.rpc("rollup_rep_maxes" as never);
-  } catch (e) {
-    // Non-fatal — prescribed loads fall back to whatever rep_maxes already
-    // has — but silent failure here is exactly how "weights stopped
-    // pulling" goes unnoticed for weeks, so at least get it into the console.
-    console.error("rollup_rep_maxes failed; prescribed loads may be stale", e);
+    const saved = Number(window.sessionStorage.getItem(ROLLUP_STORAGE_KEY));
+    if (saved && now - saved < ms) {
+      lastRepMaxRollup = saved;
+      return true;
+    }
+  } catch {
+    /* storage can be blocked; fall through */
   }
+  return false;
+}
+
+export function refreshRepMaxRollupInBackground(client: QueryClient, minGapMs = 120_000) {
+  if (rollupInFlight || rollupRanWithin(minGapMs)) return;
+  rollupInFlight = true;
+  lastRepMaxRollup = Date.now();
+  try {
+    window.sessionStorage.setItem(ROLLUP_STORAGE_KEY, String(lastRepMaxRollup));
+  } catch {
+    /* ignore */
+  }
+  void (async () => {
+    try {
+      const { error } = await supabase.rpc("rollup_rep_maxes" as never);
+      // Non-fatal — prescribed loads fall back to whatever rep_maxes already
+      // has — but silent failure here is exactly how "weights stopped
+      // pulling" goes unnoticed for weeks, so at least get it into the console.
+      if (error) console.error("rollup_rep_maxes failed; prescribed loads may be stale", error);
+    } catch (e) {
+      console.error("rollup_rep_maxes failed; prescribed loads may be stale", e);
+    } finally {
+      rollupInFlight = false;
+    }
+    await client.invalidateQueries({ queryKey: ["rep_maxes"] });
+  })();
+}
+
+// After a kid logs a set, bring the stored maxes up to date a little later (one
+// run for a burst of logging) so the NEXT workout is priced from today's lifts.
+let postLogRollupTimer: ReturnType<typeof setTimeout> | null = null;
+export function scheduleRepMaxRollupAfterLog(client: QueryClient) {
+  if (postLogRollupTimer) clearTimeout(postLogRollupTimer);
+  postLogRollupTimer = setTimeout(() => {
+    postLogRollupTimer = null;
+    refreshRepMaxRollupInBackground(client, 10_000);
+  }, 20_000);
 }
 
 export const repMaxesQO = queryOptions({
   queryKey: ["rep_maxes"],
   queryFn: async ({ client }): Promise<RepMax[]> => {
-    // Wait for the rollup so fresh sets are counted, but never more than a few
-    // seconds: it can be slow, and every rack screen sits on "getting weights
-    // ready" until this list arrives. If it is still running, show what is stored
-    // now and load again the moment it finishes.
-    const rollup = refreshRepMaxRollup();
-    const finished = await Promise.race([
-      rollup.then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
-    ]);
-    if (!finished) {
-      void rollup.then(() => client.invalidateQueries({ queryKey: ["rep_maxes"] }));
-    }
+    refreshRepMaxRollupInBackground(client);
     // Thousands of rows across a roster — page through, or older athletes'
     // maxes fall off and their prescribed loads come back blank.
     return fetchAll<RepMax>(() =>
@@ -649,6 +679,22 @@ export const repMaxesQO = queryOptions({
     );
   },
 });
+
+// One athlete's maxes only. Screens that price a few kids at a time (Training
+// View) use this instead of downloading the whole roster's history.
+export const repMaxesForAthleteQO = (athleteId: string) =>
+  queryOptions({
+    queryKey: ["rep_maxes", "athlete", athleteId],
+    queryFn: async ({ client }): Promise<RepMax[]> => {
+      refreshRepMaxRollupInBackground(client);
+      return fetchAll<RepMax>(() =>
+        scoped(supabase.from("rep_maxes").select("*"))
+          .eq("athlete_id", athleteId)
+          .order("tested_at", { ascending: false })
+          .order("id"),
+      );
+    },
+  });
 
 export const programsQO = queryOptions({
   queryKey: ["programs"],

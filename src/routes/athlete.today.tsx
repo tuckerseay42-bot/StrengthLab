@@ -27,7 +27,7 @@ import { toUserMessage } from "@/lib/db-errors";
 import { suggestLoad } from "@/lib/prescription";
 import { implausibleJump } from "@/lib/validation";
 import { DEFAULT_1RM_FORMULA, isOneRmFormula, type OneRmFormula } from "@/lib/one-rm";
-import { titleCaseName } from "@/lib/queries";
+import { titleCaseName, scheduleRepMaxRollupAfterLog } from "@/lib/queries";
 import type { RepMax, WorkoutExercise, WorkoutSet } from "@/lib/queries";
 
 export const Route = createFileRoute("/athlete/today")({
@@ -732,6 +732,7 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
   existing?: Log; bestSet?: boolean; targetVMin: number | null; targetVMax: number | null;
   onLogged: (position: number) => void;
 }) {
+  const qc = useQueryClient();
   const [load, setLoad] = useState<string>(existing?.load?.toString() ?? prescribedLoad?.toString() ?? "");
   const [reps, setReps] = useState<string>(existing?.reps?.toString() ?? (prescribedReps ?? "").replace(/\D/g, ""));
   const [vel, setVel] = useState<string>(existing?.avg_velocity?.toString() ?? "");
@@ -762,7 +763,7 @@ function SetEntry({ athleteId, rackSessionId, exerciseId, position, prescribedLo
         if (error) throw error;
       }
     },
-    onSuccess: () => { toast.success(bestSet ? "Best set logged" : `Set ${position} logged`); onLogged(position); },
+    onSuccess: () => { toast.success(bestSet ? "Best set logged" : `Set ${position} logged`); scheduleRepMaxRollupAfterLog(qc); onLogged(position); },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
 

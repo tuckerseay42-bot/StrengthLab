@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   athletesQO,
@@ -10,7 +10,8 @@ import {
   workoutSetsQO,
   programsQO,
   programWorkoutsQO,
-  repMaxesQO,
+  repMaxesForAthleteQO,
+  scheduleRepMaxRollupAfterLog,
   exercisesQO,
   athleteDisplayName,
   workoutAssignmentsQO,
@@ -329,7 +330,6 @@ function TrainingView() {
   const { data: programWorkouts = [] } = useQuery(programWorkoutsQO);
   const { data: workoutAssignments = [] } = useQuery(workoutAssignmentsQO);
   const { data: athleteTeams = [] } = useQuery(athleteTeamsQO);
-  const { data: repMaxes = [], isFetching: repMaxesFetching } = useQuery(repMaxesQO);
   const { data: exerciseLib = [] } = useQuery(exercisesQO);
 
   const measurementByExId = useMemo(() => {
@@ -353,6 +353,18 @@ function TrainingView() {
   // all-tiles-at-once console, still useful when watching many racks.
   const [viewMode, setViewMode] = useLocalStorage<ViewMode>(VIEW_MODE_KEY, "list");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Only the kids on screen need their rep maxes (a few rows each), not the whole
+  // roster's history, so weights show up fast even with a big roster. Each kid is
+  // cached on their own, so adding someone only fetches that one.
+  const repMaxQueries = useQueries({
+    queries: selectedIds.map((id) => repMaxesForAthleteQO(id)),
+  });
+  const repMaxesKey = repMaxQueries.map((q) => q.dataUpdatedAt).join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const repMaxes = useMemo(() => repMaxQueries.flatMap((q) => q.data ?? []), [repMaxesKey]);
+  const repMaxesFetching = repMaxQueries.some((q) => q.isFetching);
+
   // Tap-to-expand: one athlete takes over the screen so numbers are readable.
   const [focusId, setFocusId] = useState<string | null>(null);
 
@@ -798,6 +810,7 @@ function TrainingView() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["training-view-logs", sessionId] });
+      scheduleRepMaxRollupAfterLog(qc);
     },
     onError: (e: Error) => toast.error(toUserMessage(e)),
   });
