@@ -1,6 +1,7 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getActiveOrgId } from "@/hooks/use-active-org";
+import { toast } from "sonner";
 
 // Super-admin org scoping: when an active org is selected in the switcher,
 // scope org-owned reads to that org. Non-super-admin users are already
@@ -630,6 +631,20 @@ function rollupRanWithin(ms: number): boolean {
   return false;
 }
 
+// Say so on screen (once per page load): a quiet failure here is exactly how weights
+// and Training Maxes go empty without anyone knowing why.
+let rollupFailureShown = false;
+function reportRollupFailure(e: unknown) {
+  console.error("rollup_rep_maxes failed; prescribed loads may be stale", e);
+  if (rollupFailureShown) return;
+  rollupFailureShown = true;
+  const message = e instanceof Error ? e.message : (e as { message?: string } | null)?.message;
+  toast.error("Couldn't update max lifts, so weights and Training Maxes may be out of date.", {
+    description: message ?? undefined,
+    duration: 12000,
+  });
+}
+
 export function refreshRepMaxRollupInBackground(client: QueryClient, minGapMs = 120_000) {
   if (rollupInFlight || rollupRanWithin(minGapMs)) return;
   rollupInFlight = true;
@@ -645,9 +660,9 @@ export function refreshRepMaxRollupInBackground(client: QueryClient, minGapMs = 
       // Non-fatal — prescribed loads fall back to whatever rep_maxes already
       // has — but silent failure here is exactly how "weights stopped
       // pulling" goes unnoticed for weeks, so at least get it into the console.
-      if (error) console.error("rollup_rep_maxes failed; prescribed loads may be stale", error);
+      if (error) reportRollupFailure(error);
     } catch (e) {
-      console.error("rollup_rep_maxes failed; prescribed loads may be stale", e);
+      reportRollupFailure(e);
     } finally {
       rollupInFlight = false;
     }
