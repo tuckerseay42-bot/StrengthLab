@@ -37,6 +37,7 @@ import {
   buildPrescribedSets,
   collapseToBestSet,
   countDoneEntries,
+  exerciseLabels,
 } from "@/lib/training-resolver";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -153,7 +154,7 @@ type ViewMode = "list" | "grid";
 
 const LAYOUT_GRID: Record<LayoutSize, string> = {
   2: "grid-cols-2",
-  4: "grid-cols-2",
+  4: "grid-cols-2 lg:grid-cols-4",
   6: "grid-cols-2 md:grid-cols-3",
   8: "grid-cols-2 md:grid-cols-4",
 };
@@ -1803,6 +1804,10 @@ function AthleteTile(props: {
   } = props;
   const now = useNow(1000);
 
+  // Several kids share the screen: pack each card tight (sets on one line per lift). The
+  // full-screen Expand view and the kid's own tablet screen keep the roomier table.
+  const compactCard = !focused && !selfService;
+
   const pickedWeekDay = useMemo(() => {
     if (!workout) return null;
     // Prefer the kid's own program when the same workout sits in several programs.
@@ -2050,14 +2055,21 @@ function AthleteTile(props: {
       }>;
     }> = [];
     const byEx = new Map<string, number>();
+    const liftLabels = exerciseLabels(
+      Array.from(new Map(prescribedAll.map((p) => [p.exercise.id, p.exercise])).values()),
+    );
     prescribedAll.forEach((p) => {
       let gi = byEx.get(p.exercise.id);
       if (gi == null) {
         gi = out.length;
         byEx.set(p.exercise.id, gi);
         const pb = personalBestFor(frozenRepMaxes, athlete.id, p.exercise);
-        const l = (p.exercise.superset_group ?? String.fromCharCode(65 + gi)).toUpperCase();
-        out.push({ ex: p.exercise, label: `${l}${gi + 1}`, max: pb?.load ?? null, rows: [] });
+        out.push({
+          ex: p.exercise,
+          label: liftLabels.get(p.exercise.id) ?? "",
+          max: pb?.load ?? null,
+          rows: [],
+        });
       }
       const s = suggestLoad({
         athleteId: athlete.id,
@@ -2492,7 +2504,7 @@ function AthleteTile(props: {
     <Card
       className={cn(
         "relative flex flex-col overflow-y-auto overscroll-contain border transition-all duration-200",
-        focused ? "max-h-none" : "max-h-[calc(100dvh-11rem)]",
+        focused ? "max-h-none" : "max-h-[calc(100dvh-9rem)]",
         "shadow-[0_1px_2px_rgba(0,0,0,0.05),0_8px_24px_-12px_rgba(0,0,0,0.25)]",
         compact && !focused ? "gap-1.5" : "gap-2",
 
@@ -2570,7 +2582,13 @@ function AthleteTile(props: {
                   <h3
                     className={cn(
                       "truncate font-bold tracking-tight",
-                      focused ? "text-xl" : compact ? "text-base" : "text-lg",
+                      focused
+                        ? "text-xl"
+                        : compactCard
+                          ? "text-lg leading-tight"
+                          : compact
+                            ? "text-base"
+                            : "text-lg",
                     )}
                   >
                     {athleteDisplayName(athlete)}
@@ -2580,8 +2598,8 @@ function AthleteTile(props: {
                   )}
                 </div>
                 <div className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-                  {team && <span className="truncate">{team.name}</span>}
-                  {workout && <span className="truncate">· {workout.name}</span>}
+                  {!compactCard && team && <span className="truncate">{team.name}</span>}
+                  {!compactCard && workout && <span className="truncate">· {workout.name}</span>}
                   {lastCompleted && (
                     <span className="whitespace-nowrap">
                       · {relTime(new Date(lastCompleted.completed_at).getTime(), now)} ago
@@ -2604,8 +2622,8 @@ function AthleteTile(props: {
                   </>
                 ) : (
                   <>
-                    <Maximize2 className="h-3.5 w-3.5" />{" "}
-                    <span className="hidden sm:inline">Expand</span>
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    {!compactCard && <span className="hidden sm:inline"> Expand</span>}
                   </>
                 )}
               </span>
@@ -2644,9 +2662,9 @@ function AthleteTile(props: {
       <div className="px-3">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span className="tabular-nums">
-            {completedCount}/{totalSets} sets · {pct}%
+            {completedCount}/{totalSets} logged · {pct}%
           </span>
-          {!finished && totalSets - completedCount > 0 && (
+          {!finished && !compactCard && totalSets - completedCount > 0 && (
             <span className="tabular-nums">
               ~{estimateRemaining(prescribed, completedCount)}m left
             </span>
@@ -2706,7 +2724,7 @@ function AthleteTile(props: {
           {/* Self-service only ever shows the exercise in front of the
               athlete right now — the cursor already auto-advances, so
               there's nothing else worth tapping into. */}
-          {!selfService && sheet.length > 1 && (
+          {!selfService && !compactCard && sheet.length > 1 && (
             <button
               type="button"
               onClick={() => setSheetExpanded((v) => !v)}
@@ -2775,69 +2793,98 @@ function AthleteTile(props: {
                   )}
                 </div>
 
-                <table className="w-full table-fixed border-collapse text-sm tabular-nums">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <th className="w-16 px-1.5 py-1 text-left font-medium">Set</th>
-                      <th className="px-1 py-0.5 text-left font-medium">Reps</th>
-                      <th className="px-1 py-0.5 text-left font-medium">Wt</th>
-                      {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
-                      <th className="w-8 px-1 py-0.5" />
-                    </tr>
-                  </thead>
-                  <tbody>
+                {compactCard ? (
+                  <div className="flex flex-wrap gap-1 px-2 py-1.5">
                     {g.rows.map((r) => {
                       const done = r.log?.status === "completed";
                       const skipped = r.log?.status === "skipped";
-                      const isCurrent =
-                        current?.exercise.id === g.ex.id &&
-                        (bestPosByEx.has(g.ex.id) ? r.best : current.setPosition === r.pos);
+                      const wt = done ? (r.log?.load ?? "—") : (r.load ?? "—");
+                      const reps = done ? (r.log?.reps ?? "—") : (r.reps ?? "—");
                       return (
-                        <tr
+                        <span
                           key={r.pos}
-                          onClick={() => setCursorOverride(r.idx)}
                           className={cn(
-                            "cursor-pointer border-t border-border/30",
-                            done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                            skipped && "text-muted-foreground line-through",
-                            isCurrent && !done && "bg-primary/10 font-semibold",
+                            "rounded-md border px-1.5 py-0.5 text-sm font-semibold tabular-nums",
+                            r.best
+                              ? "border-primary bg-primary/15 text-foreground"
+                              : "border-border/50 bg-muted/30 text-muted-foreground",
+                            done &&
+                              "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                            skipped && "line-through opacity-60",
                           )}
                         >
-                          <td className="px-1.5 py-1.5">
-                            {r.pos}
-                            {r.best && g.rows.length > 1 && (
-                              <span className="ml-1 rounded bg-primary/20 px-1 text-[9px] font-bold uppercase text-primary">
-                                Best
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-1.5 py-1.5">
-                            {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
-                          </td>
-                          <td className="px-1.5 py-1.5 font-semibold">
-                            {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
-                          </td>
-                          {showVel && (
-                            <td className="px-1 py-1">
-                              {done
-                                ? (r.log?.avg_velocity ?? "—")
-                                : r.vel != null
-                                  ? `${r.vel}`
-                                  : "—"}
-                            </td>
-                          )}
-                          <td className="px-1.5 py-1.5 text-right">
-                            {done ? (
-                              <Check className="ml-auto h-4 w-4" />
-                            ) : isCurrent ? (
-                              <span className="ml-auto block h-1.5 w-1.5 rounded-full bg-primary" />
-                            ) : null}
-                          </td>
-                        </tr>
+                          {reps}
+                          <span className="px-0.5 text-[10px] font-normal opacity-60">×</span>
+                          {wt}
+                        </span>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  <table className="w-full table-fixed border-collapse text-sm tabular-nums">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="w-16 px-1.5 py-1 text-left font-medium">Set</th>
+                        <th className="px-1 py-0.5 text-left font-medium">Reps</th>
+                        <th className="px-1 py-0.5 text-left font-medium">Wt</th>
+                        {showVel && <th className="w-12 px-1 py-0.5 text-left font-medium">Vel</th>}
+                        <th className="w-8 px-1 py-0.5" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.rows.map((r) => {
+                        const done = r.log?.status === "completed";
+                        const skipped = r.log?.status === "skipped";
+                        const isCurrent =
+                          current?.exercise.id === g.ex.id &&
+                          (bestPosByEx.has(g.ex.id) ? r.best : current.setPosition === r.pos);
+                        return (
+                          <tr
+                            key={r.pos}
+                            onClick={() => setCursorOverride(r.idx)}
+                            className={cn(
+                              "cursor-pointer border-t border-border/30",
+                              done && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                              skipped && "text-muted-foreground line-through",
+                              isCurrent && !done && "bg-primary/10 font-semibold",
+                            )}
+                          >
+                            <td className="px-1.5 py-1.5">
+                              {r.pos}
+                              {r.best && g.rows.length > 1 && (
+                                <span className="ml-1 rounded bg-primary/20 px-1 text-[9px] font-bold uppercase text-primary">
+                                  Best
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-1.5 py-1.5">
+                              {done ? (r.log?.reps ?? "—") : (r.reps ?? "—")}
+                            </td>
+                            <td className="px-1.5 py-1.5 font-semibold">
+                              {done ? (r.log?.load ?? "—") : (r.load ?? "—")}
+                            </td>
+                            {showVel && (
+                              <td className="px-1 py-1">
+                                {done
+                                  ? (r.log?.avg_velocity ?? "—")
+                                  : r.vel != null
+                                    ? `${r.vel}`
+                                    : "—"}
+                              </td>
+                            )}
+                            <td className="px-1.5 py-1.5 text-right">
+                              {done ? (
+                                <Check className="ml-auto h-4 w-4" />
+                              ) : isCurrent ? (
+                                <span className="ml-auto block h-1.5 w-1.5 rounded-full bg-primary" />
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
 
                 {bestPosByEx.has(g.ex.id)
                   ? (() => {
@@ -2846,6 +2893,7 @@ function AthleteTile(props: {
                         <BestSetRow
                           // Start over if the planned weight shows up late (e.g. a late max).
                           key={`${g.ex.id}:${top?.load ?? "none"}:${top?.reps ?? "none"}`}
+                          compact={compactCard}
                           planLoad={top?.load ?? null}
                           planReps={top?.reps ?? null}
                           log={top?.log ?? null}
@@ -3104,11 +3152,13 @@ function WeekDayPicker({
  * Every lift on the card has its own, so the whole workout is visible at once.
  */
 function BestSetRow({
+  compact = false,
   planLoad,
   planReps,
   log,
   onLog,
 }: {
+  compact?: boolean;
   planLoad: number | null;
   planReps: string | number | null;
   log: RackSetLog | null;
@@ -3141,7 +3191,8 @@ function BestSetRow({
     return (
       <div
         className={cn(
-          "flex items-center gap-2 border-t px-2.5 py-2",
+          "flex items-center gap-2 border-t px-2.5",
+          compact ? "py-1.5" : "py-2",
           done ? "border-emerald-500/30 bg-emerald-500/10" : "border-border/40 bg-muted/30",
         )}
       >
@@ -3169,6 +3220,49 @@ function BestSetRow({
         >
           Edit
         </button>
+      </div>
+    );
+  }
+
+  if (compact) {
+    // Tight one-line version for the shared screen: lb, reps, Log, skip.
+    return (
+      <div className="border-t border-primary/30 bg-primary/[0.04] px-2 py-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5">
+            <NumInput
+              label="Weight (lb)"
+              placeholder="lb"
+              value={load}
+              onChange={(v) => {
+                setLoad(v);
+                setWarn(null);
+              }}
+              size="sm"
+            />
+            <NumInput label="Reps" placeholder="reps" value={reps} onChange={setReps} size="sm" />
+          </div>
+          <Button className="h-10 shrink-0 gap-1 px-3 font-semibold" onClick={submit}>
+            <Check className="h-4 w-4" /> {warn != null ? "Anyway" : "Log"}
+          </Button>
+          {!done && (
+            <Button
+              variant="outline"
+              className="h-10 w-9 shrink-0 p-0"
+              onClick={() => onLog(null, null, "skipped")}
+              title="Skip / miss"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        {warn != null && (
+          <div className="mt-1 flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            {Math.round(Math.abs(warn) * 100)}% {warn > 0 ? "above" : "below"} plan. Check it, then
+            tap Anyway.
+          </div>
+        )}
       </div>
     );
   }
@@ -3223,35 +3317,40 @@ function NumInput({
   onChange,
   suffix,
   size = "md",
+  placeholder = "—",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   suffix?: string;
+  placeholder?: string;
   // "lg" is for the set actually being logged — readable at a glance from a
   // few feet off the rack. "md" (default) stays compact for the RPE/
   // velocity extras, which are a coach's own follow-up, not a mid-lift read.
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
 }) {
   return (
     <label className="relative flex min-w-0 flex-col">
-      <span
-        className={cn(
-          "mb-0.5 truncate font-semibold uppercase tracking-wide text-muted-foreground",
-          size === "lg" ? "text-xs" : "text-[10px]",
-        )}
-      >
-        {label}
-        {suffix && <span className="ml-1 opacity-70">({suffix})</span>}
-      </span>
+      {size !== "sm" && (
+        <span
+          className={cn(
+            "mb-0.5 truncate font-semibold uppercase tracking-wide text-muted-foreground",
+            size === "lg" ? "text-xs" : "text-[10px]",
+          )}
+        >
+          {label}
+          {suffix && <span className="ml-1 opacity-70">({suffix})</span>}
+        </span>
+      )}
       <Input
         value={value}
         onChange={(e) => onChange(sanitizeNumInput(e.target.value))}
         inputMode="decimal"
-        placeholder="—"
+        placeholder={placeholder}
+        aria-label={label}
         className={cn(
           "w-full min-w-0 px-1 text-center font-mono font-bold tabular-nums",
-          size === "lg" ? "h-20 text-4xl" : "h-12 text-lg",
+          size === "lg" ? "h-20 text-4xl" : size === "sm" ? "h-10 text-lg" : "h-12 text-lg",
         )}
       />
     </label>

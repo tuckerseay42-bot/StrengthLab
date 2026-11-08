@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   collapseToBestSet,
+  exerciseLabels,
   countDoneEntries,
   topSetPosition,
   type PrescribedSet,
@@ -87,5 +88,21 @@ describe("countDoneEntries", () => {
   });
   it("ignores skipped sets and logs for other exercises", () => {
     expect(countDoneEntries(entries, [log("bench", 2, "skipped"), log("zzz", 1)], isLift)).toBe(0);
+  });
+});
+
+describe("exerciseLabels", () => {
+  const e = (id: string, g: string | null = null) => ({ id, superset_group: g });
+  it("numbers only supersets: A, B, C1, C2, D", () => {
+    const m = exerciseLabels([e("squat"), e("bench"), e("press", "C"), e("pull", "C"), e("jump")]);
+    expect([...m.values()]).toEqual(["A", "B", "C1", "C2", "D"]);
+  });
+  it("labels a plain workout A, B, C", () => {
+    const m = exerciseLabels([e("a"), e("b"), e("c")]);
+    expect([...m.values()]).toEqual(["A", "B", "C"]);
+  });
+  it("handles a three-way superset and an empty list", () => {
+    expect([...exerciseLabels([e("x", "A"), e("y", "A"), e("z", "A")]).values()]).toEqual(["A1", "A2", "A3"]);
+    expect(exerciseLabels([]).size).toBe(0);
   });
 });

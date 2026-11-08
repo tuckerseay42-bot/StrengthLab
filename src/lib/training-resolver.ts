@@ -227,3 +227,26 @@ export function countDoneEntries(
   }
   return done;
 }
+
+/**
+ * Lift labels for the workout card: A, B, C... one letter per block, where a block is
+ * a run of exercises in the same superset (or a lone exercise). Only a superset gets
+ * numbers (C1, C2). So a workout reads A, B, C1, C2, D, not A1, B2, C3, C4, E5.
+ */
+export function exerciseLabels(
+  exercises: Array<{ id: string; superset_group?: string | null }>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  let i = 0;
+  let block = 0;
+  while (i < exercises.length) {
+    const group = exercises[i].superset_group || null;
+    let j = i + 1;
+    if (group) while (j < exercises.length && exercises[j].superset_group === group) j++;
+    const letter = String.fromCharCode(65 + (block % 26));
+    for (let k = i; k < j; k++) out.set(exercises[k].id, j - i > 1 ? `${letter}${k - i + 1}` : letter);
+    block++;
+    i = j;
+  }
+  return out;
+}

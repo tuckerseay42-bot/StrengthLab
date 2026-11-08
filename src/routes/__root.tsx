@@ -49,7 +49,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LogOut, User as UserIcon } from "lucide-react";
+import { ArrowLeft, ChevronDown, LogOut, User as UserIcon } from "lucide-react";
 
 function NotFoundComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -167,10 +167,33 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function AppTopBar({ userEmail, onSignOut }: { userEmail: string | null; onSignOut: () => void }) {
+function AppTopBar({
+  userEmail,
+  onSignOut,
+  wide = false,
+}: {
+  userEmail: string | null;
+  onSignOut: () => void;
+  wide?: boolean;
+}) {
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border/60 bg-background/85 px-3 backdrop-blur">
-      <SidebarTrigger />
+    <header
+      className={cn(
+        "sticky top-0 z-40 flex items-center gap-2 border-b border-border/60 bg-background/85 px-3 backdrop-blur",
+        wide ? "h-12" : "h-14",
+      )}
+    >
+      {wide ? (
+        // Training View uses the whole screen: no side tab, just a way back to the Hub.
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm font-medium hover:bg-accent"
+        >
+          <ArrowLeft className="h-4 w-4" /> Hub
+        </Link>
+      ) : (
+        <SidebarTrigger />
+      )}
       <div className="ml-auto flex items-center gap-2">
         <OrgSwitcher />
         <TeamSwitcher />
@@ -303,17 +326,21 @@ function RootComponent() {
 
   const showApp = isPublic || authState === "signed-in";
   const useCoachShell = !athleteMode && !displayMode && !isPublic && authState === "signed-in";
+  // Training View: full screen width, no side tab, so more kids fit on one screen.
+  const wideMode = useCoachShell && pathname === "/rack-console";
 
   const inner = (
     <main
       className={cn(
         kioskMode || displayMode
           ? "flex-1"
-          : useCoachShell
-            ? "flex-1 px-4 py-6 pb-20"
-            : athleteMode
-              ? "mx-auto max-w-3xl px-4 py-4 pb-20"
-              : "mx-auto max-w-6xl px-4 py-6 pb-20",
+          : wideMode
+            ? "flex-1 px-2 py-2"
+            : useCoachShell
+              ? "flex-1 px-4 py-6 pb-20"
+              : athleteMode
+                ? "mx-auto max-w-3xl px-4 py-4 pb-20"
+                : "mx-auto max-w-6xl px-4 py-6 pb-20",
       )}
     >
       {showApp ? (
@@ -331,9 +358,9 @@ function RootComponent() {
       {useCoachShell ? (
         <SidebarProvider>
           <div className="flex min-h-screen w-full bg-background">
-            <AppSidebar />
+            {!wideMode && <AppSidebar />}
             <div className="flex flex-1 flex-col min-w-0">
-              <AppTopBar userEmail={userEmail} onSignOut={handleSignOut} />
+              <AppTopBar userEmail={userEmail} onSignOut={handleSignOut} wide={wideMode} />
               {inner}
             </div>
           </div>
