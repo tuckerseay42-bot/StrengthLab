@@ -7,10 +7,13 @@ import {
   easternToday,
   formatChange,
   formatWeight,
+  groupNetChange,
+  groupWeek,
   recentWeekStarts,
   summarizeAthlete,
   trendOf,
   weekStartOf,
+  type WeekSummary,
   type WeighIn,
 } from "@/lib/weigh-ins";
 
@@ -221,5 +224,50 @@ describe("today on the Eastern clock", () => {
   it("does not roll to tomorrow in the evening", () => {
     expect(easternToday(new Date("2026-11-03T02:30:00Z"))).toBe("2026-11-02"); // 9:30pm Monday
     expect(easternToday(new Date("2026-11-03T15:00:00Z"))).toBe("2026-11-03");
+  });
+});
+
+describe("group average", () => {
+  const wk = (avg: number | null, days: number, change: number | null = null): WeekSummary => ({
+    weekStart: "2026-11-09",
+    days,
+    avg,
+    counted: days >= 3,
+    change,
+  });
+
+  it("averages only the athletes whose week counted", () => {
+    const g = groupWeek([wk(200, 3, 2), wk(180, 4, -1), wk(500, 2)], 5);
+    expect(g.avg).toBe(190);
+    expect(g.counted).toBe(2);
+    expect(g.weighed).toBe(3);
+    expect(g.total).toBe(5);
+    expect(g.provisional).toBe(false);
+  });
+  it("averages each kid's own change, skipping kids with no change yet", () => {
+    const g = groupWeek([wk(200, 3, 3), wk(180, 3, -1), wk(150, 3, null)], 3);
+    expect(g.change).toBe(1);
+  });
+  it("falls back to a faded average of partial weeks when nobody counted yet", () => {
+    const g = groupWeek([wk(200, 1), wk(180, 2), undefined], 3);
+    expect(g.avg).toBe(190);
+    expect(g.provisional).toBe(true);
+    expect(g.counted).toBe(0);
+    expect(g.change).toBeNull();
+  });
+  it("has no average when nobody weighed in", () => {
+    const g = groupWeek([undefined, wk(null, 0)], 2);
+    expect(g.avg).toBeNull();
+    expect(g.provisional).toBe(false);
+  });
+  it("averages net change across athletes that have one", () => {
+    const sum = (net: number | null) => ({
+      weeks: [],
+      firstCounted: null,
+      latestCounted: null,
+      netChange: net,
+    });
+    expect(groupNetChange([sum(4), sum(-2), sum(null)])).toEqual({ avg: 1, n: 2 });
+    expect(groupNetChange([sum(null)])).toEqual({ avg: null, n: 0 });
   });
 });

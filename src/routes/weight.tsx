@@ -15,12 +15,15 @@ import {
   easternToday,
   formatChange,
   formatWeight,
+  groupNetChange,
+  groupWeek,
   MIN_DAYS_FOR_WEEK,
   recentWeekStarts,
   summarizeAthlete,
   trendOf,
   weekStartOf,
   type AthleteWeightSummary,
+  type GroupWeek,
   type Trend,
   type WeekSummary,
 } from "@/lib/weigh-ins";
@@ -93,6 +96,25 @@ function WeekCell({ week }: { week: WeekSummary | undefined }) {
       <div className="font-bold tabular-nums">{formatWeight(week.avg)}</div>
       <div className={cn("text-[10px] font-semibold tabular-nums", trend && TREND_CLASS[trend])}>
         {week.change == null ? "" : formatChange(week.change)}
+      </div>
+    </div>
+  );
+}
+
+function GroupCell({ g, isThisWeek }: { g: GroupWeek; isThisWeek: boolean }) {
+  if (g.avg == null) return <span className="text-muted-foreground/50">—</span>;
+  const trend = trendOf(g.change);
+  return (
+    <div className={cn("leading-tight", g.provisional && "opacity-55")}>
+      <div className="text-base font-extrabold tabular-nums">{formatWeight(g.avg)}</div>
+      {g.change != null && (
+        <div className={cn("text-[11px] font-semibold tabular-nums", trend && TREND_CLASS[trend])}>
+          {formatChange(g.change)}
+        </div>
+      )}
+      <div className="text-[10px] font-normal text-muted-foreground">
+        {g.provisional ? `${g.weighed} weighed so far` : `${g.counted} of ${g.total}`}
+        {isThisWeek && !g.provisional && g.counted < g.total ? " counted" : ""}
       </div>
     </div>
   );
@@ -188,6 +210,21 @@ function WeightPage() {
     }
     return list;
   }, [rows, sort]);
+
+  // The group = whoever the filters / team / search currently show.
+  const groupRow = useMemo(() => {
+    const total = rows.length;
+    const byWeekGroup = new Map(
+      weekStarts.map((ws) => [
+        ws,
+        groupWeek(
+          rows.map((r) => r.byWeek.get(ws)),
+          total,
+        ),
+      ]),
+    );
+    return { byWeekGroup, net: groupNetChange(rows.map((r) => r.summary)), total };
+  }, [rows, weekStarts]);
 
   const weighedThisWeek = rows.filter((r) => (r.byWeek.get(thisWeek)?.days ?? 0) > 0).length;
   const quiet = rows.filter(
@@ -310,6 +347,48 @@ function WeightPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    <tr className="border-b-2 border-primary/40 bg-primary/10">
+                      <td className="sticky left-0 z-10 bg-[color-mix(in_oklab,var(--background)_88%,var(--primary))] px-3 py-2">
+                        <div className="text-sm font-extrabold uppercase tracking-wide">
+                          Group average
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {groupRow.total} athlete{groupRow.total === 1 ? "" : "s"} shown
+                        </div>
+                      </td>
+                      {weekStarts.map((ws) => (
+                        <td key={ws} className="px-2 py-2 text-center">
+                          <GroupCell
+                            g={groupRow.byWeekGroup.get(ws) as GroupWeek}
+                            isThisWeek={ws === thisWeek}
+                          />
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-right">
+                        {groupRow.net.avg == null ? (
+                          <span className="text-muted-foreground/50">—</span>
+                        ) : (
+                          <div className="leading-tight">
+                            <span
+                              className={cn(
+                                "text-base font-extrabold tabular-nums",
+                                trendOf(groupRow.net.avg) &&
+                                  TREND_CLASS[trendOf(groupRow.net.avg)!],
+                              )}
+                            >
+                              {formatChange(groupRow.net.avg)}
+                              <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">
+                                lb
+                              </span>
+                            </span>
+                            <div className="text-[10px] text-muted-foreground">
+                              avg of {groupRow.net.n}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right text-[10px] text-muted-foreground">—</td>
+                    </tr>
                     {sorted.map(({ athlete, summary, byWeek, lastDate }) => {
                       const net = trendOf(summary.netChange);
                       const since = lastDate ? daysBetween(lastDate, today) : null;

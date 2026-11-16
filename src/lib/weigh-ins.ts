@@ -200,3 +200,62 @@ export function formatChange(change: number | null): string {
   if (rounded === 0) return "0.0";
   return `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(1)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Group average (the Weight page's top row). Same rules as one athlete: a week
+// counts only with weigh-ins on 3+ different days, so the group average uses only
+// the athletes whose week counted. The group change is the average of those
+// athletes' own weekly changes, so it compares each kid with themselves and does
+// not jump when a different mix of kids weighed in.
+// ---------------------------------------------------------------------------
+
+export type GroupWeek = {
+  /** Average of the athletes' weekly averages; null when nobody weighed in. */
+  avg: number | null;
+  /** Athletes whose week counted (3+ days). */
+  counted: number;
+  /** Athletes with any weigh-in that week. */
+  weighed: number;
+  /** Everyone in the group. */
+  total: number;
+  /** Average of the counted athletes' own weekly change; null when none has one. */
+  change: number | null;
+  /** True when nobody's week counted yet, so the average is from partial weeks. */
+  provisional: boolean;
+};
+
+function mean(values: number[]): number | null {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+}
+
+export function groupWeek(weeks: Array<WeekSummary | undefined>, total: number): GroupWeek {
+  const weighed = weeks.filter((w): w is WeekSummary => !!w && w.days > 0 && w.avg != null);
+  const counted = weighed.filter((w) => w.counted);
+  if (counted.length > 0) {
+    return {
+      avg: mean(counted.map((w) => w.avg as number)),
+      counted: counted.length,
+      weighed: weighed.length,
+      total,
+      change: mean(counted.map((w) => w.change).filter((c): c is number => c != null)),
+      provisional: false,
+    };
+  }
+  return {
+    avg: mean(weighed.map((w) => w.avg as number)),
+    counted: 0,
+    weighed: weighed.length,
+    total,
+    change: null,
+    provisional: weighed.length > 0,
+  };
+}
+
+/** Average of each athlete's net change (first counted week to latest), and how many had one. */
+export function groupNetChange(summaries: AthleteWeightSummary[]): {
+  avg: number | null;
+  n: number;
+} {
+  const values = summaries.map((s) => s.netChange).filter((c): c is number => c != null);
+  return { avg: mean(values), n: values.length };
+}
