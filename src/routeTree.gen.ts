@@ -55,7 +55,7 @@ import { Route as CheckinTokenRouteImport } from './routes/checkin.$token'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as ProgramsIdRouteImport } from './routes/programs.$id'
-import { Route as TestsKioskRouteImport } from './routes/tests.kiosk'
+import { Route as TestsKioskRouteImport } from './routes/tests_.kiosk'
 import { Route as TrainingViewAttendanceRouteImport } from './routes/training-view.attendance'
 import { Route as TrainingViewCheckInRouteImport } from './routes/training-view.check-in'
 import { Route as TrainingViewSessionRouteImport } from './routes/training-view.session'
@@ -302,9 +302,9 @@ const ProgramsIdRoute = ProgramsIdRouteImport.update({
   getParentRoute: () => ProgramsRoute,
 } as any)
 const TestsKioskRoute = TestsKioskRouteImport.update({
-  id: '/kiosk',
-  path: '/kiosk',
-  getParentRoute: () => TestsRoute,
+  id: '/tests_/kiosk',
+  path: '/tests/kiosk',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const TrainingViewAttendanceRoute = TrainingViewAttendanceRouteImport.update({
   id: '/training-view/attendance',
@@ -413,7 +413,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRouteWithChildren
+  '/tests': typeof TestsRoute
   '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
   '/weight': typeof WeightRoute
@@ -476,7 +476,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRouteWithChildren
+  '/tests': typeof TestsRoute
   '/tests-import-extract': typeof TestsImportExtractRoute
   '/weight': typeof WeightRoute
   '/workouts': typeof WorkoutsRouteWithChildren
@@ -539,7 +539,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/teams': typeof TeamsRoute
-  '/tests': typeof TestsRouteWithChildren
+  '/tests': typeof TestsRoute
   '/tests-import-extract': typeof TestsImportExtractRoute
   '/training': typeof TrainingRouteWithChildren
   '/weight': typeof WeightRoute
@@ -551,7 +551,7 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$token': typeof JoinTokenRoute
   '/programs/$id': typeof ProgramsIdRoute
-  '/tests/kiosk': typeof TestsKioskRoute
+  '/tests_/kiosk': typeof TestsKioskRoute
   '/training-view/attendance': typeof TrainingViewAttendanceRoute
   '/training-view/check-in': typeof TrainingViewCheckInRoute
   '/training-view/session': typeof TrainingViewSessionRoute
@@ -741,7 +741,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$token'
     | '/programs/$id'
-    | '/tests/kiosk'
+    | '/tests_/kiosk'
     | '/training-view/attendance'
     | '/training-view/check-in'
     | '/training-view/session'
@@ -793,7 +793,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TeamsRoute: typeof TeamsRoute
-  TestsRoute: typeof TestsRouteWithChildren
+  TestsRoute: typeof TestsRoute
   TestsImportExtractRoute: typeof TestsImportExtractRoute
   TrainingRoute: typeof TrainingRouteWithChildren
   WeightRoute: typeof WeightRoute
@@ -803,6 +803,7 @@ export interface RootRouteChildren {
   CheckinTokenRoute: typeof CheckinTokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   JoinTokenRoute: typeof JoinTokenRoute
+  TestsKioskRoute: typeof TestsKioskRoute
   TrainingViewAttendanceRoute: typeof TrainingViewAttendanceRoute
   TrainingViewCheckInRoute: typeof TrainingViewCheckInRoute
   TrainingViewSessionRoute: typeof TrainingViewSessionRoute
@@ -1135,12 +1136,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProgramsIdRouteImport
       parentRoute: typeof ProgramsRoute
     }
-    '/tests/kiosk': {
-      id: '/tests/kiosk'
-      path: '/kiosk'
+    '/tests_/kiosk': {
+      id: '/tests_/kiosk'
+      path: '/tests/kiosk'
       fullPath: '/tests/kiosk'
       preLoaderRoute: typeof TestsKioskRouteImport
-      parentRoute: typeof TestsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/training-view/attendance': {
       id: '/training-view/attendance'
@@ -1266,16 +1267,6 @@ const ProgramsRouteWithChildren = ProgramsRoute._addFileChildren(
   ProgramsRouteChildren,
 )
 
-interface TestsRouteChildren {
-  TestsKioskRoute: typeof TestsKioskRoute
-}
-
-const TestsRouteChildren: TestsRouteChildren = {
-  TestsKioskRoute: TestsKioskRoute,
-}
-
-const TestsRouteWithChildren = TestsRoute._addFileChildren(TestsRouteChildren)
-
 interface TrainingRouteChildren {
   TrainingAnalyticsRoute: typeof TrainingAnalyticsRoute
   TrainingAssignedRoute: typeof TrainingAssignedRoute
@@ -1347,7 +1338,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TeamsRoute: TeamsRoute,
-  TestsRoute: TestsRouteWithChildren,
+  TestsRoute: TestsRoute,
   TestsImportExtractRoute: TestsImportExtractRoute,
   TrainingRoute: TrainingRouteWithChildren,
   WeightRoute: WeightRoute,
@@ -1357,6 +1348,7 @@ const rootRouteChildren: RootRouteChildren = {
   CheckinTokenRoute: CheckinTokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   JoinTokenRoute: JoinTokenRoute,
+  TestsKioskRoute: TestsKioskRoute,
   TrainingViewAttendanceRoute: TrainingViewAttendanceRoute,
   TrainingViewCheckInRoute: TrainingViewCheckInRoute,
   TrainingViewSessionRoute: TrainingViewSessionRoute,

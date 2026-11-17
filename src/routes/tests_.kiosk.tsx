@@ -14,6 +14,7 @@ import {
   customMetricsQO,
   testsQO,
   athleteTeamsQO,
+  athleteDisplayName,
   type Athlete,
   type TestRow,
 } from "@/lib/queries";
@@ -59,7 +60,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fullscreenApiSupported } from "@/lib/fullscreen";
 
-export const Route = createFileRoute("/tests/kiosk")({
+export const Route = createFileRoute("/tests_/kiosk")({
   head: () => ({
     meta: [{ title: "Test Kiosk — Strength Lab" }, { name: "robots", content: "noindex" }],
   }),
@@ -80,6 +81,36 @@ type JumpConfirm = {
   name: string;
   proceed: () => void;
 };
+
+/** The big "what are we testing" label, readable from across the room. */
+function MetricBanner({
+  label,
+  unit,
+  group,
+  className,
+}: {
+  label?: string;
+  unit?: string;
+  group?: string;
+  className?: string;
+}) {
+  if (!label) return null;
+  return (
+    <div className={cn("leading-tight", className)}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        {group ? `Testing · ${group}` : "Testing"}
+      </div>
+      <div className="text-3xl font-extrabold uppercase tracking-tight sm:text-4xl">
+        {label}
+        {unit && (
+          <span className="ml-2 align-middle text-lg font-semibold normal-case tracking-normal text-primary">
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function TestKioskPage() {
   const qc = useQueryClient();
@@ -222,7 +253,10 @@ function TestKioskPage() {
   const boardRoster = useMemo(() => {
     const q = boardSearch.trim().toLowerCase();
     return [...roster]
-      .filter((a) => !q || a.name.toLowerCase().includes(q))
+      .filter(
+        (a) =>
+          !q || athleteDisplayName(a).toLowerCase().includes(q) || a.name.toLowerCase().includes(q),
+      )
       .sort((a, b) => lastNameOf(a).localeCompare(lastNameOf(b)));
   }, [roster, boardSearch]);
 
@@ -261,7 +295,7 @@ function TestKioskPage() {
     const existing = todayMap.get(a.id);
     setEntry({
       athleteId: a.id,
-      name: a.name,
+      name: athleteDisplayName(a),
       existingId: existing?.id ?? null,
       value: existing ? String(existing.value) : "",
     });
@@ -357,7 +391,13 @@ function TestKioskPage() {
       </div>
 
       {view === "form" ? (
-        <div className="flex min-h-[100dvh] items-center justify-center">
+        <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6">
+          <MetricBanner
+            label={meta?.label}
+            unit={meta?.unit}
+            group={meta?.group}
+            className="text-center"
+          />
           <Card className="w-full max-w-sm">
             <CardHeader>
               <CardTitle>Log a test</CardTitle>
@@ -431,7 +471,11 @@ function TestKioskPage() {
           >
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-base">Test Kiosk — Board</CardTitle>
+                {meta ? (
+                  <MetricBanner label={meta.label} unit={meta.unit} group={meta.group} />
+                ) : (
+                  <CardTitle className="text-base">Test Kiosk — Board</CardTitle>
+                )}
                 <Button
                   size="icon"
                   variant="outline"
@@ -521,7 +565,9 @@ function TestKioskPage() {
                         ) : (
                           <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/25" />
                         )}
-                        <div className="w-full truncate text-sm font-semibold">{a.name}</div>
+                        <div className="w-full truncate text-sm font-semibold">
+                          {athleteDisplayName(a)}
+                        </div>
                         {logged && (
                           <div className="text-[11px] tabular-nums text-muted-foreground">
                             {row!.value} {row!.unit}
@@ -541,6 +587,12 @@ function TestKioskPage() {
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle>{entry?.name}</DialogTitle>
+            {meta && (
+              <div className="text-lg font-extrabold uppercase tracking-tight text-primary">
+                {meta.label}
+                {meta.unit ? ` (${meta.unit})` : ""}
+              </div>
+            )}
           </DialogHeader>
           <div>
             <Label className="text-xs text-muted-foreground">
