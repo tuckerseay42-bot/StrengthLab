@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { testsQO, liftsQO, attendanceQO, teamsQO, athleteDisplayName, type Athlete } from "@/lib/queries";
 import { findAthleteDuplicateGroups, type DuplicateGroup } from "@/lib/validation";
+import { BulkMergeDialog } from "@/components/athlete-bulk-merge-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -32,6 +33,7 @@ function groupId(members: { id: string }[]) {
 }
 
 const REASON_LABEL: Record<string, string> = {
+  first_last: "Same first & last name",
   name: "Same name",
   student_id: "Same student ID",
   email: "Same email",
@@ -72,6 +74,7 @@ export function DuplicateAthletesBanner({
   dismiss: (members: { id: string }[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   if (!groups.length) return null;
   const count = groups.reduce((n, g) => n + g.members.length, 0);
 
@@ -85,9 +88,13 @@ export function DuplicateAthletesBanner({
             across {groups.length} {groups.length === 1 ? "group" : "groups"} — merge them to keep all history on one record.
           </span>
         </p>
+        <Button size="sm" onClick={() => setBulkOpen(true)}>
+          Merge matching names…
+        </Button>
         <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Review</Button>
       </div>
       <DuplicateReviewDialog open={open} onOpenChange={setOpen} groups={groups} dismiss={dismiss} />
+      <BulkMergeDialog open={bulkOpen} onOpenChange={setBulkOpen} groups={groups} />
     </>
   );
 }

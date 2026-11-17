@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalize, levenshtein, firstNameDistance, splitFullName } from "@/lib/name-match";
+import { firstLastKey } from "@/lib/athlete-dedupe";
 
 // Athlete input schema — used before insert/update.
 // Sanity ranges use canonical units (lb, in).
@@ -72,7 +73,7 @@ export function findDuplicateAthlete<T extends { id: string; name: string }>(
 }
 
 // ---- Duplicate athlete groups (roster-wide) ----
-export type DuplicateReason = "name" | "student_id" | "email" | "fuzzy_name";
+export type DuplicateReason = "first_last" | "name" | "student_id" | "email" | "fuzzy_name";
 export type DuplicateGroup<T> = { key: string; reason: DuplicateReason; members: T[] };
 
 type DupAthlete = {
@@ -117,6 +118,8 @@ export function findAthleteDuplicateGroups<T extends DupAthlete>(athletes: T[]):
     }
   };
 
+  // Same FIRST name + LAST name (from the first/last fields) comes first.
+  pass("first_last", (a) => firstLastKey(a));
   pass("name", (a) => normalize(a.name ?? "") || null);
   pass("student_id", (a) => (a.student_id ?? "").trim().toLowerCase() || null);
   pass("email", (a) => (a.athlete_email ?? "").trim().toLowerCase() || null);
