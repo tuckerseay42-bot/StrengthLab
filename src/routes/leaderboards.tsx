@@ -8,12 +8,16 @@ import {
   athleteDisplayName, type Leaderboard, type CustomMetric,
   type LiftRow, type AttendanceRow, type CustomTestType, type AthleteTeam,
 } from "@/lib/queries";
-import { SPORTS, GRADES, GENDERS, GENDER_LABELS, downloadCSV } from "@/lib/domain";
+import {
+  SPORTS, GRADES, GENDERS, GENDER_LABELS, downloadCSV, mergedTestTypes, type TestTypeOption,
+} from "@/lib/domain";
 import { boardRangeLabel, formatLeaderValue, computeBoardRows } from "@/lib/leaderboard-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +33,8 @@ export const Route = createFileRoute("/leaderboards")({
   head: () => ({ meta: [{ title: "Leaderboards — Strength Lab" }] }),
   component: LeaderboardsPage,
 });
+
+const PRESET_PREFIX = "test:";
 
 type RangeKind = "all" | "today" | "week" | "month" | "3month" | "custom";
 type FormState = {
@@ -128,6 +134,16 @@ function LeaderboardsPage() {
   }, [qc]);
 
   const metricById = useMemo(() => new Map(metrics.map((m) => [m.id, m])), [metrics]);
+
+  // The preset tests (Vertical Jump, sprints, Bench 1RM, ...) and the coach's own test
+  // types are not saved metrics, so they used to be missing from the picker. They are
+  // listed here under their own group, and a saved metric is made for one the first time
+  // it is picked. A test that already has a saved metric is left out so it is not listed twice.
+  const presetTests = useMemo(() => {
+    const covered = new Set(metrics.filter((m) => m.kind === "test_value" && m.test_type).map((m) => m.test_type));
+    return mergedTestTypes(customTypes, metrics).filter((t) => t.group !== "Metrics" && !covered.has(t.value));
+  }, [customTypes, metrics]);
+  const presetGroups = useMemo(() => Array.from(new Set(presetTests.map((t) => t.group))), [presetTests]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
 
   const save = useMutation({
@@ -135,9 +151,43 @@ function LeaderboardsPage() {
       if (!form.name.trim()) throw new Error("Name is required");
       if (!form.metric_id) throw new Error("Pick a metric");
       const win = rangeToWindow(form);
+      let metricId = form.metric_id;
+      if (metricId.startsWith(PRESET_PREFIX)) {
+        const testType = metricId.slice(PRESET_PREFIX.length);
+        const existing = metrics.find((m) => m.kind === "test_value" && m.test_type === testType);
+        if (existing) metricId = existing.id;
+        else {
+          const preset = presetTests.find((t) => t.value === testType);
+          if (!preset) throw new Error("That test is not available any more. Pick it again.");
+          const org = await getScopedOrgId();
+          const { data: made, error: mkErr } = await supabase
+            .from("custom_metrics")
+            .insert({
+              organization_id: org,
+              name: preset.label,
+              description: null,
+              kind: "test_value",
+              test_type: preset.value,
+              numerator_test: null,
+              denominator_test: null,
+              exercise_name: null,
+              since_days: null,
+              formula: null,
+              variables: [],
+              lower_is_better: preset.lowerIsBetter,
+              unit: preset.unit || null,
+              measurement: "load",
+            })
+            .select("id")
+            .single();
+          if (mkErr) throw mkErr;
+          metricId = (made as { id: string }).id;
+          qc.invalidateQueries({ queryKey: ["custom_metrics"] });
+        }
+      }
       const payload = {
         name: form.name.trim(),
-        metric_id: form.metric_id,
+        metric_id: metricId,
         team_id: form.team_id || null,
         sport: form.sport || null,
         grade: form.grade ? Number(form.grade) : null,
@@ -196,16 +246,10 @@ function LeaderboardsPage() {
           <h1 className="text-2xl font-semibold sm:text-3xl">Leaderboards</h1>
           <p className="text-sm text-muted-foreground">{boards.length} saved · updated live from athlete data</p>
         </div>
-        <Button size="sm" onClick={() => { setEditing(null); setForm(EMPTY); setOpen(true); }} disabled={metrics.length === 0}>
+        <Button size="sm" onClick={() => { setEditing(null); setForm(EMPTY); setOpen(true); }}>
           <Plus className="h-4 w-4" /> New leaderboard
         </Button>
       </div>
-
-      {metrics.length === 0 && (
-        <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">
-          Create a <Link to="/metrics" className="text-primary underline">custom metric</Link> first.
-        </CardContent></Card>
-      )}
 
       {boardsLoading ? (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -221,7 +265,7 @@ function LeaderboardsPage() {
             </Card>
           ))}
         </div>
-      ) : boards.length === 0 && metrics.length > 0 ? (
+      ) : boards.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
           No leaderboards yet. Create one to rank athletes by any metric with team, sport, grade, or position filters.
         </CardContent></Card>
@@ -256,7 +300,28 @@ function LeaderboardsPage() {
               <Select value={form.metric_id} onValueChange={(v) => setForm({ ...form, metric_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Choose metric…" /></SelectTrigger>
                 <SelectContent>
-                  {metrics.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                  {metrics.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Your metrics</SelectLabel>
+                      {metrics.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {presetGroups.map((g) => (
+                    <SelectGroup key={g}>
+                      <SelectLabel>{g}</SelectLabel>
+                      {presetTests
+                        .filter((t: TestTypeOption) => t.group === g)
+                        .map((t) => (
+                          <SelectItem key={t.value} value={`${PRESET_PREFIX}${t.value}`}>
+                            {t.label} ({t.unit})
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
