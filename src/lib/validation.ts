@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { normalize, levenshtein, firstNameDistance, splitFullName } from "@/lib/name-match";
-import { firstLastKey } from "@/lib/athlete-dedupe";
+import { firstLastKey, findNicknameGroups, conflicting } from "@/lib/athlete-dedupe";
 
 // Athlete input schema — used before insert/update.
 // Sanity ranges use canonical units (lb, in).
@@ -73,8 +73,15 @@ export function findDuplicateAthlete<T extends { id: string; name: string }>(
 }
 
 // ---- Duplicate athlete groups (roster-wide) ----
-export type DuplicateReason = "first_last" | "name" | "student_id" | "email" | "fuzzy_name";
-export type DuplicateGroup<T> = { key: string; reason: DuplicateReason; members: T[] };
+export type DuplicateReason =
+  "first_last" | "name" | "student_id" | "email" | "fuzzy_name" | "same_last";
+export type DuplicateGroup<T> = {
+  key: string;
+  reason: DuplicateReason;
+  members: T[];
+  /** Why these look like one kid, for the "same kid?" question. */
+  hint?: string;
+};
 
 type DupAthlete = {
   id: string;
@@ -146,6 +153,8 @@ export function findAthleteDuplicateGroups<T extends DupAthlete>(athletes: T[]):
     if (!an.last || !an.first) continue;
     const matches = athletes.filter((b) => {
       if (b.id === a.id || claimed.has(b.id)) return false;
+      // Two different student IDs (or graduation years) are two different kids.
+      if (conflicting(a, b)) return false;
       const bn = nameOf(b);
       if (!bn.last || !bn.first) return false;
       if (levenshtein(an.last, bn.last) > 1) return false;
@@ -155,6 +164,13 @@ export function findAthleteDuplicateGroups<T extends DupAthlete>(athletes: T[]):
     const members = [a, ...matches];
     members.forEach((m) => claimed.add(m.id));
     groups.push({ key: `fuzzy_name:${an.last}:${an.first}`, reason: "fuzzy_name", members });
+  }
+
+  // Last: same (or similar) LAST name but different first names, for a nickname and a
+  // legal name. Offered as a question, never merged automatically.
+  for (const g of findNicknameGroups(athletes.filter((a) => !claimed.has(a.id)))) {
+    g.members.forEach((m) => claimed.add(m.id));
+    groups.push({ key: g.key, reason: "same_last", members: g.members, hint: g.hint });
   }
 
   return groups;

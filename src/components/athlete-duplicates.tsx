@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { testsQO, liftsQO, attendanceQO, teamsQO, athleteDisplayName, type Athlete } from "@/lib/queries";
 import { findAthleteDuplicateGroups, type DuplicateGroup } from "@/lib/validation";
 import { BulkMergeDialog } from "@/components/athlete-bulk-merge-dialog";
+import { pickKeeper } from "@/lib/athlete-dedupe";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ function groupId(members: { id: string }[]) {
 
 const REASON_LABEL: Record<string, string> = {
   first_last: "Same first & last name",
+  same_last: "Same last name. Same kid?",
   name: "Same name",
   student_id: "Same student ID",
   email: "Same email",
@@ -132,6 +134,14 @@ function DuplicateReviewDialog({
 
   const merge = useMutation({
     mutationFn: async ({ keep, drop }: { keep: Athlete; drop: Athlete[] }) => {
+      // A nickname and a legal name: keep the other first name as "goes by", so it is not lost.
+      const firstOf = (x: Athlete) => (x.first_name || x.name.split(/\s+/)[0] || "").trim();
+      const other = drop
+        .map(firstOf)
+        .find((n) => n && n.toLowerCase() !== firstOf(keep).toLowerCase());
+      if (other && !keep.preferred_name) {
+        await supabase.from("athletes").update({ preferred_name: other }).eq("id", keep.id);
+      }
       for (const d of drop) {
         const { error } = await supabase.rpc("merge_athletes", { _keep: keep.id, _drop: d.id });
         if (error) throw error;
@@ -163,13 +173,16 @@ function DuplicateReviewDialog({
           ) : (
             <div className="space-y-4">
               {groups.map((g) => {
-                const keepId = keepBy[g.key] ?? g.members[0].id;
+                const keepId = keepBy[g.key] ?? pickKeeper(g.members, counts).id;
                 return (
                   <div key={g.key} className="rounded-lg border p-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{athleteDisplayName(g.members[0])}</span>
                       <Badge variant="outline">{REASON_LABEL[g.reason] ?? "Match"}</Badge>
                       <Badge variant="secondary">{g.members.length} records</Badge>
+                      {g.hint && (
+                        <span className="basis-full text-xs text-muted-foreground">{g.hint}</span>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -199,6 +212,11 @@ function DuplicateReviewDialog({
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-1">
                                 <span className="font-medium">{athleteDisplayName(a)}</span>
+                                {a.preferred_name && (
+                                  <span className="text-xs text-muted-foreground">
+                                    goes by {a.preferred_name}
+                                  </span>
+                                )}
                                 {archived && <Badge variant="secondary">Archived</Badge>}
                                 {a.team_id && teamMap.get(a.team_id) && (
                                   <Badge variant="outline">{teamMap.get(a.team_id)}</Badge>
