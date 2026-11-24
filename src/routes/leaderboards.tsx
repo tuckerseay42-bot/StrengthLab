@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   leaderboardsQO, customMetricsQO, athletesQO, testsQO, liftsQO, attendanceQO, teamsQO, testTypesQO,
   athleteTeamsQO,
+  exercisesQO,
   athleteDisplayName, type Leaderboard, type CustomMetric,
   type LiftRow, type AttendanceRow, type CustomTestType, type AthleteTeam,
 } from "@/lib/queries";
@@ -35,6 +36,16 @@ export const Route = createFileRoute("/leaderboards")({
 });
 
 const PRESET_PREFIX = "test:";
+const LIFT_PREFIX = "lift:";
+
+// How an exercise is measured -> the metric setup it needs.
+const LIFT_SETUP = {
+  load: { measurement: "load", unit: "lb", lower: false },
+  seconds: { measurement: "time", unit: "s", lower: true },
+  inches: { measurement: "height", unit: "in", lower: false },
+  mph: { measurement: "speed", unit: "mph", lower: false },
+} as const;
+const liftUnit = (mt: string) => LIFT_SETUP[mt as keyof typeof LIFT_SETUP].unit;
 
 type RangeKind = "all" | "today" | "week" | "month" | "3month" | "custom";
 type FormState = {
@@ -68,6 +79,7 @@ function LeaderboardsPage() {
   const { data: athletes = [] } = useQuery(athletesQO);
   const { data: tests = [] } = useQuery(testsQO);
   const { data: lifts = [] } = useQuery(liftsQO);
+  const { data: exercises = [] } = useQuery(exercisesQO);
   const { data: attendance = [] } = useQuery(attendanceQO);
   const { data: teams = [] } = useQuery(teamsQO);
   const { data: customTypes = [] } = useQuery(testTypesQO);
@@ -144,6 +156,23 @@ function LeaderboardsPage() {
     return mergedTestTypes(customTypes, metrics).filter((t) => t.group !== "Metrics" && !covered.has(t.value));
   }, [customTypes, metrics]);
   const presetGroups = useMemo(() => Array.from(new Set(presetTests.map((t) => t.group))), [presetTests]);
+  // Lifts: the exercises that are marked as metrics or that have been logged. They get a
+  // saved metric the first time one is picked, same as the preset tests. An exercise that
+  // already has a saved metric is left out so it is not listed twice.
+  const liftOptions = useMemo(() => {
+    const covered = new Set(
+      metrics
+        .filter((m) => m.kind === "lift_max" && m.exercise_name)
+        .map((m) => m.exercise_name!.trim().toLowerCase()),
+    );
+    const logged = new Set(lifts.map((l) => (l.exercise ?? "").trim().toLowerCase()));
+    return exercises.filter(
+      (e) =>
+        e.measurement_type in LIFT_SETUP &&
+        (e.is_metric || logged.has(e.name.trim().toLowerCase())) &&
+        !covered.has(e.name.trim().toLowerCase()),
+    );
+  }, [exercises, metrics, lifts]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
 
   const save = useMutation({
@@ -184,6 +213,35 @@ function LeaderboardsPage() {
           metricId = (made as { id: string }).id;
           qc.invalidateQueries({ queryKey: ["custom_metrics"] });
         }
+      }
+      if (metricId.startsWith(LIFT_PREFIX)) {
+        const ex = liftOptions.find((e) => e.id === metricId.slice(LIFT_PREFIX.length));
+        if (!ex) throw new Error("That lift is not available any more. Pick it again.");
+        const org = await getScopedOrgId();
+        const setup = LIFT_SETUP[ex.measurement_type as keyof typeof LIFT_SETUP];
+        const { data: made, error: mkErr } = await supabase
+          .from("custom_metrics")
+          .insert({
+            organization_id: org,
+            name: ex.name,
+            description: null,
+            kind: "lift_max",
+            test_type: null,
+            numerator_test: null,
+            denominator_test: null,
+            exercise_name: ex.name,
+            since_days: null,
+            formula: null,
+            variables: [],
+            lower_is_better: setup.lower,
+            unit: setup.unit,
+            measurement: setup.measurement,
+          })
+          .select("id")
+          .single();
+        if (mkErr) throw mkErr;
+        metricId = (made as { id: string }).id;
+        qc.invalidateQueries({ queryKey: ["custom_metrics"] });
       }
       const payload = {
         name: form.name.trim(),
@@ -306,6 +364,16 @@ function LeaderboardsPage() {
                       {metrics.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {liftOptions.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Lifts</SelectLabel>
+                      {liftOptions.map((e) => (
+                        <SelectItem key={e.id} value={`${LIFT_PREFIX}${e.id}`}>
+                          {e.name} ({liftUnit(e.measurement_type)})
                         </SelectItem>
                       ))}
                     </SelectGroup>
