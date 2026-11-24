@@ -96,7 +96,8 @@ function GroupDayCell({
   total: number;
 }) {
   if (!g) return <span className="text-muted-foreground/50">—</span>;
-  const better = g.change == null || g.change === 0 ? null : lowerIsBetter ? g.change < 0 : g.change > 0;
+  const better =
+    g.change == null || g.change === 0 ? null : lowerIsBetter ? g.change < 0 : g.change > 0;
   return (
     <div className="leading-tight">
       <div className="text-base font-extrabold tabular-nums">{formatValue(g.avg, unit)}</div>
@@ -307,7 +308,8 @@ export function MetricDayGrid({
           <div>
             <CardTitle className="text-base">Team Metrics Table</CardTitle>
             <p className="text-xs text-muted-foreground print:hidden">
-              Every athlete, one metric, one column for each day it was tested. Newest is on the left.
+              Every athlete, one metric, one column for each day it was tested. Newest is on the
+              left.
             </p>
             <p className="hidden text-xs text-muted-foreground print:block">{printSummary}</p>
           </div>
@@ -496,9 +498,7 @@ export function MetricDayGrid({
       </CardHeader>
       <CardContent>
         {!metric ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            No metrics to show yet.
-          </p>
+          <p className="py-10 text-center text-sm text-muted-foreground">No metrics to show yet.</p>
         ) : !rows.length ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             No athletes match these filters.
@@ -567,10 +567,7 @@ export function MetricDayGrid({
                     ))}
                   </tr>
                   {rows.map((r) => (
-                    <tr
-                      key={r.athlete.id}
-                      className="border-t border-border/50 hover:bg-muted/20"
-                    >
+                    <tr key={r.athlete.id} className="border-t border-border/50 hover:bg-muted/20">
                       <td className="sticky left-0 z-10 bg-background px-3 py-1.5">
                         <Link
                           to="/athletes/$id"
@@ -592,7 +589,14 @@ export function MetricDayGrid({
                       <td className="whitespace-nowrap px-2 py-1.5 text-center tabular-nums text-muted-foreground">
                         {r.avg == null ? "—" : formatValue(r.avg, unit)}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-center font-semibold tabular-nums text-[color:var(--status-pr)]">
+                      <td
+                        className={cn(
+                          "whitespace-nowrap px-2 py-1.5 text-center font-semibold tabular-nums",
+                          r.best == null
+                            ? "text-muted-foreground/50"
+                            : "text-[color:var(--status-pr)]",
+                        )}
+                      >
                         {r.best == null ? "—" : formatValue(r.best, unit)}
                       </td>
                       {dates.map((d) => (
@@ -608,9 +612,9 @@ export function MetricDayGrid({
             <p className="mt-3 text-[11px] text-muted-foreground">
               Only days when someone was tested get a column, newest on the left. A box shows the
               athlete's best result that day and the change from their own previous test. The group
-              change compares only the athletes tested on both days (it needs at least 3). Average and
-              Best use all of an athlete's tests, not just the days shown. Faster is better for timed
-              tests.
+              change compares only the athletes tested on both days (it needs at least 3). Average
+              and Best use all of an athlete's tests, not just the days shown. Faster is better for
+              timed tests.
             </p>
           </>
         )}

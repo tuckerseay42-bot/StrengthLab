@@ -27,7 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, User, UsersRound, ArrowLeft } from "lucide-react";
 import { AthleteAnalyticsPanel } from "@/components/athlete-analytics-panel";
-import { TeamMetricsTable } from "@/components/team-metrics-table";
+import { MetricDayGrid } from "@/components/metric-day-grid";
 
 export const Route = createFileRoute("/performance")({
   head: () => ({ meta: [{ title: "Performance Dashboard — Strength Lab" }] }),
@@ -148,7 +148,7 @@ function PerformanceDashboard() {
           <AthleteRoster athletes={athletes} teams={teams} onSelect={setAthleteId} />
         )
       ) : (
-        <TeamMetricsTable
+        <MetricDayGrid
           athletes={athletes}
           tests={tests}
           repMaxes={repMaxes}

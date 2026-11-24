@@ -15,20 +15,45 @@ const s = (id: string, pts: [string, number][]) => ({
 
 describe("buildMetricGrid", () => {
   it("shows the change from the athlete's own previous test", () => {
-    const g = buildMetricGrid([s("a", [["2026-09-01", 27], ["2026-10-01", 28.5]])], false, "in");
+    const g = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 27],
+          ["2026-10-01", 28.5],
+        ]),
+      ],
+      false,
+      "in",
+    );
     expect(g.cells.get("a")!.get("2026-09-01")).toMatchObject({ change: null, better: null });
     expect(g.cells.get("a")!.get("2026-10-01")).toMatchObject({ change: 1.5, better: true });
   });
 
   it("counts a faster time as better", () => {
-    const g = buildMetricGrid([s("a", [["2026-09-01", 5.1], ["2026-10-01", 4.9], ["2026-11-01", 5.0]])], true, "s");
+    const g = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 5.1],
+          ["2026-10-01", 4.9],
+          ["2026-11-01", 5.0],
+        ]),
+      ],
+      true,
+      "s",
+    );
     expect(g.cells.get("a")!.get("2026-10-01")).toMatchObject({ change: -0.2, better: true });
     expect(g.cells.get("a")!.get("2026-11-01")).toMatchObject({ change: 0.1, better: false });
   });
 
   it("compares to the previous test even when days in between had no test for that athlete", () => {
     const g = buildMetricGrid(
-      [s("a", [["2026-09-01", 100], ["2026-11-01", 110]]), s("b", [["2026-10-01", 50]])],
+      [
+        s("a", [
+          ["2026-09-01", 100],
+          ["2026-11-01", 110],
+        ]),
+        s("b", [["2026-10-01", 50]]),
+      ],
       false,
       "lb",
     );
@@ -37,18 +62,43 @@ describe("buildMetricGrid", () => {
   });
 
   it("keeps the best result when a day has several", () => {
-    const g = buildMetricGrid([s("a", [["2026-09-01", 26], ["2026-09-01", 29], ["2026-09-01", 27]])], false, "in");
+    const g = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 26],
+          ["2026-09-01", 29],
+          ["2026-09-01", 27],
+        ]),
+      ],
+      false,
+      "in",
+    );
     expect(g.cells.get("a")!.get("2026-09-01")!.value).toBe(29);
   });
 
   it("treats a change that rounds to nothing as no change", () => {
-    const g = buildMetricGrid([s("a", [["2026-09-01", 4.8], ["2026-10-01", 4.801]])], true, "s");
+    const g = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 4.8],
+          ["2026-10-01", 4.801],
+        ]),
+      ],
+      true,
+      "s",
+    );
     expect(g.cells.get("a")!.get("2026-10-01")).toMatchObject({ change: 0, better: null });
   });
 });
 
 describe("group row", () => {
-  const eight = (v: number) => Array.from({ length: 5 }, (_, i) => s("a" + i, [["2026-09-01", 100 + i], ["2026-10-01", 100 + i + v]]));
+  const eight = (v: number) =>
+    Array.from({ length: 5 }, (_, i) =>
+      s("a" + i, [
+        ["2026-09-01", 100 + i],
+        ["2026-10-01", 100 + i + v],
+      ]),
+    );
 
   it("averages everyone tested that day and counts them", () => {
     const g = buildMetricGrid(eight(0), false, "lb");
@@ -67,7 +117,17 @@ describe("group row", () => {
   it("shows no change when fewer than 3 athletes were tested on both days", () => {
     expect(MIN_GROUP_OVERLAP).toBe(3);
     const g = buildMetricGrid(
-      [s("a", [["2026-09-01", 100], ["2026-10-01", 110]]), s("b", [["2026-09-01", 100], ["2026-10-01", 120]]), s("c", [["2026-10-01", 90]])],
+      [
+        s("a", [
+          ["2026-09-01", 100],
+          ["2026-10-01", 110],
+        ]),
+        s("b", [
+          ["2026-09-01", 100],
+          ["2026-10-01", 120],
+        ]),
+        s("c", [["2026-10-01", 90]]),
+      ],
       false,
       "lb",
     );
@@ -82,9 +142,27 @@ describe("group row", () => {
 
 describe("latestImprovement", () => {
   it("is positive when the newest test beat the one before, for either direction", () => {
-    const up = buildMetricGrid([s("a", [["2026-09-01", 20], ["2026-10-01", 22]])], false, "in");
+    const up = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 20],
+          ["2026-10-01", 22],
+        ]),
+      ],
+      false,
+      "in",
+    );
     expect(latestImprovement(up.cells.get("a"), false)).toBe(2);
-    const fast = buildMetricGrid([s("a", [["2026-09-01", 5], ["2026-10-01", 4.8]])], true, "s");
+    const fast = buildMetricGrid(
+      [
+        s("a", [
+          ["2026-09-01", 5],
+          ["2026-10-01", 4.8],
+        ]),
+      ],
+      true,
+      "s",
+    );
     expect(latestImprovement(fast.cells.get("a"), true)).toBe(0.2);
   });
   it("is null with one test or none", () => {
@@ -98,7 +176,11 @@ describe("visibleDates", () => {
   const all = ["2026-06-01", "2026-09-01", "2026-10-01", "2026-11-01", "2026-11-20"];
   it("lists newest first", () => {
     expect(visibleDates(all, "all", null, "2026-11-24")).toEqual([
-      "2026-11-20", "2026-11-01", "2026-10-01", "2026-09-01", "2026-06-01",
+      "2026-11-20",
+      "2026-11-01",
+      "2026-10-01",
+      "2026-09-01",
+      "2026-06-01",
     ]);
   });
   it("takes only the newest N test days", () => {
@@ -106,7 +188,12 @@ describe("visibleDates", () => {
   });
   it("limits by time range, then by count", () => {
     expect(visibleDates(all, "30", null, "2026-11-24")).toEqual(["2026-11-20", "2026-11-01"]);
-    expect(visibleDates(all, "90", null, "2026-11-24")).toEqual(["2026-11-20", "2026-11-01", "2026-10-01", "2026-09-01"]);
+    expect(visibleDates(all, "90", null, "2026-11-24")).toEqual([
+      "2026-11-20",
+      "2026-11-01",
+      "2026-10-01",
+      "2026-09-01",
+    ]);
     expect(visibleDates(all, "30", 1, "2026-11-24")).toEqual(["2026-11-20"]);
   });
   it("today means only today", () => {
